@@ -2,7 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 118;
+use Test::More tests => 117;
 
 use Mojo::ByteStream 'b';
 
