@@ -31,7 +31,7 @@ sub run {
   my $app = $self->app;
   no warnings;
   my $result = eval "package main; sub app { \$app }; $code";
-  say $result if $verbose && defined $result;
+  say $result . "\n" if $verbose && defined $result;
   die $@ if $@;
   return $result;
 }

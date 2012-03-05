@@ -21,7 +21,7 @@ sub parse {
       # Name and value
       push @cookies, Mojo::Cookie::Request->new;
       $cookies[-1]->name($name);
-      $cookies[-1]->value($value //= '');
+      $cookies[-1]->value($value = defined $value ? $value : '');
     }
   }
 

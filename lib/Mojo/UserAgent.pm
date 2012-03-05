@@ -18,13 +18,13 @@ has cert            => sub { $ENV{MOJO_CERT_FILE} };
 has connect_timeout => sub { $ENV{MOJO_CONNECT_TIMEOUT} || 10 };
 has cookie_jar      => sub { Mojo::CookieJar->new };
 has [qw/http_proxy https_proxy local_address no_proxy/];
-has inactivity_timeout => sub { $ENV{MOJO_INACTIVITY_TIMEOUT} // 20 };
+has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 20 };
 has ioloop             => sub { Mojo::IOLoop->new };
 has key                => sub { $ENV{MOJO_KEY_FILE} };
 has max_connections    => 5;
 has max_redirects => sub { $ENV{MOJO_MAX_REDIRECTS} || 0 };
 has name => 'Mojolicious (Perl)';
-has request_timeout => sub { $ENV{MOJO_REQUEST_TIMEOUT} // 0 };
+has request_timeout => sub { defined $ENV{MOJO_REQUEST_TIMEOUT} ? $ENV{MOJO_REQUEST_TIMEOUT} : 0 };
 has transactor => sub { Mojo::UserAgent::Transactor->new };
 
 # Common HTTP methods

@@ -68,7 +68,7 @@ sub getline {
   # Blocking read
   my $res = $self->{tx}->res;
   while (1) {
-    my $chunk = $res->get_body_chunk($self->{offset} //= 0);
+    my $chunk = $res->get_body_chunk($self->{offset} = defined $self->{offset} ? $self->{offset} : 0);
 
     # No content yet, try again
     sleep 1 and next unless defined $chunk;

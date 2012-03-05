@@ -186,7 +186,7 @@ sub redirect {
   # Commonly used codes
   my $res = $old->res;
   my $code = $res->code || 0;
-  return unless $code ~~ [301, 302, 303, 307];
+  return unless grep {$_ eq $code} (301, 302, 303, 307);
 
   # Fix broken location without authority and/or scheme
   return unless my $location = $res->headers->location;
@@ -199,7 +199,7 @@ sub redirect {
   # Clone request if necessary
   my $new    = Mojo::Transaction::HTTP->new;
   my $method = $req->method;
-  if ($code ~~ [301, 307]) {
+  if (grep {$_ eq $code} (301, 307)) {
     return unless $req = $req->clone;
     $new->req($req);
     my $headers = $req->headers;
@@ -207,7 +207,7 @@ sub redirect {
     $headers->remove('Cookie');
     $headers->remove('Referer');
   }
-  else { $method = 'GET' unless $method ~~ [qw/GET HEAD/] }
+  else { $method = 'GET' unless grep {$_ eq $method} qw/GET HEAD/ }
   $new->req->method($method)->url($location);
   $new->previous($old);
 

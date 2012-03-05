@@ -69,9 +69,9 @@ sub render {
     }
 
     # Relaxed, symbol or wildcard
-    elsif ($op ~~ [qw/relaxed symbol wildcard/]) {
+    elsif (grep {$_ eq $op} qw/relaxed symbol wildcard/) {
       my $name = $token->[1];
-      $rendered = $values->{$name} // '';
+      $rendered = defined $values->{$name} ? $values->{$name} : '';
       my $default = $self->defaults->{$name};
       if (!defined $default || ($default ne $rendered)) { $optional = 0 }
       elsif ($optional) { $rendered = '' }
@@ -150,7 +150,7 @@ sub _compile {
     }
 
     # Symbol
-    elsif ($op ~~ [qw/relaxed symbol wildcard/]) {
+    elsif (grep {$_ eq $op} qw/relaxed symbol wildcard/) {
       my $name = $token->[1];
       unshift @{$self->symbols}, $name;
 
@@ -211,7 +211,8 @@ sub _tokenize {
   while (length(my $char = substr $pattern, 0, 1, '')) {
 
     # Inside a symbol
-    my $symbol = $state ~~ [qw/relaxed symbol wildcard/] ? 1 : 0;
+    my $found = grep {$_ eq $state} qw/relaxed symbol wildcard/;
+    my $symbol = $found ? 1 : 0;
 
     # Quote start
     if ($char eq $quote_start) {

@@ -108,7 +108,8 @@ sub is_running {
 sub one_tick {
   my $self = shift;
   $self = $self->singleton unless ref $self;
-  $self->timer(shift // '0.025' => sub { shift->stop });
+  my $delay = shift;
+  $self->timer(defined $delay ? $delay : '0.025' => sub { shift->stop });
   $self->start;
 }
 
@@ -160,8 +161,8 @@ sub server {
 
   return $id;
 }
-
-sub singleton { state $loop ||= shift->SUPER::new }
+our $singleton_loop;
+sub singleton { $singleton_loop ||= shift->SUPER::new }
 
 sub start {
   my $self = shift;

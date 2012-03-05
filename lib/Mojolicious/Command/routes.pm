@@ -78,7 +78,7 @@ sub _draw {
       if $verbose;
 
     # Route
-    say join('  ', @parts);
+    print join('  ', @parts) . "\n";
   }
 }
 

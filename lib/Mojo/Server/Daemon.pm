@@ -15,7 +15,7 @@ use constant BONJOUR => $ENV{MOJO_NO_BONJOUR}
 use constant DEBUG => $ENV{MOJO_DAEMON_DEBUG} || 0;
 
 has [qw/backlog group listen silent user/];
-has inactivity_timeout => sub { $ENV{MOJO_INACTIVITY_TIMEOUT} // 15 };
+has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 15 };
 has ioloop             => sub { Mojo::IOLoop->singleton };
 has max_clients        => 1000;
 has max_requests       => 25;
@@ -261,7 +261,7 @@ sub _listen {
   return if $self->silent;
   $self->app->log->info(qq/Listening at "$listen"./);
   $listen =~ s|^(https?\://)\*|${1}127.0.0.1|i;
-  say "Server available at $listen.";
+  print "Server available at $listen.\n";
 }
 
 sub _read {

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 # Mojo modules are modern!
-require feature;
+# require feature;
 
 # No imports because we get subclassed, a lot!
 require Carp;

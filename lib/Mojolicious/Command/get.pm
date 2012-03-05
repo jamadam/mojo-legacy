@@ -147,7 +147,7 @@ sub run {
     if ($tx->res->headers->content_type || '') =~ /JSON/i;
 
   # Selector
-  $self->_select($buffer, $charset // $tx->res->content->charset, $selector);
+  $self->_select($buffer, defined $charset ? $charset : $tx->res->content->charset, $selector);
 }
 
 sub _json {
@@ -161,7 +161,7 @@ sub _json {
 
 sub _say {
   return unless length(my $value = shift);
-  say encode('UTF-8', $value);
+  print encode('UTF-8', $value) . "\n";
 }
 
 sub _select {

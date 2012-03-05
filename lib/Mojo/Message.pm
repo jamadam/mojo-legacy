@@ -253,7 +253,7 @@ sub get_header_chunk {
 sub get_start_line_chunk {
   my ($self, $offset) = @_;
   $self->emit(progress => 'start_line', @_);
-  return substr $self->{start_line_buffer} //= $self->_build_start_line,
+  return substr $self->{start_line_buffer} = defined $self->{start_line_buffer} ? $self->{start_line_buffer} : $self->_build_start_line,
     $offset, CHUNK_SIZE;
 }
 
@@ -271,7 +271,7 @@ sub is_finished { (shift->{state} || '') eq 'finished' }
 
 sub is_limit_exceeded {
   return unless my $code = (shift->error)[1];
-  return $code ~~ [413, 431];
+  return grep {$_ eq $code} (413, 431);
 }
 
 sub is_multipart { shift->content->is_multipart }
@@ -374,8 +374,8 @@ sub _parse {
   my ($self, $until_body, $chunk) = @_;
 
   # Add chunk
-  $self->{buffer}   //= '';
-  $self->{raw_size} //= 0;
+  $self->{buffer}   = defined $self->{buffer} ? $self->{buffer} : '';
+  $self->{raw_size} = defined $self->{raw_size} ? $self->{raw_size} : 0;
   if (defined $chunk) {
     $self->{raw_size} += length $chunk;
     $self->{buffer} .= $chunk;
@@ -399,7 +399,7 @@ sub _parse {
   }
 
   # Content
-  if (($self->{state} || '') ~~ [qw/body content finished/]) {
+  if (grep { $_ eq ($self->{state} || '')} qw/body content finished/) {
 
     # Until body
     my $content = $self->content;
@@ -474,15 +474,15 @@ sub _parse_formdata {
     $name     = url_unescape $name     if $name;
     $filename = url_unescape $filename if $filename;
     if ($charset) {
-      $name     = decode($charset, $name)     // $name     if $name;
-      $filename = decode($charset, $filename) // $filename if $filename;
+      $name     = defined decode($charset, $name) ? decode($charset, $name) : $name     if $name;
+      $filename = defined decode($charset, $filename) ? decode($charset, $filename) : $filename if $filename;
     }
 
     # Form value
     unless (defined $filename) {
       next if (my $asset = $part->asset)->is_file;
       $value = $asset->slurp;
-      $value = decode($charset, $value) // $value
+      $value = defined decode($charset, $value) ? decode($charset, $value) : $value
         if $charset && !$part->headers->content_transfer_encoding;
     }
 

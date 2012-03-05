@@ -58,7 +58,7 @@ EOF
     if $latest < $current;
   $message = "You might want to update your Mojolicious to $latest."
     if $latest > $current;
-  say $message;
+  print $message. "\n";
 }
 
 1;

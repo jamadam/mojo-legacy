@@ -169,7 +169,7 @@ sub _config {
     if $c->{keep_alive_timeout};
 }
 
-sub _exit { say shift and exit 0 }
+sub _exit { print shift ."\n" and exit 0 }
 
 sub _heartbeat {
   my $self = shift;

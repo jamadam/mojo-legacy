@@ -261,7 +261,7 @@ sub render_content {
   }
 
   # Get
-  $content = $c->{$name} // '';
+  $content = defined $c->{$name} ? $c->{$name} : '';
   return Mojo::ByteStream->new("$content");
 }
 
@@ -545,7 +545,7 @@ sub url_for {
   if ($target =~ m#^/#) {
     if (my $e = $self->stash->{path}) {
       my $real = Mojo::Util::url_unescape($req->url->path->to_abs_string);
-      $real = Mojo::Util::decode('UTF-8', $real) // $real;
+      $real = defined Mojo::Util::decode('UTF-8', $real) ? Mojo::Util::decode('UTF-8', $real) : $real;
       $real =~ s|/?$e$|$target|;
       $target = $real;
     }

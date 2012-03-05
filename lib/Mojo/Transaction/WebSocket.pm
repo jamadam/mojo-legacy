@@ -239,7 +239,7 @@ sub send {
 
   # Prepare frame
   $self->once(drain => $cb) if $cb;
-  $self->{write} //= '';
+  $self->{write} = defined $self->{write} ? $self->{write} : '';
   $self->{write} .= $self->build_frame(@$frame);
   $self->{state} = 'write';
 
@@ -270,9 +270,9 @@ sub server_read {
   my ($self, $chunk) = @_;
 
   # Parse frames
-  $self->{read} //= '';
+  $self->{read} = defined $self->{read} ? $self->{read} : '';
   $self->{read} .= $chunk if defined $chunk;
-  $self->{message} //= '';
+  $self->{message} = defined $self->{message} ? $self->{message} : '';
   while (my $frame = $self->parse_frame(\$self->{read})) {
     $self->emit(frame => $frame);
     my $op = $frame->[4] || CONTINUATION;
@@ -310,7 +310,7 @@ sub server_write {
   my $self = shift;
 
   # Drain
-  $self->{write} //= '';
+  $self->{write} = defined $self->{write} ? $self->{write} : '';
   unless (length $self->{write}) {
     $self->{state} = $self->{finished} ? 'finished' : 'read';
     $self->emit('drain');

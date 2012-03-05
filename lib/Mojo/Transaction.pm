@@ -35,7 +35,7 @@ sub is_websocket {undef}
 
 sub is_writing {
   return 1 unless my $state = shift->{state};
-  return $state ~~ [qw/write write_start_line write_headers write_body/];
+  return grep {$_ eq $state} qw/write write_start_line write_headers write_body/;
 }
 
 sub remote_address {
