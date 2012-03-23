@@ -9,6 +9,8 @@ use Mojolicious;
 has description => "Show versions of installed modules.\n";
 has usage       => "usage: $0 version\n";
 
+sub say(@) {print @_, "\n"}
+
 # "It's so cold, my processor is running at peak efficiency!"
 sub run {
   my $self = shift;

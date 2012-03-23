@@ -115,7 +115,7 @@ sub _compile {
   my $pattern = [[]];
   while ($css =~ /$TOKEN_RE/g) {
     my ($separator, $element, $pc, $attrs, $combinator) =
-      ($1, $2 // '', $3, $6, $11);
+      ($1, defined $2 ? $2 : '', $3, $6, $11);
 
     # Trash
     next unless $separator || $element || $pc || $attrs || $combinator;
@@ -166,7 +166,7 @@ sub _compile {
 
     # Attributes
     while ($attrs =~ /$ATTR_RE/g) {
-      my ($key, $op, $value) = ($self->_unescape($1), $2 // '', $3 // $4);
+      my ($key, $op, $value) = ($self->_unescape($1), defined $2 ? $2 : '', defined $3 ? $3 : $4);
       push @$selector, ['attribute', $key, $self->_regex($op, $value)];
     }
 
@@ -193,7 +193,7 @@ sub _equation {
     $num->[0] = $1;
     $num->[0] = $2 ? 1 : 0 unless defined($num->[0]) && length($num->[0]);
     $num->[0] = -1 if $num->[0] eq '-';
-    $num->[1] = $3 // 0;
+    $num->[1] = defined $3 ? $3 : 0;
     $num->[1] =~ s/\s+//g;
   }
 

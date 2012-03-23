@@ -1,4 +1,4 @@
-use 5.010001;
+use 5.008009;
 
 use strict;
 use warnings;
@@ -14,7 +14,7 @@ WriteMakefile(
   AUTHOR       => 'Sebastian Riedel <sri@cpan.org>',
   LICENSE      => 'artistic_2',
   META_MERGE   => {
-    requires  => {perl => '5.010001'},
+    requires  => {perl => '5.008009'},
     resources => {
       homepage    => 'http://mojolicio.us',
       license     => 'http://dev.perl.org/licenses/',

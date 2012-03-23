@@ -163,6 +163,8 @@ sub _config {
   $daemon->listen($listen);
 }
 
+sub say(@) {print @_, "\n"}
+
 sub _exit { say shift and exit 0 }
 
 sub _heartbeat {

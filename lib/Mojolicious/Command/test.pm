@@ -15,6 +15,8 @@ These options are available:
   -v, --verbose   Print verbose debug information to STDERR.
 EOF
 
+sub say(@) {print @_, "\n"}
+
 # "Why, the secret ingredient was...water!
 #  Yes, ordinary water, laced with nothing more than a few spoonfuls of LSD."
 sub run {
@@ -46,7 +48,7 @@ sub run {
   }
 
   # Run tests
-  $ENV{HARNESS_OPTIONS} //= 'c';
+  $ENV{HARNESS_OPTIONS} = defined $ENV{HARNESS_OPTIONS} ? $ENV{HARNESS_OPTIONS} : 'c';
   require Test::Harness;
   Test::Harness::runtests(sort @tests);
 }

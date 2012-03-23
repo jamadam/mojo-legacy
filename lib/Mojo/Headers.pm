@@ -105,7 +105,7 @@ sub parse {
 
   # Parse headers with size limit
   $self->{state} = 'headers';
-  $self->{buffer} //= '';
+  $self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '';
   $self->{buffer} .= $chunk if defined $chunk;
   my $headers = $self->{cache} ||= [];
   my $max = $self->max_line_size;

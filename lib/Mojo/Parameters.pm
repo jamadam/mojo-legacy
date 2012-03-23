@@ -86,7 +86,7 @@ sub params {
 
 sub parse {
   my ($self, $string) = @_;
-  $string //= $self->{string};
+  $string = defined $string ? $string : $self->{string};
 
   # Clear
   delete $self->{string};
@@ -102,8 +102,8 @@ sub parse {
 
     # Parse
     $pair =~ /^([^\=]*)(?:=(.*))?$/;
-    my $name  = $1 // '';
-    my $value = $2 // '';
+    my $name  = defined $1 ? $1 : '';
+    my $value = defined $2 ? $2 : '';
 
     # Replace "+" with whitespace
     $name  =~ s/\+/\ /g;
@@ -112,11 +112,11 @@ sub parse {
     # Unescape
     if (index($name, '%') >= 0) {
       $name = url_unescape $name;
-      $name = decode($charset, $name) // $name if $charset;
+      $name = defined decode($charset, $name) ? decode($charset, $name) : $name if $charset;
     }
     if (index($value, '%') >= 0) {
       $value = url_unescape $value;
-      $value = decode($charset, $value) // $value if $charset;
+      $value = defined decode($charset, $value) ? decode($charset, $value) : $value if $charset;
     }
 
     push @{$self->params}, $name, $value;
@@ -129,7 +129,7 @@ sub parse {
 #  he'd eat you and everyone you care about!"
 sub remove {
   my ($self, $name) = @_;
-  $name //= '';
+  $name = defined $name ? $name : '';
 
   # Remove
   my $params = $self->params;
