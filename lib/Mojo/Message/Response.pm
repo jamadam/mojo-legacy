@@ -73,21 +73,18 @@ my %MESSAGES = (
 sub cookies {
   my $self = shift;
 
-  # Add cookies
+  # Parse cookies
   my $headers = $self->headers;
-  if (@_) {
-    for my $cookie (@_) {
-      $cookie = Mojo::Cookie::Response->new($cookie) if ref $cookie eq 'HASH';
-      $headers->add('Set-Cookie', "$cookie");
-    }
-    return $self;
+  return [map { @{Mojo::Cookie::Response->parse($_)} } $headers->set_cookie]
+    unless @_;
+
+  # Add cookies
+  for my $cookie (@_) {
+    $cookie = Mojo::Cookie::Response->new($cookie) if ref $cookie eq 'HASH';
+    $headers->add('Set-Cookie', "$cookie");
   }
 
-  # Parse cookies
-  my @cookies;
-  push @cookies, @{Mojo::Cookie::Response->parse($_)}
-    for $headers->set_cookie;
-  return \@cookies;
+  return $self;
 }
 
 sub default_message { $MESSAGES{$_[1] || $_[0]->code || 404} || '' }
@@ -206,7 +203,7 @@ implements the following new ones.
 
   my $cookies = $res->cookies;
   $res        = $res->cookies(Mojo::Cookie::Response->new);
-  $req        = $req->cookies({name => 'foo', value => 'bar'});
+  $res        = $res->cookies({name => 'foo', value => 'bar'});
 
 Access response cookies, usually L<Mojo::Cookie::Response> objects.
 

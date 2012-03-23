@@ -14,9 +14,6 @@ use POSIX qw/setsid WNOHANG/;
 use Scalar::Util 'weaken';
 use Time::HiRes 'ualarm';
 
-# Preload
-use Mojo::UserAgent;
-
 sub DESTROY {
   my $self = shift;
 
@@ -66,7 +63,8 @@ sub run {
 
   # Preload application and configure server
   my $daemon = $self->{daemon} = Mojo::Server::Daemon->new;
-  $self->_config(my $app = $daemon->load_app($ENV{HYPNOTOAD_APP}));
+  my $app = $daemon->load_app($ENV{HYPNOTOAD_APP});
+  $self->_config($app);
 
   # Testing
   _exit('Everything looks good!') if $ENV{HYPNOTOAD_TEST};
@@ -92,8 +90,8 @@ sub run {
   }
 
   # Start accepting connections
-  ($self->{log} = $app->log)
-    ->info(qq/Hypnotoad server $$ started for "$ENV{HYPNOTOAD_APP}"./);
+  my $log = $self->{log} = $app->log;
+  $log->info(qq/Hypnotoad server $$ started for "$ENV{HYPNOTOAD_APP}"./);
   $daemon->start;
 
   # Pipe for worker communication
@@ -143,15 +141,15 @@ sub _config {
   $c->{graceful_timeout}   ||= 30;
   $c->{heartbeat_interval} ||= 5;
   $c->{heartbeat_timeout}  ||= 10;
-  $c->{lock_file} ||= catfile($ENV{MOJO_TMPDIR} || tmpdir, 'hypnotoad.lock');
+  $c->{lock_file}          ||= catfile tmpdir, 'hypnotoad.lock';
   $c->{lock_file} .= ".$$";
-  $c->{lock_timeout} ||= '0.5';
-  $c->{pid_file} ||= catfile(dirname($ENV{HYPNOTOAD_APP}), 'hypnotoad.pid');
+  $c->{lock_timeout} ||= 0.5;
+  $c->{pid_file} ||= catfile dirname($ENV{HYPNOTOAD_APP}), 'hypnotoad.pid';
   $c->{upgrade_timeout} ||= 60;
   $c->{workers}         ||= 4;
 
   # Daemon settings
-  $ENV{MOJO_REVERSE_PROXY} = 1 if $c->{proxy};
+  $ENV{MOJO_REVERSE_PROXY} = $c->{proxy};
   my $daemon = $self->{daemon};
   $daemon->backlog($c->{backlog}) if defined $c->{backlog};
   $daemon->max_clients($c->{clients} || 1000);
@@ -163,13 +161,9 @@ sub _config {
   my $listen = $c->{listen} || ['http://*:8080'];
   $listen = [$listen] unless ref $listen;
   $daemon->listen($listen);
-
-  # DEPRECATED in Leaf Fluttering In Wind!
-  $daemon->inactivity_timeout($c->{keep_alive_timeout})
-    if $c->{keep_alive_timeout};
 }
 
-sub _exit { print shift ."\n" and exit 0 }
+sub _exit { say shift and exit 0 }
 
 sub _heartbeat {
   my $self = shift;
@@ -286,8 +280,8 @@ sub _pid_file {
   return if -e (my $file = $self->{config}->{pid_file});
 
   # Create PID file
-  $self->{log}->info(qq/Creating PID file "$file"./);
-  croak qq/Can't create PID file "$file": $!/
+  $self->{log}->info(qq/Creating process id file "$file"./);
+  croak qq/Can't create process id file "$file": $!/
     unless my $pid = IO::File->new($file, '>', 0644);
   print $pid $$;
 }
@@ -498,7 +492,7 @@ L<Mojolicious::Guides::Cookbook/"Hypnotoad"> for examples.
 
 Maximum number of connections a worker is allowed to accept before stopping
 gracefully, defaults to C<1000>. Setting the value to C<0> will allow workers
-to accept new connections infinitely.
+to accept new connections indefinitely.
 
 =head2 C<backlog>
 
@@ -511,7 +505,9 @@ Listen backlog size, defaults to C<SOMAXCONN>.
   clients => 100
 
 Maximum number of parallel client connections per worker process, defaults to
-C<1000>.
+C<1000>. Note that depending on how much your application may block, you
+might want to decrease this value and increase C<workers> instead for better
+performance.
 
 =head2 C<graceful_timeout>
 
@@ -544,7 +540,7 @@ stopped, defaults to C<10>.
   inactivity_timeout => 10
 
 Maximum amount of time in seconds a connection can be inactive before getting
-dropped, defaults to C<15>. Setting the value to C<0> will allow connections
+closed, defaults to C<15>. Setting the value to C<0> will allow connections
 to be inactive indefinitely.
 
 =head2 C<keep_alive_requests>
@@ -564,7 +560,8 @@ also L<Mojo::Server::Daemon/"listen"> for more examples.
 
   lock_file => '/tmp/hypnotoad.lock'
 
-Full path to accept mutex lock file, defaults to a random temporary file.
+Full path of accept mutex lock file prefix, to which the process id will be
+appended, defaults to a random temporary path.
 
 =head2 C<lock_timeout>
 
@@ -577,16 +574,15 @@ accept mutex, defaults to C<0.5>.
 
   pid_file => '/var/run/hypnotoad.pid'
 
-Full path to PID file, defaults to C<hypnotoad.pid> in the same directory as
-the application. Note that this value can only be changed after the server
-has been stopped.
+Full path to process id file, defaults to C<hypnotoad.pid> in the same
+directory as the application. Note that this value can only be changed after
+the server has been stopped.
 
 =head2 C<proxy>
 
   proxy => 1
 
-Activate reverse proxy support, defaults to the value of
-the C<MOJO_REVERSE_PROXY> environment variable.
+Activate reverse proxy support.
 
 =head2 C<upgrade_timeout>
 

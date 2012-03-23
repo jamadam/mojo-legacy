@@ -7,7 +7,7 @@ use utf8;
 # Disable Bonjour, IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
+  $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
 use Test::More tests => 91;
@@ -36,8 +36,8 @@ get '/plain' => {text => 'Nothing to see here!'};
 # WebSocket /push
 websocket '/push' => sub {
   my $self = shift;
-  my $id = Mojo::IOLoop->recurring('0.5' => sub { $self->send('push') });
-  $self->on(finish => sub { Mojo::IOLoop->drop($id) });
+  my $id = Mojo::IOLoop->recurring(0.5 => sub { $self->send('push') });
+  $self->on(finish => sub { Mojo::IOLoop->remove($id) });
 };
 
 # WebSocket /unicode

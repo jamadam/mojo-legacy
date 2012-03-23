@@ -238,8 +238,9 @@ sub message_unlike {
 }
 
 # "God bless those pagans."
-sub patch_ok { shift->_request_ok(patch => @_) }
-sub post_ok  { shift->_request_ok(post  => @_) }
+sub options_ok { shift->_request_ok(options => @_) }
+sub patch_ok   { shift->_request_ok(patch   => @_) }
+sub post_ok    { shift->_request_ok(post    => @_) }
 
 sub post_form_ok {
   my ($self, $url) = (shift, shift);
@@ -456,15 +457,6 @@ Alias for L<Mojo::UserAgent/"app">.
   # Change log level
   $t->app->log->level('fatal');
 
-  # Disable inactivity timeout for all connections
-  $t->app->hook(after_build_tx => sub {
-    my ($tx, $app) = @_;
-    $tx->on(connection => sub {
-      my ($tx, $id) = @_;
-      Mojo::IOLoop->stream($id)->timeout(0);
-    });
-  });
-
 =head2 C<content_is>
 
   $t = $t->content_is('working!');
@@ -546,8 +538,7 @@ Opposite of C<element_exists>.
   $t = $t->finish_ok;
   $t = $t->finish_ok('finished successfully');
 
-Finish C<WebSocket> connection. Note that this method is EXPERIMENTAL and
-might change without warning!
+Finish C<WebSocket> connection.
 
 =head2 C<get_ok>
 
@@ -626,40 +617,42 @@ Opposite of C<json_has>.
   $t = $t->message_is('working!');
   $t = $t->message_is('working!', 'right message');
 
-Check WebSocket message for exact match. Note that this method is
-EXPERIMENTAL and might change without warning!
+Check WebSocket message for exact match.
 
 =head2 C<message_isnt>
 
   $t = $t->message_isnt('working!');
   $t = $t->message_isnt('working!', 'different message');
 
-Opposite of C<message_is>. Note that this method is EXPERIMENTAL and might
-change without warning!
+Opposite of C<message_is>.
 
 =head2 C<message_like>
 
   $t = $t->message_like(qr/working!/);
   $t = $t->message_like(qr/working!/, 'right message');
 
-Check WebSocket message for similar match. Note that this method is
-EXPERIMENTAL and might change without warning!
+Check WebSocket message for similar match.
 
 =head2 C<message_unlike>
 
   $t = $t->message_unlike(qr/working!/);
   $t = $t->message_unlike(qr/working!/, 'different message');
 
-Opposite of C<message_like>. Note that this method is EXPERIMENTAL and might
-change without warning!
+Opposite of C<message_like>.
+
+=head2 C<options_ok>
+
+  $t = $t->options_ok('/foo');
+
+Perform a C<OPTIONS> request and check for transport errors, takes the exact
+same arguments as L<Mojo::UserAgent/"options">.
 
 =head2 C<patch_ok>
 
   $t = $t->patch_ok('/foo');
 
 Perform a C<PATCH> request and check for transport errors, takes the exact
-same arguments as L<Mojo::UserAgent/"patch">. Note that this method is
-EXPERIMENTAL and might change without warning!
+same arguments as L<Mojo::UserAgent/"patch">.
 
 =head2 C<post_ok>
 
@@ -696,8 +689,7 @@ Reset user agent session.
   $t = $t->send_ok('hello');
   $t = $t->send_ok('hello', 'sent successfully');
 
-Send message or frame via WebSocket. Note that this method is EXPERIMENTAL
-and might change without warning!
+Send message or frame via WebSocket.
 
 =head2 C<status_is>
 
@@ -746,8 +738,7 @@ Opposite of C<text_like>.
   $t = $t->websocket_ok('/echo');
 
 Open a C<WebSocket> connection with transparent handshake, takes the exact
-same arguments as L<Mojo::UserAgent/"websocket">. Note that this method is
-EXPERIMENTAL and might change without warning!
+same arguments as L<Mojo::UserAgent/"websocket">.
 
 =head1 SEE ALSO
 

@@ -15,7 +15,7 @@ has verbose => sub { $ENV{MOJO_EXCEPTION_VERBOSE} || 0 };
 # "Attempted murder? Now honestly, what is that?
 #  Do they give a Nobel Prize for attempted chemistry?"
 sub new {
-  my $self = shift->SUPER::new();
+  my $self = shift->SUPER::new;
   return @_ ? $self->_detect(@_) : $self;
 }
 
@@ -44,7 +44,7 @@ sub to_string {
 
 sub trace {
   my ($self, $start) = @_;
-  $start = defined $start ? $start : 1;
+  $start //= 1;
   my @frames;
   while (my @trace = caller($start++)) { push @frames, \@trace }
   $self->frames(\@frames);

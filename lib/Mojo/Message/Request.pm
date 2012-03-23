@@ -39,22 +39,20 @@ sub clone {
 sub cookies {
   my $self = shift;
 
-  # Add cookies
+  # Parse cookies
   my $headers = $self->headers;
-  if (@_) {
-    my @cookies = $headers->cookie || ();
-    for my $cookie (@_) {
-      $cookie = Mojo::Cookie::Request->new($cookie) if ref $cookie eq 'HASH';
-      push @cookies, $cookie;
-    }
-    $headers->cookie(join('; ', @cookies));
-    return $self;
-  }
+  return [map { @{Mojo::Cookie::Request->parse($_)} } $headers->cookie]
+    unless @_;
 
-  # Cookie
-  my @cookies;
-  push @cookies, @{Mojo::Cookie::Request->parse($_)} for $headers->cookie;
-  return \@cookies;
+  # Add cookies
+  my @cookies = $headers->cookie || ();
+  for my $cookie (@_) {
+    $cookie = Mojo::Cookie::Request->new($cookie) if ref $cookie eq 'HASH';
+    push @cookies, $cookie;
+  }
+  $headers->cookie(join('; ', @cookies));
+
+  return $self;
 }
 
 sub fix_headers {
@@ -397,8 +395,7 @@ implements the following new ones.
 
   my $clone = $req->clone;
 
-Clone request if possible, otherwise return C<undef>. Note that this method
-is EXPERIMENTAL and might change without warning!
+Clone request if possible, otherwise return C<undef>.
 
 =head2 C<cookies>
 
@@ -430,7 +427,9 @@ Check C<X-Requested-With> header for C<XMLHttpRequest> value.
 
 =head2 C<param>
 
-  my $param = $req->param('foo');
+  my @names = $req->param;
+  my $foo   = $req->param('foo');
+  my @foo   = $req->param('foo');
 
 Access C<GET> and C<POST> parameters.
 

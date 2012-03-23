@@ -68,7 +68,7 @@ sub encode {
 sub say {
   my ($self, $handle) = @_;
   $handle ||= \*STDOUT;
-  print $handle $$self . "\n";
+  say $handle $$self;
 }
 
 sub secure_compare {

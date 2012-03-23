@@ -8,11 +8,7 @@ use POSIX 'WNOHANG';
 
 use constant DEBUG => $ENV{MORBO_DEBUG} || 0;
 
-has listen => sub { [] };
-has watch  => sub { [qw/lib templates/] };
-
-# Cache stats
-my $STATS = {};
+has watch => sub { [qw/lib templates/] };
 
 # "All in all, this is one day Mittens the kitten won’t soon forget.
 #  Kittens give Morbo gas.
@@ -25,9 +21,10 @@ sub check_file {
   # Check if modify time and/or size have changed
   my ($size, $mtime) = (stat $file)[7, 9];
   return unless defined $mtime;
-  my $stats = $STATS->{$file} ||= [$^T, $size];
+  my $cache = $self->{cache} ||= {};
+  my $stats = $cache->{$file} ||= [$^T, $size];
   return if $mtime <= $stats->[0] && $size == $stats->[1];
-  $STATS->{$file} = [$mtime, $size];
+  $cache->{$file} = [$mtime, $size];
 
   return 1;
 }
@@ -72,7 +69,7 @@ sub _manage {
     warn "CHECKING $file\n" if DEBUG;
     next unless $self->check_file($file);
     warn "MODIFIED $file\n" if DEBUG;
-    print qq/File "$file" changed, restarting.\n/ if $ENV{MORBO_VERBOSE};
+    say qq/File "$file" changed, restarting./ if $ENV{MORBO_VERBOSE};
     kill 'TERM', $self->{running} if $self->{running};
     $self->{modified} = 1;
   }
@@ -114,7 +111,6 @@ sub _spawn {
   my $daemon = Mojo::Server::Daemon->new;
   $daemon->load_app($self->watch->[0]);
   $daemon->silent(1) if $ENV{MORBO_REV} > 1;
-  $daemon->listen($self->listen) if @{$self->listen};
   $daemon->start;
   my $loop = $daemon->ioloop;
   $loop->recurring(
@@ -142,8 +138,7 @@ Mojo::Server::Morbo - DOOOOOOOOOOOOOOOOOOM!
 L<Mojo::Server::Morbo> is a full featured self-restart capable non-blocking
 I/O HTTP 1.1 and WebSocket server built around the very well tested and
 reliable L<Mojo::Server::Daemon> with C<IPv6>, C<TLS>, C<Bonjour> and
-C<libev> support. Note that this module is EXPERIMENTAL and might change
-without warning!
+C<libev> support.
 
 To start applications with it you can use the L<morbo> script.
 
@@ -158,13 +153,6 @@ C<MOJO_NO_BONJOUR>, C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
 =head1 ATTRIBUTES
 
 L<Mojo::Server::Morbo> implements the following attributes.
-
-=head2 C<listen>
-
-  my $listen = $morbo->listen;
-  $morbo     = $morbo->listen(['http://*:3000']);
-
-List of one or more locations to listen on, defaults to C<http://*:3000>.
 
 =head2 C<watch>
 
@@ -182,7 +170,7 @@ the following new ones.
 
 =head2 C<check_file>
 
-  $morbo->check_file('script/myapp');
+  my $success = $morbo->check_file('/home/sri/lib/MyApp.pm');
 
 Check if file has been modified since last check.
 

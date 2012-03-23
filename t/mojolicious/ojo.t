@@ -4,15 +4,15 @@ use utf8;
 
 # Disable Bonjour, IPv6 and libev
 BEGIN {
-  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER}  = 'Mojo::IOWatcher';
   $ENV{MOJO_MODE}       = 'development';
+  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
+  $ENV{MOJO_REACTOR}    = 'Mojo::Reactor::Poll';
 }
 
 use Test::More tests => 11;
 
 # "What do you mean 'we', flesh-tube?"
-use_ok 'ojo';
+use ojo;
 
 # * /
 a('/' => sub {
@@ -26,6 +26,9 @@ is g('/')->body, 'GET', 'right content';
 
 # HEAD /
 is h('/')->body, '', 'no content';
+
+# OPTIONS /
+is o('/')->body, 'OPTIONS', 'right content';
 
 # PATCH /
 is t('/')->body, 'PATCH', 'right content';

@@ -27,7 +27,7 @@ solid and fast enough for small to mid sized applications.
 It has many configuration options and is known to work on every platform
 Perl works on.
 
-  $ ./script/myapp help daemon
+  $ ./script/myapp daemon -h
   ...List of available options...
 
 Another huge advantage is that it supports TLS and WebSockets out of the box.
@@ -243,6 +243,7 @@ You can also use the built-in web server to embed L<Mojolicious> applications
 into alien environments like foreign event loops.
 
   use Mojolicious::Lite;
+  use Mojo::IOLoop;
   use Mojo::Server::Daemon;
 
   # Normal action
@@ -301,6 +302,7 @@ Multiple events such as parallel requests can be easily synchronized with a
 L<Mojo::IOLoop> delay.
 
   use Mojolicious::Lite;
+  use Mojo::IOLoop;
 
   # Search Twitter for "perl" and "python"
   get '/' => sub {
@@ -336,6 +338,7 @@ for example be used to delay rendering of a response, and unlike C<sleep>,
 won't block any other requests that might be processed in parallel.
 
   use Mojolicious::Lite;
+  use Mojo::IOLoop;
 
   # Wait 3 seconds before rendering a response
   get '/' => sub {
@@ -347,10 +350,11 @@ won't block any other requests that might be processed in parallel.
 
   app->start;
 
-Recurring timers are slightly more powerful, but need to be dropped manually,
+Recurring timers are slightly more powerful, but need to be stopped manually,
 or they would just keep getting emitted.
 
   use Mojolicious::Lite;
+  use Mojo::IOLoop;
 
   # Count to 5 in 1 second steps
   get '/' => sub {
@@ -364,7 +368,7 @@ or they would just keep getting emitted.
     });
 
     # Stop recurring timer
-    $self->on(finish => sub { Mojo::IOLoop->drop($id) });
+    $self->on(finish => sub { Mojo::IOLoop->remove($id) });
   };
 
   app->start;
@@ -387,6 +391,16 @@ created at startup time.
 
   app->start;
 
+Since timers and other low level event watchers are also independent from
+applications, errors can't get logged automatically, you can change that by
+subscribing to the event L<Mojo::Reactor/"error">.
+
+  # Forward error messages to the application log
+  Mojo::IOLoop->singleton->reactor->on(error => sub {
+    my ($reactor, $err) = @_;
+    app->log->error($err);
+  });
+
 Just remember that all events are processed cooperatively, so your callbacks
 shouldn't block for too long.
 
@@ -394,9 +408,11 @@ shouldn't block for too long.
 
 The WebSocket protocol offers full bi-directional low-latency communication
 channels between clients and servers. Receiving messages is as easy as
-subscribing to the C<message> event of the transaction.
+subscribing to the event L<Mojo::Transaction::WebSocket/"message"> with the
+method L<Mojolicious::Controller/"on">.
 
   use Mojolicious::Lite;
+  use Mojo::IOLoop;
 
   # Template with browser-side code
   get '/' => 'index';
@@ -448,8 +464,8 @@ subscribing to the C<message> event of the transaction.
     </body>
   </html>
 
-The C<finish> event will be emitted right after the WebSocket connection has
-been closed.
+The event L<Mojo::Transaction::WebSocket/"finish"> will be emitted right
+after the WebSocket connection has been closed.
 
 =head2 Testing WebSocket web services
 
@@ -480,6 +496,7 @@ the advantage however is low infrastructure requirements, since it reuses the
 HTTP protocol for transport.
 
   use Mojolicious::Lite;
+  use Mojo::IOLoop;
 
   # Template with browser-side code
   get '/' => 'index';
@@ -526,8 +543,9 @@ HTTP protocol for transport.
     </body>
   </html>
 
-The C<message> event will be emitted for every new log message and the
-C<finish> event right after the transaction has been finished.
+The event L<Mojo::Log/"message"> will be emitted for every new log message
+and the event L<Mojo::Transaction/"finish"> right after the transaction has
+been finished.
 
 =head2 Streaming multipart uploads
 
@@ -545,7 +563,7 @@ which can be combined to solve some of hardest problems in web development.
     $tx->req->content->on(upgrade => sub { $tx->emit('request') });
   };
 
-  # Upload form
+  # Upload form in DATA section
   get '/' => 'index';
 
   # Streaming multipart upload (invoked twice, due to early "request" event)
@@ -583,8 +601,7 @@ which can be combined to solve some of hardest problems in web development.
   <html>
     <head><title>Streaming multipart upload</title></head>
     <body>
-      % my @attrs = (method => 'POST', enctype => 'multipart/form-data');
-      %= form_for upload => @attrs => begin
+      %= form_for upload => (enctype => 'multipart/form-data') => begin
         %= file_field 'example'
         %= submit_button 'Upload'
       % end
@@ -711,9 +728,10 @@ You can just add username and password to the URL.
 
 =head2 Decorating followup requests
 
-L<Mojo::UserAgent> can automatically follow redirects, the C<start> event
-allows you direct access to each transaction right after they have been
-initialized and before a connection gets associated with them.
+L<Mojo::UserAgent> can automatically follow redirects, the event
+L<Mojo::UserAgent/"start"> allows you direct access to each transaction right
+after they have been initialized and before a connection gets associated with
+them.
 
   use Mojo::UserAgent;
 
@@ -752,8 +770,9 @@ L<Mojo::UserAgent> makes it actually easy.
   # Process transaction
   $ua->start($tx);
 
-The C<read> event will be emitted for every chunk of data that is received,
-even C<chunked> encoding will be handled transparently if necessary.
+The event L<Mojo::Content/"read"> will be emitted for every chunk of data
+that is received, even C<chunked> encoding will be handled transparently if
+necessary.
 
 =head2 Streaming request
 
@@ -782,8 +801,8 @@ Sending a streaming request is almost just as easy.
   # Process transaction
   $ua->start($tx);
 
-The drain callback passed to C<write> will be invoked whenever the entire
-previous chunk has actually been written.
+The drain callback passed to L<Mojo::Message/"write"> will be invoked
+whenever the entire previous chunk has actually been written.
 
 =head2 Large file downloads
 
@@ -900,8 +919,8 @@ transactions will be in random order.
   $ua->get('http://mojolicio.us/perldoc' => $delay->begin);
   my ($tx, $tx2) = $delay->wait;
 
-The C<finish> event of L<Mojo::IOLoop::Delay> can be used in code that needs
-to be able to work standalone as well as inside L<Mojolicious> applications.
+The event L<Mojo::IOLoop::Delay/"finish"> can be used for code that needs to
+be able to work standalone as well as inside L<Mojolicious> applications.
 
   use Mojo::UserAgent;
   use Mojo::IOLoop;
@@ -1011,7 +1030,7 @@ you can use or overload.
 
 Ever thought about running a quick oneliner against your L<Mojolicious>
 application to test something?
-Thanks to the C<eval> command you can do just that, the application instance
+Thanks to the C<eval> command you can do just that, the application object
 itself can be accessed via C<app>.
 
   $ mojo generate lite_app

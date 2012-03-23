@@ -17,7 +17,7 @@ has pair_separator => '&';
 #  HOMER!
 #  I gotta go Moe my damn weiner kids are listening."
 sub new {
-  my $self = shift->SUPER::new();
+  my $self = shift->SUPER::new;
 
   # Hash/Array
   if (@_ > 1) { $self->append(@_) }
@@ -86,7 +86,7 @@ sub params {
 
 sub parse {
   my ($self, $string) = @_;
-  $string = defined $string ? $string : $self->{string};
+  $string //= $self->{string};
 
   # Clear
   delete $self->{string};
@@ -102,8 +102,8 @@ sub parse {
 
     # Parse
     $pair =~ /^([^\=]*)(?:=(.*))?$/;
-    my $name  = defined $1 ? $1 : '';
-    my $value = defined $2 ? $2 : '';
+    my $name  = $1 // '';
+    my $value = $2 // '';
 
     # Replace "+" with whitespace
     $name  =~ s/\+/\ /g;
@@ -112,11 +112,11 @@ sub parse {
     # Unescape
     if (index($name, '%') >= 0) {
       $name = url_unescape $name;
-      $name = defined decode($charset, $name) ? decode($charset, $name) : $name if $charset;
+      $name = decode($charset, $name) // $name if $charset;
     }
     if (index($value, '%') >= 0) {
       $value = url_unescape $value;
-      $value = defined decode($charset, $value) ? decode($charset, $value) : $value if $charset;
+      $value = decode($charset, $value) // $value if $charset;
     }
 
     push @{$self->params}, $name, $value;
@@ -129,7 +129,7 @@ sub parse {
 #  he'd eat you and everyone you care about!"
 sub remove {
   my ($self, $name) = @_;
-  $name = defined $name ? $name : '';
+  $name //= '';
 
   # Remove
   my $params = $self->params;

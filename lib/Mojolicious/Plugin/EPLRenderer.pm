@@ -61,8 +61,7 @@ sub register {
 
           # No template
           else {
-            $c->app->log->debug(qq/Template "$t" not found./)
-              and return;
+            $c->app->log->debug(qq/Template "$t" not found./) and return;
           }
         }
 
@@ -70,15 +69,8 @@ sub register {
         $cache->set($key => $mt);
       }
 
-      # Exception
-      if (ref $$output) {
-        my $e = $$output;
-        $$output = '';
-        $c->render_exception($e);
-      }
-
-      # Success or exception
-      return ref $$output ? 0 : 1;
+      # Exception or success
+      return ref $$output ? die($$output) : 1;
     }
   );
 }

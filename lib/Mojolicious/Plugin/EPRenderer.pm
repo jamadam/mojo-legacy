@@ -16,11 +16,11 @@ sub register {
   my $template = $conf->{template} || {};
 
   # Custom sandbox
-  $template->{namespace} = defined $template->{namespace} ? $template->{namespace} : 
+  $template->{namespace} //=
     'Mojo::Template::SandBox::' . md5_sum(($ENV{MOJO_EXE} || ref $app) . $$);
 
   # Auto escape by default to prevent XSS attacks
-  $template->{auto_escape} = defined $template->{auto_escape} ? $template->{auto_escape} : 1;
+  $template->{auto_escape} //= 1;
 
   # Add "ep" handler
   $app->renderer->add_handler(

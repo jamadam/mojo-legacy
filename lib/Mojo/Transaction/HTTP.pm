@@ -85,8 +85,8 @@ sub keep_alive {
   return 1 if $req_conn eq 'keep-alive' || $res_conn eq 'keep-alive';
 
   # No keep alive for 0.9 and 1.0
-  return if grep {$_ eq $req->version} qw/0.9 1.0/;
-  return if grep {$_ eq $res->version} qw/0.9 1.0/;
+  return if $req->version ~~ [qw/0.9 1.0/];
+  return if $res->version ~~ [qw/0.9 1.0/];
 
   return 1;
 }
@@ -308,8 +308,7 @@ Emitted when a request is ready and needs to be handled.
   });
 
 Emitted when transaction gets upgraded to a L<Mojo::Transaction::WebSocket>
-object. Note that this event is EXPERIMENTAL and might change without
-warning!
+object.
 
   $tx->on(upgrade => sub {
     my ($tx, $ws) = @_;

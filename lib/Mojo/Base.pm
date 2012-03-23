@@ -4,10 +4,10 @@ use strict;
 use warnings;
 
 # Mojo modules are modern!
-# require feature;
+use feature ();
 
 # No imports because we get subclassed, a lot!
-require Carp;
+use Carp ();
 
 # "Kids, you tried your best and you failed miserably.
 #  The lesson is, never try."
@@ -190,16 +190,16 @@ L<Mojo::Base> implements the following methods.
 
 =head2 C<new>
 
-  my $instance = BaseSubClass->new;
-  my $instance = BaseSubClass->new(name => 'value');
-  my $instance = BaseSubClass->new({name => 'value'});
+  my $object = BaseSubClass->new;
+  my $object = BaseSubClass->new(name => 'value');
+  my $object = BaseSubClass->new({name => 'value'});
 
 This base class provides a basic object constructor. You can pass it either a
 hash or a hash reference with attribute values.
 
 =head2 C<attr>
 
-  $instance->attr('name');
+  $object->attr('name');
   BaseSubClass->attr('name');
   BaseSubClass->attr([qw/name1 name2 name3/]);
   BaseSubClass->attr(name => 'foo');

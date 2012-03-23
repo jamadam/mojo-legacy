@@ -25,8 +25,7 @@ sub error {
   my $req  = $self->req;
   return $req->error if $req->error;
   my $res = $self->res;
-  return $res->error if $res->error;
-  return;
+  return $res->error ? $res->error : undef;
 }
 
 sub is_finished { (shift->{state} || '') eq 'finished' }
@@ -35,7 +34,7 @@ sub is_websocket {undef}
 
 sub is_writing {
   return 1 unless my $state = shift->{state};
-  return grep {$_ eq $state} qw/write write_start_line write_headers write_body/;
+  return $state ~~ [qw/write write_start_line write_headers write_body/];
 }
 
 sub remote_address {
@@ -70,8 +69,7 @@ sub server_write { croak 'Method "server_write" not implemented by subclass' }
 
 sub success {
   my $self = shift;
-  return $self->res unless $self->error;
-  return;
+  return $self->error ? undef : $self->res;
 }
 
 1;
@@ -152,6 +150,7 @@ Local interface port.
 
 Previous transaction that triggered this followup transaction.
 
+  # Path of previous request
   say $tx->previous->req->url->path;
 
 =head2 C<remote_address>
@@ -269,6 +268,7 @@ Returns the L<Mojo::Message::Response> object (C<res>) if transaction was
 successful or C<undef> otherwise. Connection and parser errors have only a
 message in C<error>, 400 and 500 responses also a code.
 
+  # Sensible exception handling
   if (my $res = $tx->success) {
     say $res->body;
   }

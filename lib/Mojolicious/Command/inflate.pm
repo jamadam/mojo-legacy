@@ -10,8 +10,14 @@ has usage       => "usage: $0 inflate\n";
 sub run {
   my $self = shift;
 
-  # Find and turn all embedded files into real files
-  my $all = $self->get_all_data($self->app->renderer->default_template_class);
+  # Find all embedded files
+  my $all = {};
+  my $app = $self->app;
+  for my $class (@{$app->renderer->classes}, @{$app->static->classes}) {
+    $all = {%{$self->get_all_data($class)}, %$all};
+  }
+
+  # Turn them into real files
   for my $file (keys %$all) {
     my $prefix = $file =~ /\.\w+\.\w+$/ ? 'templates' : 'public';
     my $path = $self->rel_file("$prefix/$file");
@@ -35,8 +41,8 @@ Mojolicious::Command::inflate - Inflate command
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::inflate> turns all your embedded templates into real
-ones.
+L<Mojolicious::Command::inflate> turns templates and static files embedded in
+the C<DATA> sections of your application into real files.
 
 =head1 ATTRIBUTES
 

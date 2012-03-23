@@ -181,8 +181,9 @@ class, but the router can be accessed from everywhere (even at runtime).
 
 =head2 Routing destination
 
-After you start a new route with the C<route> method you can also give it a
-destination in the form of a hash using the chained C<to> method.
+After you start a new route with the method L<Mojolicious::Routes/"route">,
+you can also give it a destination in the form of a hash using the chained
+method L<Mojolicious::Routes::Route/"to">.
 
   # /welcome -> {controller => 'foo', action => 'welcome'}
   $r->route('/welcome')->to(controller => 'foo', action => 'welcome');
@@ -258,11 +259,8 @@ sensitive.
   sub startup {
     my $self = shift;
 
-    # Router
-    my $r = $self->routes;
-
     # /bye -> {controller => 'foo', action => 'bye'} -> MyApp::Foo->bye
-    $r->route('/bye')->to(controller => 'foo', action => 'bye');
+    $self->routes->route('/bye')->to(controller => 'foo', action => 'bye');
   }
 
   1;
@@ -314,7 +312,7 @@ The C<controller> is always appended to the C<namespace> if available.
   $r->route('/bye')->to('foo#bye', namespace => 'MyApp::Controller');
 
 You can also change the default namespace for all routes in the application
-with the C<namespace> attribute of the router object.
+with the router attribute L<Mojolicious::Routes/"namespace">.
 
   $r->namespace('MyApp::Controller');
 
@@ -427,18 +425,19 @@ Or you can just disable format detection.
 
 =head2 Named routes
 
-Naming your routes will allow backreferencing in many kinds of helpers
-throughout the whole framework.
+Naming your routes will allow backreferencing in many methods and helpers
+throughout the whole framework, most of them internally rely on
+L<Mojolicious::Controller/"url_for"> for this.
 
   # /foo/abc -> {controller => 'foo', action => 'bar', name => 'abc'}
   $r->route('/foo/:name')->name('test')
     ->to(controller => 'foo', action => 'bar');
 
   # Generate URL "/foo/abc" for route "test"
-  $self->url_for('test');
+  my $url = $self->url_for('test');
 
   # Generate URL "/foo/sebastian" for route "test"
-  $self->url_for('test', name => 'sebastian');
+  my $url = $self->url_for('test', name => 'sebastian');
 
 Nameless routes get an automatically generated one assigned that is simply
 equal to the route itself without non-word characters.
@@ -447,19 +446,28 @@ equal to the route itself without non-word characters.
   $r->route('/foo/bar')->to('test#stuff');
 
   # Generate URL "/foo/bar"
-  $self->url_for('foobar');
+  my $url = $self->url_for('foobar');
 
 To refer to the current route you can use the reserved name C<current> or no
 name at all.
 
   # Generate URL for current route
-  $self->url_for('current');
-  $self->url_for;
+  my $url = $self->url_for('current');
+  my $url = $self->url_for;
+
+To check or get the name of the current route you can use the helper
+L<Mojolicious::Plugin::DefaultHelpers/"current_route">.
+
+  # Name for current route
+  my $name = $self->current_route;
+
+  # Check route name in code shared by multiple routes
+  $self->stash(button => 'green') if $self->current_route('login');
 
 =head2 HTTP methods
 
-The C<via> method of the route object allows only specific HTTP methods to
-pass.
+The method L<Mojolicious::Routes::Route/"via"> allows only specific HTTP
+methods to pass.
 
   # GET /bye    -> {controller => 'foo', action => 'bye'}
   # POST /bye   -> undef
@@ -474,7 +482,8 @@ pass.
 
 =head2 Bridges
 
-Bridges unlike nested routes always match and result in additional dispatch
+Bridges can be used to share code with multiple nested routes, because unlike
+normal nested routes, they always match and result in additional dispatch
 cycles.
 
   # /foo     -> undef
@@ -512,6 +521,36 @@ have children.
   $foo->route('/bar')->to(action => 'bar');
 
 All children will be ignored if a waypoint matches.
+
+=head2 Hooks
+
+Hooks operate outside the routing system and allow you to extend
+L<Mojolicious> itself by sharing code with all requests indiscriminately,
+which makes them a very powerful tool especially for plugins.
+
+  # Application
+  package MyApp;
+  use Mojo::Base 'Mojolicious';
+
+  sub startup {
+    my $self = shift;
+
+    # Check all requests for a "/test" prefix
+    $self->hook(before_dispatch => sub {
+      my $self = shift;
+      $self->render(text => 'This request did not reach the router.')
+        if $self->req->url->path->contains('/test');
+    });
+
+    # These will not be reached if the hook above renders a response
+    my $r = $self->routes;
+    $r->route('/welcome')->to('foo#welcome');
+    $r->route('/bye')->to('foo#bye');
+  }
+
+  1;
+
+For a full list of available hooks see L<Mojolicious/"hook">.
 
 =head2 Mojolicious::Lite routes
 
@@ -576,7 +615,7 @@ out for quicksand!
 The C<routes> command can be used from the command line to list all available
 routes together with name and underlying regular expressions.
 
-  $ script/myapp routes -v
+  $ ./myapp.pl routes -v
   /foo/:name  GET   fooname  ^/foo/([^/\.]+))(?:\.([^/]+)$)?
   /bar        POST  bar      ^/bar(?:\.([^/]+)$)?
 
@@ -599,7 +638,8 @@ snowman very sad.
 
 =head2 WebSockets
 
-You can restrict access to WebSocket handshakes using the C<websocket> method.
+You can restrict access to WebSocket handshakes using the method
+L<Mojolicious::Routes::Route/"websocket">.
 
   # /echo (WebSocket handshake)
   $r->websocket('/echo')->to(controller => 'foo', action => 'echo');
@@ -646,8 +686,9 @@ play, they are basically router plugins.
   $r->route('/firefox_only')->over(agent => qr/Firefox/)
     ->to(controller => 'foo', action => 'bar');
 
-The method C<add_condition> registers the new condition in the router while
-C<over> actually applies it to the route.
+The method L<Mojolicious::Routes::Route/"add_condition"> registers the new
+condition in the router, while L<Mojolicious::Routes/"over"> actually applies
+it to the route.
 
 =head2 Condition plugins
 
@@ -691,11 +732,8 @@ applications.
     # Plugin
     $self->plugin('WerewolfCondition');
 
-    # Routes
-    my $r = $self->routes;
-
     # /hideout (keep them out for 4 days after full moon)
-    $r->route('/hideout')->over(werewolf => 4)
+    $self->routes->route('/hideout')->over(werewolf => 4)
       ->to(controller => 'foo', action => 'bar');
   }
 
@@ -720,9 +758,10 @@ domain specific language in normal L<Mojolicious> controllers.
 
   1;
 
-With the C<detour> method which is very similar to C<to>, you can allow the
-route to partially match and use only the remaining path in the embedded
-application, the base path will be passed along in the C<path> stash value.
+With the method L<Mojolicious::Routes::Route/"detour"> which is very similar
+to L<Mojolicious::Routes::Route/"to">, you can allow the route to partially
+match and use only the remaining path in the embedded application, the base
+path will be passed along in the C<path> stash value.
 
   # /foo/*
   $r->route('/foo')->detour('bar#', name => 'Mojo');

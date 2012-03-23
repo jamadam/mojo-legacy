@@ -51,11 +51,9 @@ sub detect {
 
 sub type {
   my ($self, $ext, $type) = @_;
-  if ($type) {
-    $self->types->{$ext} = $type;
-    return $self;
-  }
-  return $self->types->{$ext || ''};
+  return $self->types->{$ext || ''} unless $type;
+  $self->types->{$ext} = $type;
+  return $self;
 }
 
 1;
@@ -88,15 +86,14 @@ List of MIME types.
 
 =head1 METHODS
 
-L<Mojolicious::Types> inherits all methods from L<Mojo::Base> and implements the
-following ones.
+L<Mojolicious::Types> inherits all methods from L<Mojo::Base> and implements
+the following ones.
 
 =head2 C<detect>
 
   my $extensions = $types->detect('application/json;q=9');
 
-Detect file extensions from C<Accept> header value. Note that this method is
-EXPERIMENTAL and might change without warning!
+Detect file extensions from C<Accept> header value.
 
 =head2 C<type>
 

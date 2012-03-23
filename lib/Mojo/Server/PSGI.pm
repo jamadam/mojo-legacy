@@ -50,7 +50,10 @@ sub run {
 }
 
 sub to_psgi_app {
-  (my $self = shift)->app;
+  my $self = shift;
+
+  # Preload application and wrap it
+  $self->app;
   return sub { $self->run(@_) }
 }
 
@@ -65,21 +68,16 @@ sub close { shift->{tx}->server_close }
 sub getline {
   my $self = shift;
 
-  # Blocking read
-  my $res = $self->{tx}->res;
-  while (1) {
-    my $chunk = $res->get_body_chunk($self->{offset} = defined $self->{offset} ? $self->{offset} : 0);
+  # No content yet, try again later
+  my $chunk = $self->{tx}->res->get_body_chunk($self->{offset} //= 0);
+  return '' unless defined $chunk;
 
-    # No content yet, try again
-    sleep 1 and next unless defined $chunk;
+  # End of content
+  return unless length $chunk;
 
-    # End of content
-    return unless length $chunk;
-
-    # Content
-    $self->{offset} += length $chunk;
-    return $chunk;
-  }
+  # Content
+  $self->{offset} += length $chunk;
+  return $chunk;
 }
 
 1;
@@ -138,8 +136,7 @@ Run L<PSGI>.
 
   my $app = $psgi->to_psgi_app;
 
-Turn L<Mojo> application into L<PSGI> application. Note that this method is
-EXPERIMENTAL and might change without warning!
+Turn L<Mojo> application into L<PSGI> application.
 
 =head1 SEE ALSO
 

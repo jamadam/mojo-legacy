@@ -2,25 +2,24 @@ use Mojo::Base -strict;
 
 # Disable libev and TLS
 BEGIN {
-  $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
-  $ENV{MOJO_NO_TLS}    = 1;
+  $ENV{MOJO_NO_TLS}  = 1;
+  $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
 use Test::More;
 
 plan skip_all => 'set TEST_ONLINE to enable this test (developer only!)'
   unless $ENV{TEST_ONLINE};
-plan tests => 109;
+plan tests => 108;
 
 # "So then I said to the cop, "No, you're driving under the influence...
 #  of being a jerk"."
 use IO::Socket::INET;
 use Mojo::IOLoop;
 use Mojo::Transaction::HTTP;
+use Mojo::UserAgent;
 use Mojolicious::Lite;
 use ojo;
-
-use_ok 'Mojo::UserAgent';
 
 # GET /remote_address
 get '/remote_address' => sub {
@@ -42,7 +41,7 @@ $ua->get(
 );
 $loop->start;
 $ua = undef;
-$loop->one_tick(0);
+$loop->one_tick;
 ok !$loop->stream($id), 'loop not tainted';
 is $code, 301, 'right status';
 
@@ -333,12 +332,12 @@ is $tx4->res->code, 200, 'right status';
 like $tx2->res->content->asset->slurp, qr/Perl/i, 'right content';
 
 # Connect timeout (non-routable address)
-$tx = $ua->connect_timeout('0.5')->get('192.0.2.1');
+$tx = $ua->connect_timeout(0.5)->get('192.0.2.1');
 ok !$tx->is_finished, 'transaction is not finished';
 is $tx->error, 'Connect timeout.', 'right error';
 $ua->connect_timeout(3);
 
 # Request timeout (non-routable address)
-$tx = $ua->request_timeout('0.5')->get('192.0.2.1');
+$tx = $ua->request_timeout(0.5)->get('192.0.2.1');
 ok !$tx->is_finished, 'transaction is not finished';
 is $tx->error, 'Request timeout.', 'right error';

@@ -3,10 +3,10 @@ use Mojo::Base -strict;
 # Disable Bonjour, IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
+  $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 47;
+use Test::More tests => 49;
 
 # "I can't believe it! Reading and writing actually paid off!"
 use IO::Socket::INET;
@@ -150,6 +150,14 @@ websocket '/deadcallback' => sub {
   $self->on(message => sub { die 'i see dead callbacks' });
 };
 
+# WebSocket /timeout
+my $timeout;
+websocket '/timeout' => sub {
+  my $self = shift;
+  Mojo::IOLoop->stream($self->tx->connection)->timeout(0.5);
+  $self->on(finish => sub { $timeout = 'works!' });
+};
+
 # GET /link
 my $ua  = app->ua;
 my $res = $ua->get('/link')->success;
@@ -288,7 +296,7 @@ $ua->websocket(
     $tx->on(
       finish => sub {
         $finished += 4;
-        $loop->timer('0.5' => sub { shift->stop });
+        $loop->timer(0.5 => sub { shift->stop });
       }
     );
   }
@@ -313,7 +321,7 @@ $ua->websocket(
         my ($tx, $message) = @_;
         $result .= $message;
         $tx->finish and $running-- if $message eq 'test1';
-        $loop->timer('0.5' => sub { $loop->stop }) unless $running;
+        $loop->timer(0.5 => sub { $loop->stop }) unless $running;
       }
     );
     $tx->on(finish => sub { $finished += 1 });
@@ -329,7 +337,7 @@ $ua->websocket(
         my ($tx, $message) = @_;
         $result2 .= $message;
         $tx->finish and $running-- if $message eq 'test1';
-        $loop->timer('0.5' => sub { $loop->stop }) unless $running;
+        $loop->timer(0.5 => sub { $loop->stop }) unless $running;
       }
     );
     $tx->on(finish => sub { $finished += 2 });
@@ -492,6 +500,23 @@ $ua->websocket(
 );
 $loop->start;
 is $result, 'hi' x 200000, 'right result';
+
+# WebSocket /timeout
+my $log = '';
+$message = app->log->subscribers('message')->[0];
+app->log->unsubscribe(message => $message);
+app->log->level('error');
+app->log->on(message => sub { $log .= pop });
+$ua->websocket(
+  '/timeout' => sub {
+    pop->on(finish => sub { Mojo::IOLoop->stop });
+  }
+);
+Mojo::IOLoop->start;
+app->log->level('fatal');
+app->log->on(message => $message);
+is $timeout, 'works!', 'finish event has been emitted';
+like $log, qr/Inactivity timeout\./, 'right log message';
 
 # WebSocket /echo (ping/pong)
 my $pong;

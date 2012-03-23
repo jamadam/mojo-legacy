@@ -11,7 +11,7 @@ use Mojo::URL;
 has [qw/leading_slash trailing_slash/];
 has parts => sub { [] };
 
-sub new { shift->SUPER::new()->parse(@_) }
+sub new { shift->SUPER::new->parse(@_) }
 
 sub canonicalize {
   my $self = shift;
@@ -28,7 +28,7 @@ sub canonicalize {
     }
 
     # "."
-    next if grep {$_ eq $part} ('.', '');
+    next if $part ~~ ['.', ''];
 
     # Part
     push @parts, $part;
@@ -67,7 +67,7 @@ sub contains {
 
 sub parse {
   my ($self, $path) = @_;
-  $path = defined $path ? $path : '';
+  $path //= '';
 
   $path = url_unescape $path;
   utf8::decode $path;

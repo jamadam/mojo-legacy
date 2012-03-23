@@ -132,8 +132,7 @@ Emit event.
   $e = $e->emit_safe('foo');
   $e = $e->emit_safe('foo', 123);
 
-Emit event safely and emit C<error> event on failure. Note that this method
-is EXPERIMENTAL and might change without warning!
+Emit event safely and emit C<error> event on failure.
 
 =head2 C<has_subscribers>
 
@@ -169,6 +168,7 @@ Subscribe to event and unsubscribe again after it has been emitted once.
 
 All subscribers for event.
 
+  # Unsubscribe last subscriber
   $e->unsubscribe(foo => $e->subscribers('foo')->[-1]);
 
 =head2 C<unsubscribe>

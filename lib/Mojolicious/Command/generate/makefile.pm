@@ -20,7 +20,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
   VERSION   => '0.01',
-  PREREQ_PM => {'Mojolicious' => '2.50'},
+  PREREQ_PM => {'Mojolicious' => '2.60'},
   test      => {TESTS => 't/*.t'}
 );
 
@@ -38,7 +38,8 @@ Mojolicious::Command::generate::makefile - Makefile generator command
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::generate::makefile> is a makefile generator.
+L<Mojolicious::Command::generate::makefile> generates C<Makefile.PL> files
+for applications.
 
 =head1 ATTRIBUTES
 

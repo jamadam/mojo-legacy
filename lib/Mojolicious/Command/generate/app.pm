@@ -86,7 +86,7 @@ sub startup {
   # Documentation browser under "/perldoc"
   $self->plugin('PODRenderer');
 
-  # Routes
+  # Router
   my $r = $self->routes;
 
   # Normal route to controller
@@ -128,10 +128,8 @@ sub welcome {
 % my $class = shift;
 use Mojo::Base -strict;
 
-use Test::More tests => 4;
+use Test::More tests => 3;
 use Test::Mojo;
-
-use_ok '<%= $class %>';
 
 my $t = Test::Mojo->new('<%= $class %>');
 $t->get_ok('/')->status_is(200)->content_like(qr/Mojolicious/i);
@@ -169,7 +167,8 @@ Mojolicious::Command::generate::app - App generator command
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::generate::app> is an application generator.
+L<Mojolicious::Command::generate::app> generates application directory
+structures for fully functional L<Mojolicious> applications.
 
 =head1 ATTRIBUTES
 

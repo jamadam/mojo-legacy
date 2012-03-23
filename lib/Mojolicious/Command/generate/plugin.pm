@@ -108,7 +108,7 @@ WriteMakefile(
   NAME         => '<%= $class %>',
   VERSION_FROM => 'lib/<%= $path %>',
   AUTHOR       => 'A Good Programmer <nospam@cpan.org>',
-  PREREQ_PM    => {'Mojolicious' => '2.50'},
+  PREREQ_PM    => {'Mojolicious' => '2.60'},
   test         => {TESTS => 't/*.t'}
 );
 
@@ -126,7 +126,8 @@ Mojolicious::Command::generate::plugin - Plugin generator command
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::generate::plugin> is a plugin generator.
+L<Mojolicious::Command::generate::plugin> generates directory structures for
+fully functional L<Mojolicious> plugins.
 
 =head1 ATTRIBUTES
 

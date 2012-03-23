@@ -90,6 +90,7 @@ L<Mojo::Asset::Memory> can emit the following events.
 
   $mem->on(upgrade => sub {
     my ($mem, $file) = @_;
+    ...
   });
 
 Emitted when asset gets upgraded to a L<Mojo::Asset::File> object.
@@ -117,8 +118,8 @@ automatically upgrade to a L<Mojo::Asset::File> object.
   my $size = $mem->max_memory_size;
   $mem     = $mem->max_memory_size(1024);
 
-Maximum asset size in bytes, only attempt upgrading to a L<Mojo::Asset::File>
-object after reaching this limit, defaults to the value of the
+Maximum size in bytes of data to keep in memory before automatically
+upgrading to a L<Mojo::Asset::File> object, defaults to the value of the
 C<MOJO_MAX_MEMORY_SIZE> environment variable or C<262144>.
 
 =head1 METHODS

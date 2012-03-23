@@ -3,7 +3,7 @@ use Mojo::Base -strict;
 # Disable Bonjour, IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
+  $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
 use Test::More;
@@ -17,12 +17,10 @@ use Mojo::Command;
 use Mojo::IOLoop;
 use Mojo::UserAgent;
 
+# "I ate the blue ones... they taste like burning."
 plan skip_all => 'set TEST_HYPNOTOAD to enable this test (developer only!)'
   unless $ENV{TEST_HYPNOTOAD};
-plan tests => 51;
-
-# "I ate the blue ones... they taste like burning."
-use_ok 'Mojo::Server::Hypnotoad';
+plan tests => 50;
 
 # Prepare script
 my $cwd = cwd;
@@ -37,8 +35,11 @@ use Mojolicious::Lite;
 
 plugin Config => {
   default => {
-    hypnotoad =>
-      {listen => ['http://*:$port1', 'http://*:$port2'], workers => 1}
+    hypnotoad => {
+      inactivity_timeout => 3,
+      listen => ['http://127.0.0.1:$port1', 'http://127.0.0.1:$port2'],
+      workers => 1
+    }
   }
 };
 
@@ -52,10 +53,11 @@ EOF
 # Start
 my $prefix = "$FindBin::Bin/../../script";
 open my $start, '-|', $^X, "$prefix/hypnotoad", $script;
+sleep 3;
 sleep 1
   while !IO::Socket::INET->new(
   Proto    => 'tcp',
-  PeerAddr => 'localhost',
+  PeerAddr => '127.0.0.1',
   PeerPort => $port2
   );
 my $old = _pid();
@@ -100,8 +102,11 @@ use Mojolicious::Lite;
 
 plugin Config => {
   default => {
-    hypnotoad =>
-      {listen => ['http://*:$port1', 'http://*:$port2'], workers => 1}
+    hypnotoad => {
+      inactivity_timeout => 3,
+      listen => ['http://127.0.0.1:$port1', 'http://127.0.0.1:$port2'],
+      workers => 1
+    }
   }
 };
 
@@ -129,7 +134,7 @@ ok $tx->kept_alive,  'connection was kept alive';
 is $tx->res->code, 200, 'right status';
 is $tx->res->body, 'Hello Hypnotoad!', 'right content';
 
-# Drop keep alive connections
+# Remove keep alive connections
 $ua = Mojo::UserAgent->new;
 
 # Wait for hot deployment to finish
@@ -176,7 +181,7 @@ open my $stop, '-|', $^X, "$prefix/hypnotoad", $script, '-s';
 sleep 1
   while IO::Socket::INET->new(
   Proto    => 'tcp',
-  PeerAddr => 'localhost',
+  PeerAddr => '127.0.0.1',
   PeerPort => $port2
   );
 

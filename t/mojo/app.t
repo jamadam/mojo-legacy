@@ -3,23 +3,22 @@ use Mojo::Base -strict;
 # Disable Bonjour, IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
+  $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 53;
+use Test::More tests => 54;
 
 # "I was so bored I cut the pony tail off the guy in front of us.
 #  Look at me, I'm a grad student.
 #  I'm 30 years old and I made $600 last year.
 #  Bart, don't make fun of grad students.
 #  They've just made a terrible life choice."
+use Mojo;
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
 use Mojo::Transaction::HTTP;
 use Mojo::UserAgent;
-
-use_ok 'Mojo';
-use_ok 'Mojolicious';
+use Mojolicious;
 
 # Timeout
 {
@@ -28,6 +27,21 @@ use_ok 'Mojolicious';
   is(Mojo::Server::Daemon->new->inactivity_timeout, 25, 'right value');
   $ENV{MOJO_INACTIVITY_TIMEOUT} = 0;
   is(Mojo::Server::Daemon->new->inactivity_timeout, 0, 'right value');
+}
+
+# Listen
+{
+  is_deeply(Mojo::Server::Daemon->new->listen,
+    ['http://*:3000'], 'right value');
+  local $ENV{MOJO_LISTEN} = 'http://localhost:8080';
+  is_deeply(Mojo::Server::Daemon->new->listen,
+    ['http://localhost:8080'], 'right value');
+  $ENV{MOJO_LISTEN} = 'http://*:80,https://*:443';
+  is_deeply(
+    Mojo::Server::Daemon->new->listen,
+    ['http://*:80', 'https://*:443'],
+    'right value'
+  );
 }
 
 # Logger
@@ -96,7 +110,7 @@ $id = Mojo::IOLoop->client(
       read => sub {
         my ($stream, $chunk) = @_;
         $buffer .= $chunk;
-        Mojo::IOLoop->drop($id) and Mojo::IOLoop->stop
+        Mojo::IOLoop->remove($id) and Mojo::IOLoop->stop
           if $buffer =~ s/ is working!$//;
         $stream->write('4321')
           if $buffer =~ m#HTTP/1.1 100 Continue.*\x0d\x0a\x0d\x0a#gs;
@@ -119,7 +133,7 @@ $id     = Mojo::IOLoop->client(
       read => sub {
         my ($stream, $chunk) = @_;
         $buffer .= $chunk;
-        Mojo::IOLoop->drop($id) and Mojo::IOLoop->stop
+        Mojo::IOLoop->remove($id) and Mojo::IOLoop->stop
           if $buffer =~ s/ is working!.*is working!$//gs;
       }
     );

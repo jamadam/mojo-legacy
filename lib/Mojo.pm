@@ -5,6 +5,7 @@ use Carp 'croak';
 use Mojo::Home;
 use Mojo::Log;
 use Mojo::Transaction::HTTP;
+use Mojo::UserAgent;
 use Scalar::Util 'weaken';
 
 has home => sub { Mojo::Home->new };
@@ -13,7 +14,6 @@ has ua   => sub {
   my $self = shift;
 
   # Fresh user agent
-  require Mojo::UserAgent;
   my $ua = Mojo::UserAgent->new->app($self);
   weaken $self;
   $ua->on(error => sub { $self->log->error(pop) });
@@ -110,6 +110,7 @@ L<Mojo> implements the following attributes.
 The home directory of your application, defaults to a L<Mojo::Home> object
 which stringifies to the actual path.
 
+  # Generate portable path relative to home directory
   my $path = $app->home->rel_file('data/important.txt');
 
 =head2 C<log>
@@ -119,6 +120,7 @@ which stringifies to the actual path.
 
 The logging layer of your application, defaults to a L<Mojo::Log> object.
 
+  # Log debug message
   $app->log->debug('It works!');
 
 =head2 C<ua>
@@ -128,6 +130,9 @@ The logging layer of your application, defaults to a L<Mojo::Log> object.
 
 A full featured HTTP 1.1 user agent for use in your applications, defaults to
 a L<Mojo::UserAgent> object.
+
+  # Perform blocking request
+  my $body = $app->ua->get('mojolicio.us')->res->body;
 
 =head1 METHODS
 
@@ -158,6 +163,7 @@ object.
 
 Application configuration.
 
+  # Manipulate configuration
   $app->config->{foo} = 'bar';
   my $foo = $app->config->{foo};
   delete $app->config->{foo};
@@ -172,6 +178,7 @@ L<Mojo::Transaction::HTTP> or L<Mojo::Transaction::WebSocket> object.
 
   sub handler {
     my ($self, $tx) = @_;
+    ...
   }
 
 =head1 SEE ALSO

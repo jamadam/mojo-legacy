@@ -8,16 +8,13 @@ use Mojo::Home;
 use Mojo::JSON;
 use Mojo::Util 'encode';
 
-has cache => sub { Mojo::Cache->new };
+has cache   => sub { Mojo::Cache->new };
+has classes => sub { ['main'] };
 has default_format => 'html';
 has 'default_handler';
-has default_template_class => 'main';
-has detect_templates       => 1;
-has encoding               => 'UTF-8';
-has handlers               => sub { {} };
-has helpers                => sub { {} };
-has layout_prefix          => 'layouts';
-has paths                  => sub { [] };
+has encoding => 'UTF-8';
+has [qw/handlers helpers/] => sub { {} };
+has paths => sub { [] };
 
 # "This is not how Xmas is supposed to be.
 #  In my day Xmas was about bringing people together,
@@ -64,10 +61,22 @@ sub add_helper {
   return $self;
 }
 
+# DEPRECATED in Leaf Fluttering In Wind!
+sub default_template_class {
+  warn <<EOF;
+Mojolicious::Renderer->default_template_class is DEPRECATED in favor of
+Mojolicious::Renderer->classes!
+EOF
+  my $self = shift;
+  return $self->classes->[0] unless @_;
+  $self->classes->[0] = shift;
+  return $self;
+}
+
 sub get_data_template {
   my ($self, $options, $template) = @_;
   return Mojo::Command->new->get_data($template,
-    $self->_detect_template_class($options));
+    $self->_data_templates->{$template});
 }
 
 # "Bodies are for hookers and fat people."
@@ -96,12 +105,11 @@ sub render {
   my $handler = $stash->{handler};
   $handler = $self->default_handler if defined $inline && !defined $handler;
   my $options = {
-    template       => $template,
-    format         => $format,
-    handler        => $handler,
-    encoding       => $self->encoding,
-    inline         => $inline,
-    template_class => $stash->{template_class}
+    template => $template,
+    format   => $format,
+    handler  => $handler,
+    encoding => $self->encoding,
+    inline   => $inline
   };
 
   # Text
@@ -140,10 +148,9 @@ sub render {
 
     # Extends
     while ((my $extends = $self->_extends($c)) && !defined $inline) {
-      $options->{template_class} = $stash->{template_class};
-      $options->{handler}        = $stash->{handler};
-      $options->{format}         = $stash->{format} || $self->default_format;
-      $options->{template}       = $extends;
+      $options->{handler}  = $stash->{handler};
+      $options->{format}   = $stash->{format} || $self->default_format;
+      $options->{template} = $extends;
       $self->_render_template($c, \$output, $options);
       $content->{content} = $output
         if $content->{content} !~ /\S/ && $output =~ /\S/;
@@ -197,56 +204,52 @@ sub template_path {
   return catfile($self->paths->[0], split '/', $name);
 }
 
+sub _data_templates {
+  my $self = shift;
+
+  # Index DATA templates
+  return $self->{data_templates} if $self->{data_templates};
+  for my $class (@{$self->classes}) {
+    $self->{data_templates}->{$_} = $class
+      for keys %{Mojo::Command->new->get_all_data($class) || {}};
+  }
+  return $self->{data_templates} ||= {};
+}
+
 sub _detect_handler {
   my ($self, $options) = @_;
 
-  # Disabled
-  return unless $self->detect_templates;
-
   # Templates
-  my $templates = $self->{templates};
-  unless ($templates) {
-    $templates = $self->{templates} =
-      [map { @{Mojo::Home->new($_)->list_files} } @{$self->paths}];
+  return unless my $file = $self->template_name($options);
+  unless ($self->{templates}) {
+    $_ =~ s/\.(\w+)$// and $self->{templates}->{$_} ||= $1
+      for sort map { @{Mojo::Home->new($_)->list_files} } @{$self->paths};
   }
+  return $self->{templates}->{$file} if exists $self->{templates}->{$file};
 
   # DATA templates
-  my $class  = $self->_detect_template_class($options);
-  my $inline = $self->{data_templates}->{$class}
-    ||= [keys %{Mojo::Command->new->get_all_data($class) || {}}];
-
-  # Detect
-  return unless my $file = $self->template_name($options);
-  $file = quotemeta $file;
-  for my $template (@$templates, @$inline) {
-    if ($template =~ /^$file\.(\w+)$/) { return $1 }
+  unless ($self->{data}) {
+    $_ =~ s/\.(\w+)$// and $self->{data}->{$_} ||= $1
+      for sort keys %{$self->_data_templates};
   }
+  return $self->{data}->{$file} if exists $self->{data}->{$file};
 
   return;
-}
-
-sub _detect_template_class {
-  my ($self, $options) = @_;
-  return $options->{template_class} || $self->default_template_class;
 }
 
 sub _extends {
   my ($self, $c) = @_;
   my $stash = $c->stash;
   if (my $layout = delete $stash->{layout}) {
-    $stash->{extends} ||= $self->layout_prefix . '/' . $layout;
+    $stash->{extends} ||= 'layouts' . '/' . $layout;
   }
   return delete $stash->{extends};
 }
 
-# "I want to see the edge of the universe.
-#  Ooh, that sounds cool.
-#  It's funny, you live in the universe, but you never get to do this things
-#  until someone comes to visit."
 sub _render_template {
   my ($self, $c, $output, $options) = @_;
 
-  # Render
+  # Find handler and render
   my $handler =
        $options->{handler}
     || $self->_detect_handler($options)
@@ -258,7 +261,6 @@ sub _render_template {
 
   # No handler
   else { $c->app->log->error(qq/No handler for "$handler" available./) }
-
   return;
 }
 
@@ -289,8 +291,17 @@ L<Mojolicious::Renderer> implements the following attributes.
   my $cache = $renderer->cache;
   $renderer = $renderer->cache(Mojo::Cache->new);
 
-Renderer cache, defaults to a L<Mojo::Cache> object. Note that this attribute
-is EXPERIMENTAL and might change without warning!
+Renderer cache, defaults to a L<Mojo::Cache> object.
+
+=head2 C<classes>
+
+  my $classes = $renderer->classes;
+  $renderer   = $renderer->classes(['main']);
+
+Classes to use for finding templates in C<DATA> section, defaults to C<main>.
+
+  # Add another class with templates in DATA section
+  push @{$renderer->classes}, 'Mojolicious::Plugin::Fun';
 
 =head2 C<default_format>
 
@@ -303,37 +314,10 @@ renderer will use L<Mojolicious/"types"> to look up the content MIME type.
 =head2 C<default_handler>
 
   my $default = $renderer->default_handler;
-  $renderer   = $renderer->default_handler('epl');
+  $renderer   = $renderer->default_handler('ep');
 
 The default template handler to use for rendering in cases where auto
 detection doesn't work, like for C<inline> templates.
-
-=over 2
-
-=item B<epl>
-
-C<Embedded Perl Lite> handled by L<Mojolicious::Plugin::EPLRenderer>.
-
-=item B<ep>
-
-C<Embedded Perl> handled by L<Mojolicious::Plugin::EPRenderer>.
-
-=back
-
-=head2 C<default_template_class>
-
-  my $default = $renderer->default_template_class;
-  $renderer   = $renderer->default_template_class('main');
-
-Class to use for finding templates in C<DATA> section, defaults to C<main>.
-
-=head2 C<detect_templates>
-
-  my $detect = $renderer->detect_templates;
-  $renderer  = $renderer->detect_templates(1);
-
-Template auto detection, the renderer will try to select the right template
-and renderer automatically.
 
 =head2 C<encoding>
 
@@ -356,13 +340,6 @@ Registered handlers.
 
 Registered helpers.
 
-=head2 C<layout_prefix>
-
-  my $prefix = $renderer->layout_prefix;
-  $renderer  = $renderer->layout_prefix('layouts');
-
-Directory to look for layouts in, defaults to C<layouts>.
-
 =head2 C<paths>
 
   my $paths = $renderer->paths;
@@ -382,21 +359,20 @@ implements the following ones.
 
   my $renderer = Mojolicious::Renderer->new;
 
-Construct a new renderer.
+Construct a new renderer and register C<data>, C<json> as well as C<text>
+handlers.
 
 =head2 C<add_handler>
 
   $renderer = $renderer->add_handler(epl => sub {...});
 
-Add a new handler to the renderer. See L<Mojolicious::Plugin::EPRenderer> for
-a sample renderer.
+Register a new handler.
 
 =head2 C<add_helper>
 
   $renderer = $renderer->add_helper(url_for => sub {...});
 
-Add a new helper to the renderer. See L<Mojolicious::Plugin::EPRenderer> for
-sample helpers.
+Register a new helper.
 
 =head2 C<get_data_template>
 
@@ -404,7 +380,6 @@ sample helpers.
     template       => 'foo/bar',
     format         => 'html',
     handler        => 'epl'
-    template_class => 'main'
   }, 'foo.html.ep');
 
 Get a DATA template by name, usually used by handlers.
@@ -428,7 +403,7 @@ L<Mojolicious::Controller/"render"> for a more user-friendly interface.
   });
 
 Builds a template name based on an options hash with C<template>, C<format>
-and C<handler>.
+and C<handler>, usually used by handlers.
 
 =head2 C<template_path>
 
@@ -439,7 +414,7 @@ and C<handler>.
   });
 
 Builds a full template path based on an options hash with C<template>,
-C<format> and C<handler>.
+C<format> and C<handler>, usually used by handlers.
 
 =head1 SEE ALSO
 

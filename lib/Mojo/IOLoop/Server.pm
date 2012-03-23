@@ -2,8 +2,7 @@ package Mojo::IOLoop::Server;
 use Mojo::Base 'Mojo::EventEmitter';
 
 use Carp 'croak';
-use File::Spec::Functions qw/catfile tmpdir/;
-use IO::File;
+use File::Temp;
 use IO::Socket::INET;
 use Scalar::Util 'weaken';
 use Socket qw/IPPROTO_TCP TCP_NODELAY/;
@@ -66,10 +65,10 @@ AnqxHi90n/p912ynLg2SjBq+03GaECeGzC/QqKK2gtA=
 -----END RSA PRIVATE KEY-----
 EOF
 
-has accepts   => 10;
-has iowatcher => sub {
+has accepts => 10;
+has reactor => sub {
   require Mojo::IOLoop;
-  Mojo::IOLoop->singleton->iowatcher;
+  Mojo::IOLoop->singleton->reactor;
 };
 
 # "Your guilty consciences may make you vote Democratic, but secretly you all
@@ -78,11 +77,10 @@ has iowatcher => sub {
 sub DESTROY {
   my $self = shift;
   if (my $port = $self->{port}) { $ENV{MOJO_REUSE} =~ s/(?:^|\,)$port\:\d+// }
-  if (my $cert = $self->{cert}) { unlink $cert if -w $cert }
-  if (my $key  = $self->{key})  { unlink $key  if -w $key }
-  return unless my $watcher = $self->{iowatcher};
+  defined $_ and -w $_ and unlink $_ for $self->{cert}, $self->{key};
+  return unless my $reactor = $self->{reactor};
   $self->stop if $self->{handle};
-  $watcher->drop($_) for values %{$self->{handles}};
+  $reactor->remove($_) for values %{$self->{handles}};
 }
 
 # "And I gave that man directions, even though I didn't know the way,
@@ -112,7 +110,7 @@ sub listen {
   # New socket
   else {
     my %options = (
-      Listen => defined $args->{backlog} ? $args->{backlog} : SOMAXCONN,
+      Listen => $args->{backlog} // SOMAXCONN,
       LocalAddr => $args->{address} || '0.0.0.0',
       LocalPort => $port,
       Proto     => 'tcp',
@@ -147,32 +145,23 @@ sub listen {
 }
 
 sub generate_port {
-
-  # Try random ports
-  my $port = 1 . int(rand 10) . int(rand 10) . int(rand 10) . int(rand 10);
-  while ($port++ < 30000) {
-    return $port
-      if IO::Socket::INET->new(
-      Listen    => 5,
-      LocalAddr => '127.0.0.1',
-      LocalPort => $port,
-      Proto     => 'tcp'
-      );
-  }
-
-  return;
+  IO::Socket::INET->new(
+    Listen    => 5,
+    LocalAddr => '127.0.0.1',
+    Proto     => 'tcp'
+  )->sockport;
 }
 
 sub start {
   my $self = shift;
   weaken $self;
-  $self->iowatcher->io(
+  $self->reactor->io(
     $self->{handle} => sub { $self->_accept for 1 .. $self->accepts });
 }
 
 sub stop {
   my $self = shift;
-  $self->iowatcher->drop($self->{handle});
+  $self->reactor->remove($self->{handle});
 }
 
 sub _accept {
@@ -190,44 +179,28 @@ sub _accept {
   weaken $self;
   $tls->{SSL_error_trap} = sub {
     return unless my $handle = delete $self->{handles}->{shift()};
-    $self->iowatcher->drop($handle);
+    $self->reactor->remove($handle);
     close $handle;
   };
   return unless $handle = IO::Socket::SSL->start_SSL($handle, %$tls);
-  $self->iowatcher->io($handle => sub { $self->_tls($handle) });
+  $self->reactor->io($handle => sub { $self->_tls($handle) });
   $self->{handles}->{$handle} = $handle;
 }
 
 sub _cert_file {
   my $self = shift;
-
-  # Check if temporary TLS cert file already exists
-  my $cert = $self->{cert};
-  return $cert if $cert && -r $cert;
-
-  # Create temporary TLS cert file
-  $cert = catfile $ENV{MOJO_TMPDIR} || tmpdir, "mojocert-$$.pem";
-  croak qq/Can't create temporary TLS cert file "$cert"/
-    unless my $file = IO::File->new("> $cert");
-  print $file CERT;
-
-  $self->{cert} = $cert;
+  return $self->{cert} if $self->{cert};
+  my $cert = File::Temp->new(UNLINK => 0, SUFFIX => ".$$.pem");
+  print $cert CERT;
+  return $self->{cert} = $cert->filename;
 }
 
 sub _key_file {
   my $self = shift;
-
-  # Check if temporary TLS key file already exists
-  my $key = $self->{key};
-  return $key if $key && -r $key;
-
-  # Create temporary TLS key file
-  $key = catfile $ENV{MOJO_TMPDIR} || tmpdir, "mojokey-$$.pem";
-  croak qq/Can't create temporary TLS key file "$key"/
-    unless my $file = IO::File->new("> $key");
-  print $file KEY;
-
-  $self->{key} = $key;
+  return $self->{key} if $self->{key};
+  my $key = File::Temp->new(UNLINK => 0, SUFFIX => ".$$.pem");
+  print $key KEY;
+  return $self->{key} = $key->filename;
 }
 
 # "Where on my badge does it say anything about protecting people?
@@ -237,15 +210,15 @@ sub _tls {
 
   # Accepted
   if ($handle->accept_SSL) {
-    $self->iowatcher->drop($handle);
+    $self->reactor->remove($handle);
     delete $self->{handles}->{$handle};
     return $self->emit_safe(accept => $handle);
   }
 
   # Switch between reading and writing
   my $err = $IO::Socket::SSL::SSL_ERROR;
-  if    ($err == TLS_READ)  { $self->iowatcher->watch($handle, 1, 0) }
-  elsif ($err == TLS_WRITE) { $self->iowatcher->watch($handle, 1, 1) }
+  if    ($err == TLS_READ)  { $self->reactor->watch($handle, 1, 0) }
+  elsif ($err == TLS_WRITE) { $self->reactor->watch($handle, 1, 1) }
 }
 
 1;
@@ -273,8 +246,7 @@ Mojo::IOLoop::Server - Non-blocking TCP server
 
 =head1 DESCRIPTION
 
-L<Mojo::IOLoop::Server> accepts TCP connections for L<Mojo::IOLoop>. Note
-that this module is EXPERIMENTAL and might change without warning!
+L<Mojo::IOLoop::Server> accepts TCP connections for L<Mojo::IOLoop>.
 
 =head1 EVENTS
 
@@ -300,12 +272,12 @@ L<Mojo::IOLoop::Server> implements the following attributes.
 
 Number of connections to accept at once, defaults to C<10>.
 
-=head2 C<iowatcher>
+=head2 C<reactor>
 
-  my $watcher = $server->iowatcher;
-  $server     = $server->iowatcher(Mojo::IOWatcher->new);
+  my $reactor = $server->reactor;
+  $server     = $server->reactor(Mojo::Reactor::Poll->new);
 
-Low level event watcher, defaults to the C<iowatcher> attribute value of the
+Low level event reactor, defaults to the C<reactor> attribute value of the
 global L<Mojo::IOLoop> singleton.
 
 =head1 METHODS
@@ -346,11 +318,11 @@ Path to TLS certificate authority file.
 
 =item C<tls_cert>
 
-Path to the TLS cert file, defaulting to a built-in test certificate.
+Path to the TLS cert file, defaults to a built-in test certificate.
 
 =item C<tls_key>
 
-Path to the TLS key file, defaulting to a built-in test key.
+Path to the TLS key file, defaults to a built-in test key.
 
 =back
 
@@ -358,7 +330,7 @@ Path to the TLS key file, defaulting to a built-in test key.
 
   my $port = $server->generate_port;
 
-Find a free TCP port.
+Find a free TCP port, this is a utility function primarily used for tests.
 
 =head2 C<start>
 

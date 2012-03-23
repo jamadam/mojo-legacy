@@ -227,7 +227,7 @@ sub send {
   my ($self, $frame, $cb) = @_;
 
   # Binary or raw text
-  if (ref $frame && ref $frame eq 'HASH') {
+  if ((ref $frame || '') eq 'HASH') {
     $frame =
       exists $frame->{text}
       ? [1, 0, 0, 0, TEXT, $frame->{text}]
@@ -239,7 +239,7 @@ sub send {
 
   # Prepare frame
   $self->once(drain => $cb) if $cb;
-  $self->{write} = defined $self->{write} ? $self->{write} : '';
+  $self->{write} //= '';
   $self->{write} .= $self->build_frame(@$frame);
   $self->{state} = 'write';
 
@@ -270,9 +270,9 @@ sub server_read {
   my ($self, $chunk) = @_;
 
   # Parse frames
-  $self->{read} = defined $self->{read} ? $self->{read} : '';
+  $self->{read} //= '';
   $self->{read} .= $chunk if defined $chunk;
-  $self->{message} = defined $self->{message} ? $self->{message} : '';
+  $self->{message} //= '';
   while (my $frame = $self->parse_frame(\$self->{read})) {
     $self->emit(frame => $frame);
     my $op = $frame->[4] || CONTINUATION;
@@ -310,7 +310,7 @@ sub server_write {
   my $self = shift;
 
   # Drain
-  $self->{write} = defined $self->{write} ? $self->{write} : '';
+  $self->{write} //= '';
   unless (length $self->{write}) {
     $self->{state} = $self->{finished} ? 'finished' : 'read';
     $self->emit('drain');
@@ -353,8 +353,7 @@ Mojo::Transaction::WebSocket - WebSocket transaction container
 =head1 DESCRIPTION
 
 L<Mojo::Transaction::WebSocket> is a container for WebSocket transactions as
-described in RFC 6455. Note that this module is EXPERIMENTAL and might change
-without warning!
+described in RFC 6455.
 
 =head1 EVENTS
 
@@ -447,6 +446,9 @@ L<Mojo::Transaction> and implements the following new ones.
 
 Build WebSocket frame.
 
+  # Build single "Binary" frame
+  say $ws->build_frame(1, 0, 0, 0, 2, 'Hello World!');
+
 =head2 C<client_challenge>
 
   my $success = $ws->client_challenge;
@@ -525,15 +527,11 @@ Alias for L<Mojo::Transaction/"remote_port">.
 
 Alias for L<Mojo::Transaction/"req">.
 
-  $ws->req->headers->header('X-Bender' => 'Bite my shiny metal ass!');
-
 =head2 C<res>
 
   my $res = $ws->res;
 
 Alias for L<Mojo::Transaction/"res">.
-
-  $ws->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
 
 =head2 C<resume>
 

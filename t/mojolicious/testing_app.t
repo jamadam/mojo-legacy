@@ -2,12 +2,12 @@ use Mojo::Base -strict;
 
 # Disable Bonjour, IPv6 and libev
 BEGIN {
-  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER}  = 'Mojo::IOWatcher';
   $ENV{MOJO_MODE}       = 'testing';
+  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
+  $ENV{MOJO_REACTOR}    = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 26;
+use Test::More tests => 25;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
@@ -15,8 +15,6 @@ use lib "$FindBin::Bin/lib";
 use Test::Mojo;
 
 # "Anything less than immortality is a complete waste of time!"
-use_ok 'MojoliciousTest';
-
 my $t = Test::Mojo->new('MojoliciousTest');
 
 # SyntaxError::foo in testing mode (syntax error in controller)

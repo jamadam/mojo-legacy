@@ -72,7 +72,8 @@ sub register {
       # Rewrite code sections for syntax highlighting
       $dom->find('pre')->each(
         sub {
-          return if (my $e = shift)->all_text =~ /^\s*\$\s+/m;
+          my $e = shift;
+          return if $e->all_text =~ /^\s*\$\s+/m;
           my $attrs = $e->attrs;
           my $class = $attrs->{class};
           $attrs->{class} =
@@ -190,8 +191,7 @@ Handler name.
   # Mojolicious::Lite
   plugin PODRenderer => {no_perldoc => 1};
 
-Disable perldoc browser. Note that this option is EXPERIMENTAL and might
-change without warning!
+Disable perldoc browser.
 
 =head2 C<preprocess>
 

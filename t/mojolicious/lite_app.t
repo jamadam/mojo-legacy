@@ -4,12 +4,12 @@ use utf8;
 
 # Disable Bonjour, IPv6 and libev
 BEGIN {
-  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER}  = 'Mojo::IOWatcher';
   $ENV{MOJO_MODE}       = 'development';
+  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
+  $ENV{MOJO_REACTOR}    = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 727;
+use Test::More tests => 709;
 
 # "Wait you're the only friend I have...
 #  You really want a robot for a friend?
@@ -247,7 +247,8 @@ get '/inline/ep/partial' => sub {
 get '/source' => sub {
   my $self = shift;
   my $file = $self->param('fail') ? 'does_not_exist.txt' : '../lite_app.t';
-  $self->render_static($file)
+  $self->render('this_does_not_ever_exist')
+    or $self->render_static($file)
     or $self->render_text('does not exist!', status => 404);
 };
 
@@ -335,9 +336,6 @@ get '/layout' => sub {
 
 # POST /template
 post '/template' => 'index';
-
-# GET /memorized
-get '/memorized' => 'memorized';
 
 # * /something
 any '/something' => sub {
@@ -977,6 +975,9 @@ $t->get_ok('/foo_relaxed/')->status_is(404);
 # GET /foo_wildcard/123
 $t->get_ok('/foo_wildcard/123')->status_is(200)->content_is('123');
 
+# GET /foo_wildcard/IQ==%0A
+$t->get_ok('/foo_wildcard/IQ==%0A')->status_is(200)->content_is("IQ==\x0a");
+
 # GET /foo_wildcard
 $t->get_ok('/foo_wildcard/')->status_is(404);
 
@@ -1045,30 +1046,6 @@ $t->post_ok('/template')->status_is(200)
   ->header_is(Server         => 'Mojolicious (Perl)')
   ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
   ->content_is('Just works!');
-
-# GET /memorized
-$t->get_ok('/memorized')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
-  ->content_like(qr/\d+a\d+b\d+c\d+\nd\d+\ne\d+/);
-my $memorized = $t->tx->res->body;
-
-# GET /memorized
-$t->get_ok('/memorized')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')->content_is($memorized);
-
-# GET /memorized
-$t->get_ok('/memorized')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')->content_is($memorized);
-
-# GET /memorized (expired)
-sleep 2;
-$t->get_ok('/memorized')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
-  ->content_like(qr/\d+a\d+b\d+c\d+\nd\d+\ne\d+/)->content_isnt($memorized);
 
 # GET /something
 $t->get_ok('/something')->status_is(200)
@@ -1421,7 +1398,7 @@ $t->get_ok('/dynamic/inline')->status_is(200)
   ->content_is("dynamic inline 2\n");
 
 # User agent timer
-$tua->ioloop->one_tick('0.1');
+$tua->ioloop->one_tick;
 is $timer,
   "/root.html\n/root.html\n/root.html\n/root.html\n/root.html\nworks!",
   'right content';
@@ -1450,25 +1427,6 @@ text!
 
 @@ template.txt.epl
 <div id="foo">Redirect works!</div>
-
-@@ memorized.html.ep
-<%= memorize begin =%>
-<%= time =%>
-<% end =%>
-<%= memorize begin =%>
-    <%= 'a' . time =%>
-<% end =%><%= memorize begin =%>
-<%= 'b' . time =%>
-<% end =%>
-<%= memorize test => begin =%>
-<%= 'c' . time =%>
-<% end =%>
-<%= memorize expiry => {expires => time + 1} => begin %>
-<%= 'd' . time =%>
-<% end =%>
-<%= memorize {expires => time + 1} => begin %>
-<%= 'e' . time =%>
-<% end =%>
 
 @@ test(test)(\Qtest\E)(.html.ep
 <%= $self->match->endpoint->name %>

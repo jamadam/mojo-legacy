@@ -502,8 +502,7 @@ Construct a new L<Mojo::DOM> object.
   my $untrimmed = $dom->all_text(0);
 
 Extract all text content from DOM structure, smart whitespace trimming is
-disabled by default. Note that the trim argument of this method is
-EXPERIMENTAL and might change without warning!
+enabled by default.
 
   # "foo bar baz"
   $dom->parse("<div>foo\n<p>bar</p>baz\n</div>")->div->all_text;
@@ -597,6 +596,9 @@ Parent of element.
 
 Alias for L<Mojo::DOM::HTML/"parse">.
 
+  # Parse UTF-8 encoded XML
+  my $dom = Mojo::DOM->new->charset('UTF-8')->xml(1)->parse($xml);
+
 =head2 C<prepend>
 
   $dom = $dom->prepend('<p>Hi!</p>');
@@ -645,8 +647,7 @@ Find root node.
   my $untrimmed = $dom->text(0);
 
 Extract text content from element only (not including child elements), smart
-whitespace trimming is disabled by default. Note that the trim argument of
-this method is EXPERIMENTAL and might change without warning!
+whitespace trimming is enabled by default.
 
   # "foo baz"
   $dom->parse("<div>foo\n<p>bar</p>baz\n</div>")->div->text;
@@ -660,8 +661,7 @@ this method is EXPERIMENTAL and might change without warning!
   my $untrimmed = $dom->text_after(0);
 
 Extract text content immediately following element, smart whitespace trimming
-is disabled by default. Note that this method is EXPERIMENTAL and might
-change without warning!
+is enabled by default.
 
   # "baz"
   $dom->parse("<div>foo\n<p>bar</p>baz\n</div>")->div->p->text_after;
@@ -675,8 +675,7 @@ change without warning!
   my $untrimmed = $dom->text_before(0);
 
 Extract text content immediately preceding element, smart whitespace trimming
-is disabled by default. Note that this method is EXPERIMENTAL and might
-change without warning!
+is enabled by default.
 
   # "foo"
   $dom->parse("<div>foo\n<p>bar</p>baz\n</div>")->div->p->text_before;
@@ -711,8 +710,7 @@ Element type.
   my $xml = $dom->xml;
   $dom    = $dom->xml(1);
 
-Alias for L<Mojo::DOM::HTML/"xml">. Note that this method is EXPERIMENTAL and
-might change without warning!
+Alias for L<Mojo::DOM::HTML/"xml">.
 
 =head1 CHILD ELEMENTS
 

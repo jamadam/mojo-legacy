@@ -69,7 +69,8 @@ sub _draw {
     push @parts, $name . ' ' x ($length[2] - length $name);
 
     # Regex
-    (my $pattern = $node->[1]->pattern)->match('/');
+    my $pattern = $node->[1]->pattern;
+    $pattern->match('/');
     my $regex  = (regexp_pattern $pattern->regex)[0];
     my $format = (regexp_pattern $pattern->format)[0];
     my $req    = $pattern->reqs->{format};
@@ -78,7 +79,7 @@ sub _draw {
       if $verbose;
 
     # Route
-    print join('  ', @parts) . "\n";
+    say join('  ', @parts);
   }
 }
 
@@ -113,7 +114,7 @@ Mojolicious::Command::routes - Routes command
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::routes> prints all your application routes.
+L<Mojolicious::Command::routes> lists all your application routes.
 
 =head1 ATTRIBUTES
 

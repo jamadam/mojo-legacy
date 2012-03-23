@@ -19,17 +19,17 @@ use utf8;
 
 use Test::More tests => 197;
 
+# "When I held that gun in my hand, I felt a surge of power...
+#  like God must feel when he's holding a gun."
 use File::Spec::Functions qw/catfile splitdir/;
 use File::Temp;
 use FindBin;
-
-# "When I held that gun in my hand, I felt a surge of power...
-#  like God must feel when he's holding a gun."
-use_ok 'Mojo::Template';
+use Mojo::Template;
 
 # Consistent scalar context
-my $mt     = Mojo::Template->new;
-my $output = $mt->render('<%= split /,/, "a,b" %>:<%== split /,/, "a,b" %>');
+my $mt = Mojo::Template->new;
+$mt->prepend('my @foo = (3, 4);');
+my $output = $mt->render('<%= @foo %>:<%== @foo %>');
 is $output, "2:2\n", 'same context';
 
 # Trim tag
@@ -955,6 +955,16 @@ $output = $mt->render(<<'EOF');
 %>\
 EOF
 is $output, 'hello world', 'multiline expression';
+
+# Escaped multiline expression
+$mt     = Mojo::Template->new;
+$output = $mt->render(<<'EOF');
+<%==
+'hello '
+.'world'
+%>
+EOF
+is $output, "hello world\n", 'escaped multiline expression';
 
 # Scoped scalar
 $mt     = Mojo::Template->new;

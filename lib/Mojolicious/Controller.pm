@@ -1,6 +1,7 @@
 package Mojolicious::Controller;
 use Mojo::Base -base;
 
+use Carp ();
 use Mojo::ByteStream;
 use Mojo::Cookie::Response;
 use Mojo::Exception;
@@ -10,14 +11,12 @@ use Mojo::URL;
 use Mojo::Util;
 use Mojolicious;
 use Mojolicious::Routes::Match;
-
-require Carp;
-require Scalar::Util;
+use Scalar::Util ();
 
 # "Scalpel... blood bucket... priest."
 has app => sub { Mojolicious->new };
 has match => sub {
-  Mojolicious::Routes::Match->new(get => '/')->root(shift->app->routes);
+  Mojolicious::Routes::Match->new(GET => '/')->root(shift->app->routes);
 };
 has tx => sub { Mojo::Transaction::HTTP->new };
 
@@ -168,7 +167,7 @@ sub param {
 
   # Captured unreserved values
   if (!$RESERVED{$name} && defined(my $v = $p->{$name})) {
-    return ref $v && ref $v eq 'ARRAY' ? wantarray ? @$v : $$v[0] : $v;
+    return (ref $v || '') eq 'ARRAY' ? wantarray ? @$v : $$v[0] : $v;
   }
 
   # Upload
@@ -234,9 +233,7 @@ sub render {
   $res->body($output) unless $res->body;
   my $headers = $res->headers;
   $headers->content_type($type) unless $headers->content_type;
-  $self->rendered($stash->{status});
-
-  return 1;
+  return $self->rendered($stash->{status});
 }
 
 # "She's built like a steakhouse, but she handles like a bistro!"
@@ -261,7 +258,7 @@ sub render_content {
   }
 
   # Get
-  $content = defined $c->{$name} ? $c->{$name} : '';
+  $content = $c->{$name} // '';
   return Mojo::ByteStream->new("$content");
 }
 
@@ -352,15 +349,11 @@ sub render_partial {
 
 sub render_static {
   my ($self, $file) = @_;
-
   my $app = $self->app;
-  $app->log->debug(
-    qq/Static file "$file" not found, public directory missing?/)
+  $app->log->debug(qq/File "$file" not found, public directory missing?/)
     and return
     unless $app->static->serve($self, $file);
-  $self->rendered;
-
-  return 1;
+  return $self->rendered;
 }
 
 sub render_text { shift->render(text => shift, @_) }
@@ -528,9 +521,10 @@ sub ua { shift->app->ua }
 
 sub url_for {
   my $self = shift;
-  my $target = shift || '';
+  my $target = shift // '';
 
   # Absolute URL
+  return $target if (Scalar::Util::blessed($target) || '') eq 'Mojo::URL';
   return Mojo::URL->new($target) if $target =~ m#^\w+\://#;
 
   # Base
@@ -545,7 +539,7 @@ sub url_for {
   if ($target =~ m#^/#) {
     if (my $e = $self->stash->{path}) {
       my $real = Mojo::Util::url_unescape($req->url->path->to_abs_string);
-      $real = defined Mojo::Util::decode('UTF-8', $real) ? Mojo::Util::decode('UTF-8', $real) : $real;
+      $real = Mojo::Util::decode('UTF-8', $real) // $real;
       $real =~ s|/?$e$|$target|;
       $target = $real;
     }
@@ -576,27 +570,17 @@ sub url_for {
 
 sub write {
   my ($self, $chunk, $cb) = @_;
-
-  if (ref $chunk && ref $chunk eq 'CODE') {
-    $cb    = $chunk;
-    $chunk = undef;
-  }
+  ($cb, $chunk) = ($chunk, undef) if (ref $chunk || '') eq 'CODE';
   $self->res->write($chunk, sub { shift and $self->$cb(@_) if $cb });
   $self->rendered;
-
   return $self;
 }
 
 sub write_chunk {
   my ($self, $chunk, $cb) = @_;
-
-  if (ref $chunk && ref $chunk eq 'CODE') {
-    $cb    = $chunk;
-    $chunk = undef;
-  }
+  ($cb, $chunk) = ($chunk, undef) if (ref $chunk || '') eq 'CODE';
   $self->res->write_chunk($chunk, sub { shift and $self->$cb(@_) if $cb });
   $self->rendered;
-
   return $self;
 }
 
@@ -653,6 +637,7 @@ implements the following new ones.
 A reference back to the L<Mojolicious> application that dispatched to this
 controller, defaults to a L<Mojolicious> object.
 
+  # Use application logger
   $c->app->log->debug('Hello Mojo!');
 
 =head2 C<match>
@@ -660,10 +645,8 @@ controller, defaults to a L<Mojolicious> object.
   my $m = $c->match;
   $c    = $c->match(Mojolicious::Routes::Match->new);
 
-Routes dispatcher results for the current request, defaults to a
+Router results for the current request, defaults to a
 L<Mojolicious::Routes::Match> object.
-
-  my $name = $c->match->endpoint->name;
 
 =head2 C<tx>
 
@@ -673,6 +656,7 @@ L<Mojolicious::Routes::Match> object.
 The transaction that is currently being processed, usually a
 L<Mojo::Transaction::HTTP> or L<Mojo::Transaction::WebSocket> object.
 
+  # Check peer information
   my $address = $c->tx->remote_address;
 
 =head1 METHODS
@@ -682,14 +666,15 @@ implements the following new ones.
 
 =head2 C<cookie>
 
-  $c         = $c->cookie(foo => 'bar');
-  $c         = $c->cookie(foo => 'bar', {path => '/'});
   my $value  = $c->cookie('foo');
   my @values = $c->cookie('foo');
+  $c         = $c->cookie(foo => 'bar');
+  $c         = $c->cookie(foo => 'bar', {path => '/'});
 
 Access request cookie values and create new response cookies.
 
-  my $foo = $c->cookie('foo')->value;
+  # Create response cookie with domain
+  $c->cookie(name => 'sebastian', {domain => 'mojolicio.us'});
 
 =head2 C<finish>
 
@@ -706,6 +691,7 @@ Gracefully end WebSocket connection or long poll stream.
 
 Data storage persistent only for the next request, stored in the C<session>.
 
+  # Show message after redirect
   $c->flash(message => 'User created successfully!');
   $c->redirect_to('show_user', id => 23);
 
@@ -767,16 +753,15 @@ C<url_for>.
 
 =head2 C<render>
 
-  $c->render;
-  $c->render(controller => 'foo', action => 'bar');
-  $c->render({controller => 'foo', action => 'bar'});
-  $c->render(text => 'Hello!');
-  $c->render(template => 'index');
-  $c->render(template => 'foo/index');
-  $c->render(template => 'index', format => 'html', handler => 'epl');
-  $c->render(handler => 'something');
-  $c->render('foo/bar');
-  $c->render('foo/bar', format => 'html');
+  my $success = $c->render;
+  my $success = $c->render(controller => 'foo', action => 'bar');
+  my $success = $c->render({controller => 'foo', action => 'bar'});
+  my $success = $c->render(text => 'Hello!');
+  my $success = $c->render(template => 'foo/index');
+  my $success = $c->render(template => 'index', format => 'html');
+  my $success = $c->render(handler => 'something');
+  my $success = $c->render('foo/bar');
+  my $output  = $c->render('foo/bar', partial => 1);
 
 This is a wrapper around L<Mojolicious::Renderer> exposing pretty much all
 functionality provided by it. It will set a default template to use based on
@@ -823,6 +808,7 @@ Render a data structure as JSON.
 Disable automatic rendering, especially for long polling this can be quite
 useful.
 
+  # Delayed rendering
   $c->render_later;
   Mojo::IOLoop->timer(2 => sub {
     $c->render(text => 'Delayed by 2 seconds!');
@@ -848,8 +834,8 @@ Same as C<render> but returns the rendered result.
   my $success = $c->render_static('images/logo.png');
   my $success = $c->render_static('../lib/MyApp.pm');
 
-Render a static file using L<Mojolicious::Static>, relative to the
-C<public> directories of your application.
+Render a static file using L<Mojolicious::Static>, relative to the C<public>
+directories of your application.
 
 =head2 C<render_text>
 
@@ -861,6 +847,7 @@ See C<render_data> for an alternative without encoding. Note that this does
 not change the content type of the response, which is
 C<text/html;charset=UTF-8> by default.
 
+  # Render "text/plain" response
   $c->render_text('Hello World!', format => 'txt');
 
 =head2 C<rendered>
@@ -882,6 +869,7 @@ Finalize response and run C<after_dispatch> plugin hook.
 Alias for C<$c-E<gt>tx-E<gt>req>. Usually refers to a
 L<Mojo::Message::Request> object.
 
+  # Extract request information
   $c->render_json({url => $c->req->url->to_abs->to_string});
 
 =head2 C<res>
@@ -891,6 +879,7 @@ L<Mojo::Message::Request> object.
 Alias for C<$c-E<gt>tx-E<gt>res>. Usually refers to a
 L<Mojo::Message::Response> object.
 
+  # Force file download by setting a custom response header
   $c->res->headers->content_disposition('attachment; filename=foo.png;');
 
 =head2 C<respond_to>
@@ -920,14 +909,19 @@ defaults to rendering an empty C<204> response.
   $c = $c->send('Hi there!', sub {...});
 
 Send message or frame non-blocking via WebSocket, the optional drain callback
-will be invoked once all data has been written. Note that this method is
-EXPERIMENTAL and might change without warning!
+will be invoked once all data has been written.
 
   # Send JSON object as text frame
   $c->send({text => Mojo::JSON->new->encode({hello => 'world'})});
 
   # Send "Ping" frame
   $c->send([1, 0, 0, 0, 9, 'Hello World!']);
+
+For mostly idle WebSockets you might also want to increase the inactivity
+timeout, which usually defaults to C<15> seconds.
+
+  # Increase inactivity timeout for connection to 300 seconds
+  Mojo::IOLoop->stream($c->tx->connection)->timeout(300);
 
 =head2 C<session>
 
@@ -939,16 +933,20 @@ EXPERIMENTAL and might change without warning!
 Persistent data storage, stored C<JSON> serialized in a signed cookie. Note
 that cookies are generally limited to 4096 bytes of data.
 
+  # Manipulate session
   $c->session->{foo} = 'bar';
   my $foo = $c->session->{foo};
   delete $c->session->{foo};
 
+  # Delete whole session
+  $c->session(expires => 1);
+
 =head2 C<signed_cookie>
 
-  $c         = $c->signed_cookie(foo => 'bar');
-  $c         = $c->signed_cookie(foo => 'bar', {path => '/'});
   my $value  = $c->signed_cookie('foo');
   my @values = $c->signed_cookie('foo');
+  $c         = $c->signed_cookie(foo => 'bar');
+  $c         = $c->signed_cookie(foo => 'bar', {path => '/'});
 
 Access signed request cookie values and create new signed response cookies.
 Cookies failing signature verification will be automatically discarded.
@@ -967,6 +965,7 @@ C<cb>, C<controller>, C<data>, C<extends>, C<format>, C<handler>, C<json>,
 C<layout>, C<namespace>, C<partial>, C<path>, C<status>, C<template> and
 C<text>.
 
+  # Manipulate stash
   $c->stash->{foo} = 'bar';
   my $foo = $c->stash->{foo};
   delete $c->stash->{foo};
@@ -1017,8 +1016,8 @@ Generate a portable L<Mojo::URL> object with base for a route, path or URL.
   # "/myapp/perldoc?foo=bar" if application is deployed under "/myapp"
   $c->url_for('/perldoc')->query(foo => 'bar');
 
-You can also use L<Mojolicious::Plugin::DefaultHelpers/"url_with"> to inherit
-query parameters from the current request.
+You can also use the helper L<Mojolicious::Plugin::DefaultHelpers/"url_with">
+to inherit query parameters from the current request.
 
   # "/list?q=mojo&page=2" if current request was for "/list?q=mojo&page=1"
   $c->url_with->query([page => 2]);
@@ -1049,10 +1048,10 @@ invoked once all data has been written.
     });
   });
 
-For Comet (C<long polling>) you might also want to increase the connection
+For Comet (C<long polling>) you might also want to increase the inactivity
 timeout, which usually defaults to C<15> seconds.
 
-  # Increase timeout for current connection to 300 seconds
+  # Increase inactivity timeout for connection to 300 seconds
   Mojo::IOLoop->stream($c->tx->connection)->timeout(300);
 
 =head2 C<write_chunk>
@@ -1065,6 +1064,7 @@ timeout, which usually defaults to C<15> seconds.
 Write dynamic content non-blocking with C<chunked> transfer encoding, the
 optional drain callback will be invoked once all data has been written.
 
+  # Make sure previous chunk has been written before continuing
   $c->write_chunk('He', sub {
     my $c = shift;
     $c->write_chunk('ll', sub {
@@ -1086,7 +1086,7 @@ You can call C<finish> at any time to end the stream.
 =head1 HELPERS
 
 In addition to the attributes and methods above you can also call helpers on
-instances of L<Mojolicious::Controller>. This includes all helpers from
+L<Mojolicious::Controller> objects. This includes all helpers from
 L<Mojolicious::Plugin::DefaultHelpers> and
 L<Mojolicious::Plugin::TagHelpers>.
 

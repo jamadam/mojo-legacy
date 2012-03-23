@@ -6,7 +6,7 @@ use Mojo::IOLoop::Client;
 use Mojo::IOLoop::Delay;
 use Mojo::IOLoop::Server;
 use Mojo::IOLoop::Stream;
-use Mojo::IOWatcher;
+use Mojo::Reactor::Poll;
 use Mojo::Util 'md5_sum';
 use Scalar::Util qw/blessed weaken/;
 use Time::HiRes 'time';
@@ -14,24 +14,22 @@ use Time::HiRes 'time';
 use constant DEBUG => $ENV{MOJO_IOLOOP_DEBUG} || 0;
 
 has client_class => 'Mojo::IOLoop::Client';
-has iowatcher    => sub {
-  my $class = Mojo::IOWatcher->detect;
-  warn "MAINLOOP ($class)\n" if DEBUG;
-  my $watcher = $class->new;
-  $watcher->on(error => sub { warn pop });
-  return $watcher;
-};
 has [qw/lock unlock/];
 has max_accepts     => 0;
 has max_connections => 1000;
-has server_class    => 'Mojo::IOLoop::Server';
-has stream_class    => 'Mojo::IOLoop::Stream';
+has reactor         => sub {
+  my $class = Mojo::Reactor::Poll->detect;
+  warn "MAINLOOP ($class)\n" if DEBUG;
+  return $class->new;
+};
+has server_class => 'Mojo::IOLoop::Server';
+has stream_class => 'Mojo::IOLoop::Stream';
 
 # Ignore PIPE signal
 $SIG{PIPE} = 'IGNORE';
 
-# Initialize singleton watcher early
-__PACKAGE__->singleton->iowatcher;
+# Initialize singleton reactor early
+__PACKAGE__->singleton->reactor;
 
 sub client {
   my $self = shift;
@@ -47,8 +45,7 @@ sub client {
   my $id     = $args->{id} || $self->_id;
   my $c      = $self->{connections}->{$id} ||= {};
   $c->{client} = $client;
-  $client->iowatcher($self->iowatcher);
-  weaken $client->{iowatcher};
+  weaken $client->reactor($self->reactor)->{reactor};
 
   # Events
   weaken $self;
@@ -82,42 +79,43 @@ sub client {
 sub delay {
   my ($self, $cb) = @_;
   $self = $self->singleton unless ref $self;
-
   my $delay = Mojo::IOLoop::Delay->new;
-  $delay->ioloop($self);
-  weaken $delay->{ioloop};
+  weaken $delay->ioloop($self)->{ioloop};
   $delay->once(finish => $cb) if $cb;
-
   return $delay;
 }
 
+# DEPRECATED in Leaf Fluttering In Wind!
 sub drop {
-  my ($self, $id) = @_;
-  $self = $self->singleton unless ref $self;
-  if (my $c = $self->{connections}->{$id}) { return $c->{finish} = 1 }
-  $self->_drop($id);
+  warn "Mojo::IOLoop->drop is DEPRECATED in favor of Mojo::IOLoop->remove!\n";
+  shift->remove(@_);
 }
 
 sub generate_port { Mojo::IOLoop::Server->generate_port }
 
 sub is_running {
   my $self = shift;
-  return (ref $self ? $self : $self->singleton)->iowatcher->is_running;
+  return (ref $self ? $self : $self->singleton)->reactor->is_running;
 }
 
 sub one_tick {
   my $self = shift;
   $self = $self->singleton unless ref $self;
-  my $delay = shift;
-  $self->timer(defined $delay ? $delay : '0.025' => sub { shift->stop });
-  $self->start;
+  $self->reactor->one_tick;
 }
 
 sub recurring {
   my ($self, $after, $cb) = @_;
   $self = $self->singleton unless ref $self;
   weaken $self;
-  return $self->iowatcher->recurring($after => sub { $self->$cb(pop) });
+  return $self->reactor->recurring($after => sub { $self->$cb });
+}
+
+sub remove {
+  my ($self, $id) = @_;
+  $self = $self->singleton unless ref $self;
+  if (my $c = $self->{connections}->{$id}) { return $c->{finish} = 1 }
+  $self->_remove($id);
 }
 
 # "Fat Tony is a cancer on this fair city!
@@ -134,8 +132,7 @@ sub server {
   my $server = $self->server_class->new;
   my $id     = $self->_id;
   $self->{servers}->{$id} = $server;
-  $server->iowatcher($self->iowatcher);
-  weaken $server->{iowatcher};
+  weaken $server->reactor($self->reactor)->{reactor};
 
   # Events
   weaken $self;
@@ -144,7 +141,8 @@ sub server {
       my $handle = pop;
 
       # Accept
-      my $id = $self->stream(my $stream = $self->stream_class->new($handle));
+      my $stream = $self->stream_class->new($handle);
+      my $id     = $self->stream($stream);
       $self->$cb($stream, $id);
 
       # Enforce limit
@@ -161,20 +159,19 @@ sub server {
 
   return $id;
 }
-our $singleton_loop;
-sub singleton { $singleton_loop ||= shift->SUPER::new }
+
+sub singleton { state $loop ||= shift->SUPER::new }
 
 sub start {
   my $self = shift;
   $self = $self->singleton unless ref $self;
   croak 'Mojo::IOLoop already running' if $self->is_running;
-  $self->iowatcher->start;
-  return $self;
+  $self->reactor->start;
 }
 
 sub stop {
   my $self = shift;
-  (ref $self ? $self : $self->singleton)->iowatcher->stop;
+  (ref $self ? $self : $self->singleton)->reactor->stop;
 }
 
 sub stream {
@@ -191,12 +188,11 @@ sub stream {
     return $c->{stream};
   }
 
-  # Connect stream with watcher
+  # Connect stream with reactor
   my $id = shift || $self->_id;
   my $c = $self->{connections}->{$id} ||= {};
   $c->{stream} = $stream;
-  $stream->iowatcher($self->iowatcher);
-  weaken $stream->{iowatcher};
+  weaken $stream->reactor($self->reactor)->{reactor};
 
   # Events
   weaken $self;
@@ -210,44 +206,29 @@ sub timer {
   my ($self, $after, $cb) = @_;
   $self = $self->singleton unless ref $self;
   weaken $self;
-  return $self->iowatcher->timer($after => sub { $self->$cb(pop) });
+  return $self->reactor->timer($after => sub { $self->$cb });
 }
 
 sub _cleaner {
   my $self = shift;
   $self->{cleaner} ||= $self->recurring(
-    '0.025' => sub {
+    0.025 => sub {
       my $self = shift;
 
       # Manage connections
       $self->_listening;
       my $connections = $self->{connections} ||= {};
       while (my ($id, $c) = each %$connections) {
-        $self->_drop($id)
+        $self->_remove($id)
           if $c->{finish} && (!$c->{stream} || !$c->{stream}->is_writing);
       }
 
       # Graceful shutdown
+      $self->_remove(delete $self->{cleaner})
+        unless keys(%$connections) || keys(%{$self->{servers}});
       $self->stop if $self->max_connections == 0 && keys %$connections == 0;
     }
   );
-}
-
-sub _drop {
-  my ($self, $id) = @_;
-
-  # Timer
-  return unless my $watcher = $self->iowatcher;
-  return if $watcher->drop($id);
-
-  # Listen socket
-  if (delete $self->{servers}->{$id}) { delete $self->{listening} }
-
-  # Connection (stream needs to be deleted first)
-  else {
-    delete(($self->{connections}->{$id} || {})->{stream});
-    delete $self->{connections}->{$id};
-  }
 }
 
 sub _id {
@@ -285,6 +266,23 @@ sub _not_listening {
 
   # Stop listening
   $_->stop for values %{$self->{servers} || {}};
+}
+
+sub _remove {
+  my ($self, $id) = @_;
+
+  # Timer
+  return unless my $reactor = $self->reactor;
+  return if $reactor->remove($id);
+
+  # Listen socket
+  if (delete $self->{servers}->{$id}) { delete $self->{listening} }
+
+  # Connection (stream needs to be deleted first)
+  else {
+    delete(($self->{connections}->{$id} || {})->{stream});
+    delete $self->{connections}->{$id};
+  }
 }
 
 1;
@@ -331,18 +329,17 @@ Mojo::IOLoop - Minimalistic reactor for non-blocking TCP clients and servers
   # Add a timer
   Mojo::IOLoop->timer(5 => sub {
     my $loop = shift;
-    $loop->drop($id);
+    $loop->remove($id);
   });
 
-  # Start and stop loop
-  Mojo::IOLoop->start;
-  Mojo::IOLoop->stop;
+  # Start loop if necessary
+  Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
 =head1 DESCRIPTION
 
-L<Mojo::IOLoop> is a very minimalistic reactor that has been reduced to the
-absolute minimal feature set required to build solid and scalable
-non-blocking TCP clients and servers.
+L<Mojo::IOLoop> is a very minimalistic reactor based on L<Mojo::Reactor>, it
+has been reduced to the absolute minimal feature set required to build solid
+and scalable non-blocking TCP clients and servers.
 
 Optional modules L<EV>, L<IO::Socket::IP> and L<IO::Socket::SSL> are
 supported transparently and used if installed. Individual features can also
@@ -363,17 +360,7 @@ L<Mojo::IOLoop> implements the following attributes.
   $loop     = $loop->client_class('Mojo::IOLoop::Client');
 
 Class to be used for opening TCP connections with the C<client> method,
-defaults to L<Mojo::IOLoop::Client>. Note that this attribute is EXPERIMENTAL
-and might change without warning!
-
-=head2 C<iowatcher>
-
-  my $watcher = $loop->iowatcher;
-  $loop       = $loop->iowatcher(Mojo::IOWatcher->new);
-
-Low level event watcher, usually a L<Mojo::IOWatcher> or
-L<Mojo::IOWatcher::EV> object. Note that this attribute is EXPERIMENTAL and
-might change without warning!
+defaults to L<Mojo::IOLoop::Client>.
 
 =head2 C<lock>
 
@@ -400,8 +387,7 @@ captured.
 The maximum number of connections this loop is allowed to accept before
 shutting down gracefully without interrupting existing connections, defaults
 to C<0>. Setting the value to C<0> will allow this loop to accept new
-connections infinitely. Note that this attribute is EXPERIMENTAL and might
-change without warning!
+connections indefinitely.
 
 =head2 C<max_connections>
 
@@ -414,14 +400,21 @@ Setting the value to C<0> will make this loop stop accepting new connections
 and allow it to shutdown gracefully without interrupting existing
 connections.
 
+=head2 C<reactor>
+
+  my $reactor = $loop->reactor;
+  $loop       = $loop->reactor(Mojo::Reactor->new);
+
+Low level event reactor, usually a L<Mojo::Reactor::Poll> or
+L<Mojo::Reactor::EV> object.
+
 =head2 C<server_class>
 
   my $class = $loop->server_class;
   $loop     = $loop->server_class('Mojo::IOLoop::Server');
 
 Class to be used for accepting TCP connections with the C<server> method,
-defaults to L<Mojo::IOLoop::Server>. Note that this attribute is EXPERIMENTAL
-and might change without warning!
+defaults to L<Mojo::IOLoop::Server>.
 
 =head2 C<stream_class>
 
@@ -429,8 +422,7 @@ and might change without warning!
   $loop     = $loop->stream_class('Mojo::IOLoop::Stream');
 
 Class to be used by C<client> and C<server> methods for I/O streams, defaults
-to L<Mojo::IOLoop::Stream>. Note that this attribute is EXPERIMENTAL and
-might change without warning!
+to L<Mojo::IOLoop::Stream>.
 
 =head2 C<unlock>
 
@@ -454,8 +446,7 @@ following new ones.
 
 Open TCP connection with C<client_class>, which is usually
 L<Mojo::IOLoop::Client>, takes the same arguments as
-L<Mojo::IOLoop::Client/"connect">. Note that this method is EXPERIMENTAL and
-might change without warning!
+L<Mojo::IOLoop::Client/"connect">.
 
   Mojo::IOLoop->client({port => 3000} => sub {
     my ($loop, $err, $stream) = @_;
@@ -469,7 +460,7 @@ might change without warning!
   my $delay = $loop->delay(sub {...});
 
 Get L<Mojo::IOLoop::Delay> object to synchronize events and subscribe to
-C<finish> event if optional callback is provided.
+event L<Mojo::IOLoop::Delay/"finish"> if optional callback is provided.
 
   # Synchronize multiple events
   my $delay = Mojo::IOLoop->delay(sub { say 'BOOM!' });
@@ -483,14 +474,6 @@ C<finish> event if optional callback is provided.
 
   # Wait for events if necessary
   $delay->wait unless Mojo::IOLoop->is_running;
-
-=head2 C<drop>
-
-  Mojo::IOLoop->drop($id);
-  $loop->drop($id);
-
-Drop anything with an id. Connections will be dropped gracefully by allowing
-them to finish writing all data in their write buffers.
 
 =head2 C<generate_port>
 
@@ -512,11 +495,9 @@ Check if loop is running.
 
   Mojo::IOLoop->one_tick;
   $loop->one_tick;
-  $loop->one_tick('0.25');
-  $loop->one_tick(0);
 
-Run reactor for roughly one tick and try not to block longer than the given
-amount of time in seconds.
+Run reactor for roughly one tick. Note that this method can recurse back into
+the reactor, so you need to be careful.
 
 =head2 C<recurring>
 
@@ -524,11 +505,19 @@ amount of time in seconds.
   my $id = $loop->recurring(3 => sub {...});
 
 Create a new recurring timer, invoking the callback repeatedly after a given
-amount of seconds.
+amount of time in seconds.
 
   # Run multiple reactors next to each other
   my $loop2 = Mojo::IOLoop->new;
-  Mojo::IOLoop->recurring(0 => sub { $loop2->one_tick(0) });
+  Mojo::IOLoop->recurring(0 => sub { $loop2->one_tick });
+
+=head2 C<remove>
+
+  Mojo::IOLoop->remove($id);
+  $loop->remove($id);
+
+Remove anything with an id. Connections will be dropped gracefully by
+allowing them to finish writing all data in their write buffers.
 
 =head2 C<server>
 
@@ -538,8 +527,7 @@ amount of seconds.
 
 Accept TCP connections with C<server_class>, which is usually
 L<Mojo::IOLoop::Server>, takes the same arguments as
-L<Mojo::IOLoop::Server/"listen">. Note that this method is EXPERIMENTAL and
-might change without warning!
+L<Mojo::IOLoop::Server/"listen">.
 
   Mojo::IOLoop->server({port => 3000} => sub {
     my ($loop, $stream, $id) = @_;
@@ -551,7 +539,7 @@ might change without warning!
   my $loop = Mojo::IOLoop->singleton;
 
 The global L<Mojo::IOLoop> singleton, used to access a single shared loop
-instance from everywhere inside the process.
+object from everywhere inside the process.
 
   # Many methods also allow you to take shortcuts
   Mojo::IOLoop->timer(2 => sub { Mojo::IOLoop->stop });
@@ -562,7 +550,8 @@ instance from everywhere inside the process.
   Mojo::IOLoop->start;
   $loop->start;
 
-Start the loop, this will block until C<stop> is called.
+Start the loop, this will block until C<stop> is called or no events are
+being watched anymore.
 
 =head2 C<stop>
 
@@ -579,10 +568,9 @@ and the loop can be restarted by running C<start> again.
   my $id     = $loop->stream($stream);
 
 Get L<Mojo::IOLoop::Stream> object for id or turn object into a connection.
-Note that this method is EXPERIMENTAL and might change without warning!
 
-  # Increase timeout for the connection of a transaction to 300 seconds
-  Mojo::IOLoop->stream($tx->connection)->timeout(300);
+  # Increase inactivity timeout for connection to 300 seconds
+  Mojo::IOLoop->stream($id)->timeout(300);
 
 =head2 C<timer>
 
@@ -590,7 +578,8 @@ Note that this method is EXPERIMENTAL and might change without warning!
   my $id = $loop->timer(5 => sub {...});
   my $id = $loop->timer(0.25 => sub {...});
 
-Create a new timer, invoking the callback after a given amount of seconds.
+Create a new timer, invoking the callback after a given amount of time in
+seconds.
 
 =head1 DEBUGGING
 

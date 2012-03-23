@@ -3,16 +3,15 @@ use Mojo::Base -strict;
 # Disable Bonjour, IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
+  $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 82;
+use Test::More tests => 81;
 
 # "The strong must protect the sweet."
 use Mojo::IOLoop;
+use Mojo::UserAgent;
 use Mojolicious::Lite;
-
-use_ok 'Mojo::UserAgent';
 
 # Silence
 app->log->level('fatal');
@@ -203,7 +202,7 @@ $ua->once(
     $tx->on(
       connection => sub {
         my ($tx, $connection) = @_;
-        Mojo::IOLoop->stream($connection)->timeout('0.5');
+        Mojo::IOLoop->stream($connection)->timeout(0.5);
       }
     );
   }
@@ -264,7 +263,7 @@ my $drain;
 $drain = sub {
   my $req = shift;
   return $ua->ioloop->timer(
-    '0.5' => sub {
+    0.5 => sub {
       $req->write_chunk('');
       $tx->resume;
       $stream
@@ -320,12 +319,12 @@ $ua->get(
   sub {
     push @kept_alive, pop->kept_alive;
     Mojo::IOLoop->timer(
-      '0.25' => sub {
+      0.25 => sub {
         $ua->get(
           '/',
           sub {
             push @kept_alive, pop->kept_alive;
-            Mojo::IOLoop->timer('0.25' => sub { Mojo::IOLoop->stop });
+            Mojo::IOLoop->timer(0.25 => sub { Mojo::IOLoop->stop });
           }
         );
       }
@@ -337,8 +336,9 @@ is_deeply \@kept_alive, [1, 1], 'connections kept alive';
 
 # Premature connection close
 my $port = Mojo::IOLoop->generate_port;
-my $id =
-  Mojo::IOLoop->server({port => $port} => sub { Mojo::IOLoop->drop(pop) });
+my $id   = Mojo::IOLoop->server(
+  {address => '127.0.0.1', port => $port} => sub { Mojo::IOLoop->remove(pop) }
+);
 $tx = $ua->get("http://localhost:$port/");
 ok !$tx->success, 'not successful';
 is $tx->error, 'Premature connection close.', 'right error';

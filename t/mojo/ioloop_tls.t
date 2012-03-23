@@ -3,7 +3,7 @@ use Mojo::Base -strict;
 # Disable Bonjour, IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
-  $ENV{MOJO_IOWATCHER} = 'Mojo::IOWatcher';
+  $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
 # To regenerate all required certificates run these commands
@@ -32,19 +32,19 @@ plan skip_all => 'set TEST_TLS to enable this test (developer only!)'
   unless $ENV{TEST_TLS};
 plan skip_all => 'IO::Socket::SSL 1.37 required for this test!'
   unless Mojo::IOLoop::Server::TLS;
-plan tests => 27;
+plan tests => 26;
 
 # "To the panic room!
 #  We don't have a panic room.
 #  To the panic room store!"
-use_ok 'Mojo::IOLoop';
+use Mojo::IOLoop;
 
 # Built-in certificate
 my $loop = Mojo::IOLoop->new;
 my $port = Mojo::IOLoop->generate_port;
 my ($server, $client) = '';
 $loop->server(
-  {port => $port, tls => 1} => sub {
+  {address => '127.0.0.1', port => $port, tls => 1} => sub {
     my ($loop, $stream) = @_;
     $stream->write('test', sub { shift->write('321') });
     $stream->on(read => sub { $server .= pop });
@@ -66,9 +66,10 @@ is $client, 'test321', 'right content';
 $loop   = Mojo::IOLoop->singleton;
 $port   = Mojo::IOLoop->generate_port;
 $server = $client = '';
-my ($drop, $running, $timeout, $server_err, $server_close, $client_close);
-Mojo::IOLoop->drop(Mojo::IOLoop->recurring(0 => sub { $drop++ }));
+my ($remove, $running, $timeout, $server_err, $server_close, $client_close);
+Mojo::IOLoop->remove(Mojo::IOLoop->recurring(0 => sub { $remove++ }));
 $loop->server(
+  address  => '127.0.0.1',
   port     => $port,
   tls      => 1,
   tls_ca   => 't/mojo/certs/ca.crt',
@@ -82,7 +83,7 @@ $loop->server(
     $stream->on(close   => sub { $server_close++ });
     $stream->on(error   => sub { $server_err = pop });
     $stream->on(read    => sub { $server .= pop });
-    $stream->timeout('0.5');
+    $stream->timeout(0.5);
   }
 );
 $loop->client(
@@ -105,7 +106,7 @@ is $timeout,      1,         'server emitted timeout event once';
 is $server_close, 1,         'server emitted close event once';
 is $client_close, 1,         'client emitted close event once';
 ok $running,      'loop was running';
-ok !$drop,       'event dropped successfully';
+ok !$remove,     'event removed successfully';
 ok !$server_err, 'no error';
 
 # Invalid client certificate
@@ -135,6 +136,7 @@ $loop       = Mojo::IOLoop->new;
 $port       = Mojo::IOLoop->generate_port;
 $server_err = $client_err = '';
 $loop->server(
+  address  => '127.0.0.1',
   port     => $port,
   tls      => 1,
   tls_ca   => 'no cert',
@@ -160,6 +162,7 @@ $port   = Mojo::IOLoop->generate_port;
 $server = $client = '';
 ($running, $timeout, $server_err, $server_close, $client_close) = undef;
 $loop->server(
+  address  => '127.0.0.1',
   port     => $port,
   tls      => 1,
   tls_ca   => 't/mojo/certs/ca.crt',
@@ -173,7 +176,7 @@ $loop->server(
     $stream->on(close   => sub { $server_close++ });
     $stream->on(error   => sub { $server_err = pop });
     $stream->on(read    => sub { $server .= pop });
-    $stream->timeout('0.5');
+    $stream->timeout(0.5);
   }
 );
 $loop->client(
@@ -204,6 +207,7 @@ $loop       = Mojo::IOLoop->new;
 $port       = Mojo::IOLoop->generate_port;
 $server_err = $client_err = '';
 $loop->server(
+  address  => '127.0.0.1',
   port     => $port,
   tls      => 1,
   tls_cert => 't/mojo/certs/badclient.crt',
@@ -226,6 +230,7 @@ $loop       = Mojo::IOLoop->new;
 $port       = Mojo::IOLoop->generate_port;
 $server_err = $client_err = '';
 $loop->server(
+  address  => '127.0.0.1',
   port     => $port,
   tls      => 1,
   tls_cert => 't/mojo/certs/badclient.crt',

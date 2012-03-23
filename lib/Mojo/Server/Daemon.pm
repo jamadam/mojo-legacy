@@ -3,6 +3,7 @@ use Mojo::Base 'Mojo::Server';
 
 use Carp 'croak';
 use Mojo::IOLoop;
+use Mojo::URL;
 use POSIX;
 use Scalar::Util 'weaken';
 use Sys::Hostname;
@@ -14,39 +15,18 @@ use constant BONJOUR => $ENV{MOJO_NO_BONJOUR}
 
 use constant DEBUG => $ENV{MOJO_DAEMON_DEBUG} || 0;
 
-has [qw/backlog group listen silent user/];
-has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 15 };
-has ioloop             => sub { Mojo::IOLoop->singleton };
-has max_clients        => 1000;
-has max_requests       => 25;
-
-my $LISTEN_RE = qr|
-  ^
-  (http(?:s)?)\://   # Scheme
-  (.+)               # Address
-  \:(\d+)            # Port
-  (?:
-    \:(.*?)          # Certificate
-    \:(.*?)          # Key
-    (?:\:(.+)?)?     # Certificate Authority
-  )?
-  $
-|x;
+has [qw/backlog group silent user/];
+has inactivity_timeout => sub { $ENV{MOJO_INACTIVITY_TIMEOUT} // 15 };
+has ioloop => sub { Mojo::IOLoop->singleton };
+has listen => sub { [split /,/, $ENV{MOJO_LISTEN} || 'http://*:3000'] };
+has max_clients  => 1000;
+has max_requests => 25;
 
 sub DESTROY {
   my $self = shift;
   return unless my $loop = $self->ioloop;
-  $loop->drop($_) for keys %{$self->{connections} || {}};
-  $loop->drop($_) for @{$self->{listening} || []};
-}
-
-# DEPRECATED in Leaf Fluttering In Wind!
-sub keep_alive_timeout {
-  warn <<EOF;
-Mojo::Server::Daemon->keep_alive_timeout is DEPRECATED in favor of
-Mojo::Server::Daemon->inactivity_timeout!
-EOF
-  shift->inactivity_timeout(@_);
+  $loop->remove($_) for keys %{$self->{connections} || {}};
+  $loop->remove($_) for @{$self->{listening} || []};
 }
 
 # DEPRECATED in Leaf Fluttering In Wind!
@@ -85,7 +65,7 @@ sub setuidgid {
 
 sub start {
   my $self = shift;
-  $self->_listen($_) for @{$self->listen || ['http://*:3000']};
+  $self->_listen($_) for @{$self->listen};
   $self->ioloop->max_connections($self->max_clients);
 }
 
@@ -128,42 +108,29 @@ sub _build_tx {
   return $tx;
 }
 
-sub _close { shift->_drop(pop) }
-
-sub _drop {
-  my ($self, $id) = @_;
-
-  # Finish gracefully
-  my $c = $self->{connections}->{$id};
-  if (my $tx = $c->{ws} || $c->{tx}) { $tx->server_close }
-
-  # Drop connection
-  delete $self->{connections}->{$id};
-}
+sub _close { shift->_remove(pop) }
 
 sub _error {
   my ($self, $id, $err) = @_;
   $self->app->log->error($err);
-  $self->_drop($id);
+  $self->_remove($id);
 }
 
 sub _finish {
   my ($self, $id, $tx) = @_;
 
-  # WebSocket
+  # Always remove connection for WebSockets
   if ($tx->is_websocket) {
-    $self->_drop($id);
-    return $self->ioloop->drop($id);
+    $self->_remove($id);
+    return $self->ioloop->remove($id);
   }
 
   # Finish transaction
-  my $c = $self->{connections}->{$id};
-  delete $c->{tx};
   $tx->server_close;
 
-  # WebSocket
-  my $s = 0;
-  if (my $ws = $c->{ws}) {
+  # Upgrade connection to WebSocket
+  my $c = $self->{connections}->{$id};
+  if (my $ws = $c->{tx} = delete $c->{ws}) {
 
     # Successful upgrade
     if ($ws->res->code eq '101') {
@@ -173,18 +140,18 @@ sub _finish {
 
     # Failed upgrade
     else {
-      delete $c->{ws};
+      delete $c->{tx};
       $ws->server_close;
     }
   }
 
-  # Close connection
+  # Close connection if necessary
   if ($tx->req->error || !$tx->keep_alive) {
-    $self->_drop($id);
-    $self->ioloop->drop($id);
+    $self->_remove($id);
+    $self->ioloop->remove($id);
   }
 
-  # Leftovers
+  # Build new transaction for leftovers
   elsif (defined(my $leftovers = $tx->server_leftovers)) {
     $tx = $c->{tx} = $self->_build_tx($id, $c);
     $tx->server_read($leftovers);
@@ -204,17 +171,32 @@ sub _listen {
   return unless $listen;
 
   # Check listen value
-  croak qq/Invalid listen value "$listen"/ unless $listen =~ $LISTEN_RE;
-  my $options = {};
-  my $tls;
-  $tls = $options->{tls} = 1 if $1 eq 'https';
-  $options->{address}  = $2 if $2 ne '*';
-  $options->{port}     = $3;
-  $options->{tls_cert} = $4 if $4;
-  $options->{tls_key}  = $5 if $5;
-  $options->{tls_ca}   = $6 if $6;
+  my $url   = Mojo::URL->new($listen);
+  my $query = $url->query;
 
-  # Listen backlog size
+  # DEPRECATED in Leaf Fluttering In Wind!
+  my ($address, $port, $cert, $key, $ca);
+  if ($listen =~ qr|//([^\[\]]]+)\:(\d+)\:(.*?)\:(.*?)(?:\:(.+)?)?$|) {
+    warn "Custom HTTPS listen values are DEPRECATED in favor of URLs!\n";
+    ($address, $port, $cert, $key, $ca) = ($1, $2, $3, $4, $5);
+  }
+
+  else {
+    $address = $url->host;
+    $port    = $url->port;
+    $cert    = $query->param('cert');
+    $key     = $query->param('key');
+    $ca      = $query->param('ca');
+  }
+
+  # Options
+  my $options = {port => $port};
+  my $tls;
+  $tls = $options->{tls} = 1 if $url->scheme eq 'https';
+  $options->{address}  = $address if $address ne '*';
+  $options->{tls_cert} = $cert    if $cert;
+  $options->{tls_key}  = $key     if $key;
+  $options->{tls_ca}   = $ca      if $ca;
   my $backlog = $self->backlog;
   $options->{backlog} = $backlog if $backlog;
 
@@ -247,21 +229,19 @@ sub _listen {
 
   # Bonjour
   if (BONJOUR && (my $p = Net::Rendezvous::Publish->new)) {
-    my $port = $options->{port};
     my $name = $options->{address} || Sys::Hostname::hostname();
     $p->publish(
-      name   => "Mojolicious ($name:$port)",
-      type   => '_http._tcp',
-      domain => 'local',
-      port   => $port
-    ) if $port && !$tls;
+      name => "Mojolicious ($name:$options->{port})",
+      type => '_http._tcp',
+      port => $options->{port}
+    ) if $options->{port} && !$tls;
   }
 
   # Friendly message
   return if $self->silent;
   $self->app->log->info(qq/Listening at "$listen"./);
-  $listen =~ s|^(https?\://)\*|${1}127.0.0.1|i;
-  print "Server available at $listen.\n";
+  $listen =~ s|//\*|//127.0.0.1|i;
+  say "Server available at $listen.";
 }
 
 sub _read {
@@ -270,8 +250,7 @@ sub _read {
 
   # Make sure we have a transaction
   my $c = $self->{connections}->{$id};
-  my $tx = $c->{tx} || $c->{ws};
-  $tx ||= $c->{tx} = $self->_build_tx($id, $c);
+  my $tx = $c->{tx} ||= $self->_build_tx($id, $c);
 
   # Parse chunk
   $tx->server_read($chunk);
@@ -283,6 +262,16 @@ sub _read {
   # Finish or start writing
   if ($tx->is_finished) { $self->_finish($id, $tx) }
   elsif ($tx->is_writing) { $self->_write($id) }
+}
+
+sub _remove {
+  my ($self, $id) = @_;
+
+  # Finish gracefully
+  if (my $tx = $self->{connections}->{$id}->{tx}) { $tx->server_close }
+
+  # Remove connection
+  delete $self->{connections}->{$id};
 }
 
 sub _user {
@@ -298,7 +287,7 @@ sub _write {
 
   # Not writing
   my $c = $self->{connections}->{$id};
-  return unless my $tx = $c->{tx} || $c->{ws};
+  return unless my $tx = $c->{tx};
   return unless $tx->is_writing;
 
   # Get chunk
@@ -320,7 +309,7 @@ sub _write {
     }
     else {
       $self->_finish($id, $tx);
-      return unless $c->{tx} || $c->{ws};
+      return unless $c->{tx};
     }
   }
   $stream->write('', $cb);
@@ -397,7 +386,7 @@ Group for server process.
   $daemon     = $daemon->inactivity_timeout(5);
 
 Maximum amount of time in seconds a connection can be inactive before getting
-dropped, defaults to the value of the C<MOJO_INACTIVITY_TIMEOUT> environment
+closed, defaults to the value of the C<MOJO_INACTIVITY_TIMEOUT> environment
 variable or C<15>. Setting the value to C<0> will allow connections to be
 inactive indefinitely.
 
@@ -414,16 +403,36 @@ singleton.
   my $listen = $daemon->listen;
   $daemon    = $daemon->listen(['https://localhost:3000']);
 
-List of one or more locations to listen on, defaults to C<http://*:3000>.
+List of one or more locations to listen on, defaults to the value of the
+C<MOJO_LISTEN> environment variable or C<http://*:3000>.
 
   # Listen on two ports with HTTP and HTTPS at the same time
   $daemon->listen(['http://*:3000', 'https://*:4000']);
 
   # Use a custom certificate and key
-  $daemon->listen(['https://*:3000:/x/server.crt:/y/server.key']);
+  $daemon->listen(['https://*:3000?cert=/x/server.crt&key=/y/server.key']);
 
   # Or even a custom certificate authority
-  $daemon->listen(['https://*:3000:/x/server.crt:/y/server.key:/z/ca.crt']);
+  $daemon->listen(
+    ['https://*:3000?cert=/x/server.crt&key=/y/server.key&ca=/z/ca.crt']);
+
+These parameters are currently available:
+
+=over 4
+
+=item C<ca>
+
+Path to TLS certificate authority file.
+
+=item C<cert>
+
+Path to the TLS cert file, defaults to a built-in test certificate.
+
+=item C<key>
+
+Path to the TLS key file, defaults to a built-in test key.
+
+=back
 
 =head2 C<max_clients>
 

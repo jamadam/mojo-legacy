@@ -119,7 +119,8 @@ sub run {
       # Stream content
       $tx->res->body(
         sub {
-          $cb->(my $res = shift);
+          my $res = shift;
+          $cb->($res);
 
           # Ignore intermediate content
           return if $redirect && $res->is_status_class(300);
@@ -147,7 +148,7 @@ sub run {
     if ($tx->res->headers->content_type || '') =~ /JSON/i;
 
   # Selector
-  $self->_select($buffer, defined $charset ? $charset : $tx->res->content->charset, $selector);
+  $self->_select($buffer, $charset // $tx->res->content->charset, $selector);
 }
 
 sub _json {
@@ -161,7 +162,7 @@ sub _json {
 
 sub _say {
   return unless length(my $value = shift);
-  print encode('UTF-8', $value) . "\n";
+  say encode('UTF-8', $value);
 }
 
 sub _select {
@@ -222,8 +223,8 @@ L<Mojolicious::Command::get> is a command interface to L<Mojo::UserAgent>.
 
 =head1 ATTRIBUTES
 
-L<Mojolicious::Command::get> inherits all attributes from L<Mojo::Command>
-and implements the following new ones.
+L<Mojolicious::Command::get> performs requests to remote hosts or local
+applications.
 
 =head2 C<description>
 

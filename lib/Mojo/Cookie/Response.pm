@@ -8,9 +8,6 @@ has [qw/domain httponly max_age path secure/];
 
 my $ATTR_RE = qr/(Domain|expires|HttpOnly|Max-Age|Path|Secure)/msi;
 
-# DEPRECATED in Leaf Fluttering In Wind!
-sub comment { warn "Mojo::Cookie::Response->comment is DEPRECATED!\n" }
-
 sub expires {
   my ($self, $expires) = @_;
 
@@ -43,12 +40,13 @@ sub parse {
       if (!$i) {
         push @cookies, Mojo::Cookie::Response->new;
         $cookies[-1]->name($name);
-        $cookies[-1]->value($value = defined $value ? $value : '');
+        $cookies[-1]->value($value //= '');
       }
 
       # Attributes
       elsif (my @match = $name =~ $ATTR_RE) {
-        (my $attr = lc $match[0]) =~ tr/-/_/;
+        my $attr = lc $match[0];
+        $attr =~ tr/-/_/;
         $cookies[-1]->$attr($attr =~ /(?:Secure|HttpOnly)/i ? 1 : $value);
       }
     }
@@ -56,9 +54,6 @@ sub parse {
 
   return \@cookies;
 }
-
-# DEPRECATED in Leaf Fluttering In Wind!
-sub port { warn "Mojo::Cookie::Response->port is DEPRECATED!\n" }
 
 sub to_string {
   my $self = shift;

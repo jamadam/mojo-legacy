@@ -90,7 +90,7 @@ sub generate_body_chunk {
     if !delete $self->{delay} && !length $self->{body_buffer};
 
   # Get chunk
-  my $chunk = defined $self->{body_buffer} ? $self->{body_buffer} : '';
+  my $chunk = $self->{body_buffer} // '';
   $self->{body_buffer} = '';
 
   # EOF or delay
@@ -146,7 +146,7 @@ sub parse {
   if ($self->auto_relax) {
     my $headers    = $self->headers;
     my $connection = $headers->connection || '';
-    my $len        = defined $headers->content_length ? $headers->content_length : '';
+    my $len        = $headers->content_length // '';
     $self->relaxed(1)
       if !length $len
         && ($connection =~ /close/i || $headers->content_type);
@@ -170,7 +170,7 @@ sub parse {
 
   # Chunked or relaxed content
   if ($self->is_chunked || $self->relaxed) {
-    $self->{size} += length($self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '');
+    $self->{size} += length($self->{buffer} //= '');
     $self->emit(read => $self->{buffer});
     $self->{buffer} = '';
   }
@@ -212,8 +212,8 @@ sub parse_until_body {
   my ($self, $chunk) = @_;
 
   # Prepare first buffer
-  $self->{pre_buffer} = defined $self->{pre_buffer} ? $self->{pre_buffer} : '';
-  $self->{raw_size}   = defined $self->{raw_size} ? $self->{raw_size} : 0;
+  $self->{pre_buffer} //= '';
+  $self->{raw_size}   //= 0;
 
   # Add chunk
   if (defined $chunk) {
@@ -239,7 +239,7 @@ sub parse_until_body {
 
 sub progress {
   my $self = shift;
-  return 0 unless grep {$_ eq ($self->{state} || '')} qw/body finished/;
+  return 0 unless ($self->{state} || '') ~~ [qw/body finished/];
   return $self->{raw_size} - ($self->{header_size} || 0);
 }
 
@@ -251,7 +251,7 @@ sub write {
 
   # Add chunk
   if (defined $chunk) {
-    $self->{body_buffer} = defined $self->{body_buffer} ? $self->{body_buffer} : '';
+    $self->{body_buffer} //= '';
     $self->{body_buffer} .= $chunk;
   }
 
@@ -476,7 +476,6 @@ Content headers, defaults to a L<Mojo::Headers> object.
 
 Maximum size in bytes of buffer for pipelined HTTP requests, defaults to the
 value of the C<MOJO_MAX_LEFTOVER_SIZE> environment variable or C<262144>.
-Note that this attribute is EXPERIMENTAL and might change without warning!
 
 =head2 C<relaxed>
 
@@ -507,8 +506,7 @@ Content size in bytes.
 
   my $boundary = $content->boundary;
 
-Extract multipart boundary from C<Content-Type> header. Note that this method
-is EXPERIMENTAL and might change without warning!
+Extract multipart boundary from C<Content-Type> header.
 
 =head2 C<build_body>
 
@@ -526,15 +524,13 @@ Render all headers.
 
   my $charset = $content->charset;
 
-Extract charset from C<Content-Type> header. Note that this method is
-EXPERIMENTAL and might change without warning!
+Extract charset from C<Content-Type> header.
 
 =head2 C<clone>
 
   my $clone = $content->clone;
 
-Clone content if possible, otherwise return C<undef>. Note that this method
-is EXPERIMENTAL and might change without warning!
+Clone content if possible, otherwise return C<undef>.
 
 =head2 C<generate_body_chunk>
 
@@ -577,8 +573,7 @@ Check if content is chunked.
   my $success = $content->is_dynamic;
 
 Check if content will be dynamically generated, which prevents C<clone> from
-working. Note that this method is EXPERIMENTAL and might change without
-warning!
+working.
 
 =head2 C<is_finished>
 
@@ -634,8 +629,7 @@ Parse chunk and stop after headers.
 
   my $size = $content->progress;
 
-Size of content already received from message in bytes. Note that this method
-is EXPERIMENTAL and might change without warning!
+Size of content already received from message in bytes.
 
 =head2 C<write>
 

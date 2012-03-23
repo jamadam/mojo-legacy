@@ -14,7 +14,7 @@ sub run {
   my $self = shift;
 
   # EV
-  my $ev = eval 'use Mojo::IOWatcher::EV; 1' ? $EV::VERSION : 'not installed';
+  my $ev = eval 'use Mojo::Reactor::EV; 1' ? $EV::VERSION : 'not installed';
 
   # IPv6
   my $ipv6 =
@@ -58,7 +58,7 @@ EOF
     if $latest < $current;
   $message = "You might want to update your Mojolicious to $latest."
     if $latest > $current;
-  print $message. "\n";
+  say $message;
 }
 
 1;
@@ -77,7 +77,8 @@ Mojolicious::Command::version - Version command
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::version> shows versions of installed modules.
+L<Mojolicious::Command::version> shows version information for installed core
+and optional modules.
 
 =head1 ATTRIBUTES
 

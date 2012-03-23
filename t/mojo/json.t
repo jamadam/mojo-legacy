@@ -4,10 +4,9 @@ use utf8;
 
 use Test::More tests => 117;
 
-use Mojo::ByteStream 'b';
-
 # "We should be safe up here. I'm pretty sure fires can't climb trees."
-use_ok 'Mojo::JSON';
+use Mojo::ByteStream 'b';
+use Mojo::JSON;
 
 # Decode array
 my $json  = Mojo::JSON->new;
@@ -239,7 +238,7 @@ is_deeply $hash, {foo => 'c:\progra~1\mozill~1\firefox.exe'},
 
 # Huge string
 $string = $json->encode(['a' x 32768]);
-#is_deeply $json->decode($string), ['a' x 32768], 'successful roundtrip';
+is_deeply $json->decode($string), ['a' x 32768], 'successful roundtrip';
 is $json->error, undef, 'no error';
 
 # u2028 and u2029

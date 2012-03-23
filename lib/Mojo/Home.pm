@@ -19,7 +19,7 @@ has app_class => 'Mojo::HelloWorld';
 
 # "I'm normally not a praying man, but if you're up there,
 #  please save me Superman."
-sub new { shift->SUPER::new()->parse(@_) }
+sub new { shift->SUPER::new->parse(@_) }
 
 sub detect {
   my ($self, $class) = @_;
@@ -69,14 +69,8 @@ sub detect {
 
 sub lib_dir {
   my $self = shift;
-
-  # Directory found
-  my $parts = $self->{parts} || [];
-  my $path = catdir @$parts, 'lib';
-  return $path if -d $path;
-
-  # No lib directory
-  return;
+  my $path = catdir @{$self->{parts} || []}, 'lib';
+  return -d $path ? $path : undef;
 }
 
 sub list_files {

@@ -34,7 +34,7 @@ sub run {
 
     # Test dirctory in the directory above "mojo" (../t)
     $path = catdir @base, '..', 't' unless -d $path;
-    return print "Can't find test directory.\n" unless -d $path;
+    return say "Can't find test directory." unless -d $path;
 
     # List test files
     my $home = Mojo::Home->new($path);
@@ -42,11 +42,11 @@ sub run {
       for @{$home->list_files};
 
     $path = realpath $path;
-    print "Running tests from '$path'.\n";
+    say "Running tests from '$path'.";
   }
 
   # Run tests
-  $ENV{HARNESS_OPTIONS} = defined $ENV{HARNESS_OPTIONS} ? $ENV{HARNESS_OPTIONS} : 'c';
+  $ENV{HARNESS_OPTIONS} //= 'c';
   require Test::Harness;
   Test::Harness::runtests(sort @tests);
 }
@@ -67,7 +67,7 @@ Mojolicious::Command::test - Test command
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::test> is a test script.
+L<Mojolicious::Command::test> runs application tests from the C<t> directory.
 
 =head1 ATTRIBUTES
 

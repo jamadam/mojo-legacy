@@ -5,7 +5,7 @@ use overload
   '""'     => sub { shift->to_string },
   fallback => 1;
 
-require Time::Local;
+use Time::Local 'timegm';
 
 has 'epoch';
 
@@ -49,7 +49,7 @@ sub parse {
 
   # Prevent crash
   my $epoch;
-  $epoch = eval { Time::Local::timegm($s, $m, $h, $day, $month, $year) };
+  $epoch = eval { timegm($s, $m, $h, $day, $month, $year) };
   $self->epoch($epoch) if !$@ && $epoch >= 0;
 
   return $self;
@@ -59,7 +59,7 @@ sub to_string {
   my $self = shift;
 
   # RFC 2616 (Sun, 06 Nov 1994 08:49:37 GMT)
-  my ($s, $m, $h, $mday, $month, $year, $wday) = gmtime(defined $self->epoch ? $self->epoch : time);
+  my ($s, $m, $h, $mday, $month, $year, $wday) = gmtime($self->epoch // time);
   return sprintf "%s, %02d %s %04d %02d:%02d:%02d GMT", $DAYS[$wday], $mday,
     $MONTHS[$month], $year + 1900, $h, $m, $s;
 }

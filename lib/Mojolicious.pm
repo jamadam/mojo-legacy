@@ -2,6 +2,7 @@ package Mojolicious;
 use Mojo::Base 'Mojo';
 
 use Carp 'croak';
+use Mojo::Exception;
 use Mojolicious::Commands;
 use Mojolicious::Controller;
 use Mojolicious::Plugins;
@@ -32,7 +33,7 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Leaf Fluttering In Wind';
-our $VERSION  = '2.55';
+our $VERSION  = '2.66';
 
 # "These old doomsday devices are dangerously unstable.
 #  I'll rest easier not knowing where they are."
@@ -68,13 +69,12 @@ sub new {
   my $r = $self->routes;
   $r->namespace(ref $self);
 
-  # Hide own controller methods
+  # Hide controller attributes/methods and "handler"
   $r->hide(qw/AUTOLOAD DESTROY app cookie finish flash handler on on_finish/);
   $r->hide(qw/param redirect_to render render_content render_data/);
   $r->hide(qw/render_exception render_json render_not_found render_partial/);
-  $r->hide(qw/render_static render_text rendered req res respond_to/);
-  $r->hide(qw/send session signed_cookie stash tx ua url_for write/);
-  $r->hide('write_chunk');
+  $r->hide(qw/render_static render_text rendered req res respond_to send/);
+  $r->hide(qw/session signed_cookie stash tx ua url_for write write_chunk/);
 
   # Prepare log
   my $mode = $self->mode;
@@ -89,6 +89,16 @@ sub new {
   $self->plugin('EPRenderer');
   $self->plugin('RequestTimer');
   $self->plugin('PoweredBy');
+
+  # Exception handling
+  $self->hook(
+    around_dispatch => sub {
+      my ($next, $c) = @_;
+      local $SIG{__DIE__} =
+        sub { ref $_[0] ? CORE::die($_[0]) : Mojo::Exception->throw(@_) };
+      $c->render_exception($@) unless eval { $next->(); 1 };
+    }
+  );
 
   # Reduced log output outside of development mode
   $self->log->level('info') unless $mode eq 'development';
@@ -140,8 +150,8 @@ sub handler {
 
   # Embedded application
   my $stash = {};
-  if ($tx->can('stash')) {
-    $stash = $tx->stash;
+  if (my $sub = $tx->can('stash')) {
+    $stash = $tx->$sub;
     $tx    = $tx->tx;
   }
 
@@ -305,13 +315,16 @@ contain more information.
   # Add another "templates" directory
   push @{$app->renderer->paths}, '/foo/bar/templates';
 
+  # Add another class with templates in DATA section
+  push @{$app->renderer->classes}, 'Mojolicious::Plugin::Fun';
+
 =head2 C<routes>
 
   my $routes = $app->routes;
   $app       = $app->routes(Mojolicious::Routes->new);
 
-The routes dispatcher, defaults to a L<Mojolicious::Routes> object. You use
-this in your startup method to define the url endpoints for your application.
+The router, defaults to a L<Mojolicious::Routes> object. You use this in your
+startup method to define the url endpoints for your application.
 
   sub startup {
     my $self = shift;
@@ -350,6 +363,9 @@ L<Mojolicious::Static> object.
 
   # Add another "public" directory
   push @{$app->static->paths}, '/foo/bar/public';
+
+  # Add another class with static files in DATA section
+  push @{$app->static->classes}, 'Mojolicious::Plugin::Fun';
 
 =head2 C<types>
 
@@ -391,6 +407,7 @@ object.
 Default values for L<Mojolicious::Controller/"stash">, assigned for every new
 request.
 
+  # Manipulate defaults
   $app->defaults->{foo} = 'bar';
   my $foo = $app->defaults->{foo};
   delete $app->defaults->{foo};
@@ -456,11 +473,11 @@ parsed.
 This is a very powerful hook and should not be used lightly, it makes some
 rather advanced features such as upload progress bars possible, just note
 that it will not work for embedded applications. (Passed the transaction and
-application instances)
+application object)
 
 =item B<before_dispatch>
 
-Emitted right before the static and routes dispatchers start their work.
+Emitted right before the static dispatcher and router start their work.
 
   $app->hook(before_dispatch => sub {
     my $c = shift;
@@ -468,12 +485,12 @@ Emitted right before the static and routes dispatchers start their work.
   });
 
 Very useful for rewriting incoming requests and other preprocessing tasks.
-(Passed the default controller instance)
+(Passed the default controller object)
 
 =item B<after_static_dispatch>
 
 Emitted in reverse order after the static dispatcher determined if a static
-file should be served and before the routes dispatcher starts its work.
+file should be served and before the router starts its work.
 
   $app->hook(after_static_dispatch => sub {
     my $c = shift;
@@ -481,7 +498,7 @@ file should be served and before the routes dispatcher starts its work.
   });
 
 Mostly used for custom dispatchers and postprocessing static file responses.
-(Passed the default controller instance)
+(Passed the default controller object)
 
 =item B<after_dispatch>
 
@@ -494,7 +511,7 @@ hook can trigger before C<after_static_dispatch> due to its dynamic nature.
   });
 
 Useful for all kinds of postprocessing tasks. (Passed the current controller
-instance)
+object)
 
 =item B<around_dispatch>
 
@@ -509,9 +526,10 @@ want to continue the chain.
     ...
   });
 
-This is a very powerful hook and should not be used lightly, consider it the
+This is a very powerful hook and should not be used lightly, it allows you to
+customize application wide exception handling for example, consider it the
 sledgehammer in your toolbox. (Passed a closure leading to the next hook and
-the current controller instance)
+the current controller object)
 
 =back
 
@@ -610,10 +628,10 @@ startup.
 =head1 HELPERS
 
 In addition to the attributes and methods above you can also call helpers on
-instances of L<Mojolicious>. This includes all helpers from
+L<Mojolicious> objects. This includes all helpers from
 L<Mojolicious::Plugin::DefaultHelpers> and
 L<Mojolicious::Plugin::TagHelpers>. Note that application helpers are always
-called with a new C<controller_class> instance, so they can't depend on or
+called with a new C<controller_class> object, so they can't depend on or
 change controller state, which includes request, response and stash.
 
   $app->log->debug($app->dumper({foo => 'bar'}));

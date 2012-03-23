@@ -76,8 +76,7 @@ sub body_params {
   # "x-application-urlencoded" and "application/x-www-form-urlencoded"
   my $type = $self->headers->content_type || '';
   if ($type =~ m#(?:x-application|application/x-www-form)-urlencoded#i) {
-    return $params if (my $asset = $self->content->asset)->is_file;
-    $params->parse($asset->slurp);
+    $params->parse($self->content->asset->slurp);
   }
 
   # "multipart/formdata"
@@ -253,7 +252,7 @@ sub get_header_chunk {
 sub get_start_line_chunk {
   my ($self, $offset) = @_;
   $self->emit(progress => 'start_line', @_);
-  return substr $self->{start_line_buffer} = defined $self->{start_line_buffer} ? $self->{start_line_buffer} : $self->_build_start_line,
+  return substr $self->{start_line_buffer} //= $self->_build_start_line,
     $offset, CHUNK_SIZE;
 }
 
@@ -269,10 +268,7 @@ sub is_dynamic { shift->content->is_dynamic }
 
 sub is_finished { (shift->{state} || '') eq 'finished' }
 
-sub is_limit_exceeded {
-  return unless my $code = (shift->error)[1];
-  return grep {$_ eq $code} (413, 431);
-}
+sub is_limit_exceeded { ((shift->error)[1] || '') ~~ [413, 431] }
 
 sub is_multipart { shift->content->is_multipart }
 
@@ -374,8 +370,8 @@ sub _parse {
   my ($self, $until_body, $chunk) = @_;
 
   # Add chunk
-  $self->{buffer}   = defined $self->{buffer} ? $self->{buffer} : '';
-  $self->{raw_size} = defined $self->{raw_size} ? $self->{raw_size} : 0;
+  $self->{buffer}   //= '';
+  $self->{raw_size} //= 0;
   if (defined $chunk) {
     $self->{raw_size} += length $chunk;
     $self->{buffer} .= $chunk;
@@ -399,7 +395,7 @@ sub _parse {
   }
 
   # Content
-  if (grep { $_ eq ($self->{state} || '')} qw/body content finished/) {
+  if (($self->{state} || '') ~~ [qw/body content finished/]) {
 
     # Until body
     my $content = $self->content;
@@ -474,15 +470,14 @@ sub _parse_formdata {
     $name     = url_unescape $name     if $name;
     $filename = url_unescape $filename if $filename;
     if ($charset) {
-      $name     = defined decode($charset, $name) ? decode($charset, $name) : $name     if $name;
-      $filename = defined decode($charset, $filename) ? decode($charset, $filename) : $filename if $filename;
+      $name     = decode($charset, $name)     // $name     if $name;
+      $filename = decode($charset, $filename) // $filename if $filename;
     }
 
     # Form value
     unless (defined $filename) {
-      next if (my $asset = $part->asset)->is_file;
-      $value = $asset->slurp;
-      $value = defined decode($charset, $value) ? decode($charset, $value) : $value
+      $value = $part->asset->slurp;
+      $value = decode($charset, $value) // $value
         if $charset && !$part->headers->content_transfer_encoding;
     }
 
@@ -583,7 +578,10 @@ to L<Mojo::JSON>.
   $message = $message->max_message_size(1024);
 
 Maximum message size in bytes, defaults to the value of the
-C<MOJO_MAX_MESSAGE_SIZE> environment variable or C<5242880>.
+C<MOJO_MAX_MESSAGE_SIZE> environment variable or C<5242880>. Note that
+increasing this value can also drastically increase memory usage, should you
+for example attempt to parse an excessively large message body with the
+C<body_params>, C<dom> or C<json> methods.
 
 =head2 C<version>
 
@@ -620,7 +618,9 @@ Access C<content> data or replace all subscribers of the C<read> event.
 
   my $params = $message->body_params;
 
-C<POST> parameters, usually a L<Mojo::Parameters> object.
+C<POST> parameters extracted from C<x-application-urlencoded>,
+C<application/x-www-form-urlencoded> or C<multipart/form-data> message body,
+usually a L<Mojo::Parameters> object.
 
   say $message->body_params->param('foo');
 
@@ -663,8 +663,8 @@ L<Mojo::Cookie::Response> objects.
   my $dom        = $message->dom;
   my $collection = $message->dom('a[href]');
 
-Turns content into a L<Mojo::DOM> object and takes an optional selector to
-perform a C<find> on it right away, which returns a collection.
+Turns message body into a L<Mojo::DOM> object and takes an optional selector
+to perform a C<find> on it right away, which returns a collection.
 
   # Perform "find" right away
   $message->dom('h1, h2, h3')->each(sub { say $_->text });
@@ -736,8 +736,7 @@ Alias for L<Mojo::Content/"is_chunked">.
 
   my $success = $message->is_dynamic;
 
-Alias for L<Mojo::Content/"is_dynamic">. Note that this method is
-EXPERIMENTAL and might change without warning!
+Alias for L<Mojo::Content/"is_dynamic">.
 
 =head2 C<is_finished>
 
@@ -749,8 +748,7 @@ Check if parser is finished.
 
   my $success = $message->is_limit_exceeded;
 
-Check if message has exceeded C<max_line_size> or C<max_message_size>. Note
-that this method is EXPERIMENTAL and might change without warning!
+Check if message has exceeded C<max_line_size> or C<max_message_size>.
 
 =head2 C<is_multipart>
 
@@ -781,15 +779,15 @@ Alias for L<Mojo::Content/"leftovers">.
 
   $message->max_line_size(1024);
 
-Alias for L<Mojo::Headers/"max_line_size">. Note that this method is
-EXPERIMENTAL and might change without warning!
+Alias for L<Mojo::Headers/"max_line_size">.
 
 =head2 C<param>
 
-  my $param  = $message->param('foo');
-  my @params = $message->param('foo');
+  my @names = $message->param;
+  my $foo   = $message->param('foo');
+  my @foo   = $message->param('foo');
 
-Access C<GET> and C<POST> parameters.
+Access C<POST> parameters.
 
 =head2 C<parse>
 

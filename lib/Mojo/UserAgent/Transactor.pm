@@ -15,7 +15,7 @@ sub form {
   my ($self, $url) = (shift, shift);
 
   # Callback
-  my $cb = pop @_ if ref $_[-1] && ref $_[-1] eq 'CODE';
+  my $cb = pop @_ if (ref $_[-1] || '') eq 'CODE';
 
   # Form
   my $encoding = shift;
@@ -186,7 +186,7 @@ sub redirect {
   # Commonly used codes
   my $res = $old->res;
   my $code = $res->code || 0;
-  return unless grep {$_ eq $code} (301, 302, 303, 307);
+  return unless $code ~~ [301, 302, 303, 307];
 
   # Fix broken location without authority and/or scheme
   return unless my $location = $res->headers->location;
@@ -199,7 +199,7 @@ sub redirect {
   # Clone request if necessary
   my $new    = Mojo::Transaction::HTTP->new;
   my $method = $req->method;
-  if (grep {$_ eq $code} (301, 307)) {
+  if ($code ~~ [301, 307]) {
     return unless $req = $req->clone;
     $new->req($req);
     my $headers = $req->headers;
@@ -207,7 +207,7 @@ sub redirect {
     $headers->remove('Cookie');
     $headers->remove('Referer');
   }
-  else { $method = 'GET' unless grep {$_ eq $method} qw/GET HEAD/ }
+  else { $method = 'GET' unless $method ~~ [qw/GET HEAD/] }
   $new->req->method($method)->url($location);
   $new->previous($old);
 
@@ -227,7 +227,7 @@ sub tx {
   ref $url ? $req->url($url) : $req->url->parse($url);
 
   # Callback
-  my $cb = pop @_ if ref $_[-1] && ref $_[-1] eq 'CODE';
+  my $cb = pop @_ if (ref $_[-1] || '') eq 'CODE';
 
   # Body
   $req->body(pop @_)
@@ -275,8 +275,7 @@ Mojo::UserAgent::Transactor - User agent transactor
 =head1 DESCRIPTION
 
 L<Mojo::UserAgent::Transactor> is the transaction building and manipulation
-framework used by L<Mojo::UserAgent>. Note that this module is EXPERIMENTAL
-and might change without warning!
+framework used by L<Mojo::UserAgent>.
 
 =head1 METHODS
 
