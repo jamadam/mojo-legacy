@@ -13,6 +13,11 @@ WriteMakefile(
   ABSTRACT     => 'Real-time web framework',
   AUTHOR       => 'Sebastian Riedel <sri@cpan.org>',
   LICENSE      => 'artistic_2',
+  PREREQ_PM    => {
+    'Pod::Simple::HTML'       => '0',
+    'Pod::Simple::Search'     => '0',
+    'Digest::SHA'             => '0',
+  },
   META_MERGE   => {
     requires  => {perl => '5.008009'},
     resources => {

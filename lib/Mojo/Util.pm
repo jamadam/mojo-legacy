@@ -2,7 +2,8 @@ package Mojo::Util;
 use Mojo::Base 'Exporter';
 
 use Digest::MD5 qw/md5 md5_hex/;
-use Digest::SHA qw/sha1 sha1_hex/;
+BEGIN {eval {require Digest::SHA; import Digest::SHA qw/sha1 sha1_hex/}}
+#use Digest::SHA qw/sha1 sha1_hex/;
 use Encode 'find_encoding';
 use MIME::Base64 qw/decode_base64 encode_base64/;
 use MIME::QuotedPrint qw/decode_qp encode_qp/;

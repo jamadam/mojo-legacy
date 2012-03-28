@@ -6,8 +6,8 @@ use Mojo::Asset::File;
 use Mojo::ByteStream 'b';
 use Mojo::DOM;
 use Mojo::Util 'url_escape';
-use Pod::Simple::HTML;
-use Pod::Simple::Search;
+BEGIN {eval {require Pod::Simple::HTML; import Pod::Simple::HTML}}
+BEGIN {eval {require Pod::Simple::Search; import Pod::Simple::Search}}
 
 # Paths
 our @PATHS = map { $_, "$_/pods" } @INC;
