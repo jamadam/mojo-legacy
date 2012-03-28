@@ -1,4 +1,4 @@
-use 5.008009;
+use 5.008007;
 
 use strict;
 use warnings;
@@ -19,7 +19,7 @@ WriteMakefile(
     'Digest::SHA'             => '0',
   },
   META_MERGE   => {
-    requires  => {perl => '5.008009'},
+    requires  => {perl => '5.008007'},
     resources => {
       homepage    => 'http://mojolicio.us',
       license     => 'http://dev.perl.org/licenses/',
