@@ -45,13 +45,12 @@ criteria.
 =head2 What about backwards compatibility?
 
 In conformance with L<Mojolicious::Guides::CodingGuidelines>, we will always
-deprecate a feature for at least one major release before removing or
-changing it in incompatible ways. New features can however be marked as
-experimental to explicitly exclude them from these rules. This gives us the
-necessary freedom to ensure a healthy future for L<Mojolicious>. So, as long
-as you are not using anything marked experimental, untested or undocumented,
-you can always count on backwards compatibility, everything else would be
-considered a bug.
+deprecate a feature before removing or changing it in incompatible ways
+between major releases. New features can however be marked as experimental to
+explicitly exclude them from these rules. This gives us the necessary freedom
+to ensure a healthy future for L<Mojolicious>. So, as long as you are not
+using anything marked experimental, untested or undocumented, you can always
+count on backwards compatibility, everything else would be considered a bug.
 
 =head2 Why not split up Mojolicious into many smaller distributions?
 
@@ -59,6 +58,18 @@ Because there are no advantages, it drastically increases maintenance costs
 and installation times without giving us anything in return. It would only
 make sense if we wanted to pass ownership of a module to a new maintainer,
 which we already have done in the past.
+
+=head2 Can you add feature XY to the core distribution?
+
+Probably not. While the L<Mojolicious> distribtion covers a wide range of
+features, we are rather conservative when it comes to adding new ones. The
+most important criteria are outlined in
+L<Mojolicious::Guides::CodingGuidelines>. But don't let this discourage you,
+it doesn't hurt to open a
+L<GitHub issue|https://github.com/kraih/mojo/issues> and ask, just be
+prepared that it might not pass the vote. To increase the chances you can
+also discuss and refine ideas on the
+L<mailing-list|http://groups.google.com/group/mojolicious>.
 
 =head2 What does the error "Maximum message size exceeded." mean?
 
@@ -112,19 +123,11 @@ good, the C<t> directory of this distribution has many good examples for how
 to do it right. Writing a test is usually the hardest part of fixing a bug,
 so the better your test case the faster it can be fixed. ;)
 
-Once that's done you can contact the developers via via GitHub
-(L<https://github.com/kraih/mojo/issues>), mailing list
-(L<http://groups.google.com/group/mojolicious>) or IRC
-(C<#mojo> on C<irc.perl.org>).
+Once that's done you can contact the developers via
+L<GitHub issue|https://github.com/kraih/mojo/issues>.
 
-If you decide to fix the bug yourself make sure to also take a look at
+If you decide to fix the bug yourself, make sure to also take a look at
 L<Mojolicious::Guides::CodingGuidelines>.
-
-=head2 Which namespace should i use for Mojolicious plugins?
-
-For all new plugins that you might want to release to CPAN, we suggest using
-the "Mojolicious::Plugin" namespace. While "MojoX" has been used a lot in the
-past, it is now deprecated.
 
 =head1 MORE
 

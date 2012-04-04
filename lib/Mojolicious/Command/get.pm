@@ -32,11 +32,9 @@ These options are available:
   -c, --content <content>     Content to send with request.
   -H, --header <name:value>   Additional HTTP header.
   -M, --method <method>       HTTP method to use, defaults to "GET".
-  -r, --redirect              Follow up to 5 redirects.
+  -r, --redirect              Follow up to 10 redirects.
   -v, --verbose               Print request and response headers to STDERR.
 EOF
-
-sub say(@) {print @_, "\n"}
 
 # "Objection.
 #  In the absence of pants, defense's suspenders serve no purpose.
@@ -73,7 +71,7 @@ sub run {
 
   # Fresh user agent
   my $ua = Mojo::UserAgent->new(ioloop => Mojo::IOLoop->singleton);
-  $ua->max_redirects(5) if $redirect;
+  $ua->max_redirects(10) if $redirect;
 
   # Absolute URL
   if ($url !~ m#/#) { $ua->detect_proxy }
@@ -150,7 +148,7 @@ sub run {
     if ($tx->res->headers->content_type || '') =~ /JSON/i;
 
   # Selector
-  $self->_select($buffer, defined $charset ? $charset : $tx->res->content->charset, $selector);
+  $self->_select($buffer, $charset // $tx->res->content->charset, $selector);
 }
 
 sub _json {
@@ -158,8 +156,7 @@ sub _json {
   my $json = Mojo::JSON->new;
   return unless my $data = $json->decode($buffer);
   return unless $data = Mojo::JSON::Pointer->get($data, $pointer);
-  ref $data eq 'HASH'
-    || ref $data eq 'ARRAY' ? say($json->encode($data)) : _say($data);
+  ref $data ~~ ['HASH', 'ARRAY'] ? say($json->encode($data)) : _say($data);
 }
 
 sub _say {

@@ -3,6 +3,7 @@ use Mojo::Base -strict;
 # Disable libev and TLS
 BEGIN {
   $ENV{MOJO_NO_TLS}  = 1;
+  $ENV{MOJO_PROXY}   = 0;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
@@ -41,7 +42,8 @@ $ua->get(
 );
 $loop->start;
 $ua = undef;
-$loop->one_tick;
+$loop->timer(0.25 => sub { shift->stop });
+$loop->start;
 ok !$loop->stream($id), 'loop not tainted';
 is $code, 301, 'right status';
 

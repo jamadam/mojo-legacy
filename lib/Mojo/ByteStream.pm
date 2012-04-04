@@ -37,7 +37,7 @@ sub import {
 #  Well, I think the veal died of loneliness."
 sub new {
   my $class = shift;
-  bless \(my $dummy = join '', @_), ref $class || $class;
+  return bless \(my $dummy = join '', @_), ref $class || $class;
 }
 
 sub clone {
@@ -68,7 +68,7 @@ sub encode {
 sub say {
   my ($self, $handle) = @_;
   $handle ||= \*STDOUT;
-  print $handle $$self. "\n";
+  say $handle $$self;
 }
 
 sub secure_compare {
@@ -80,7 +80,7 @@ sub size { length ${shift()} }
 
 sub split {
   my ($self, $pattern) = @_;
-  Mojo::Collection->new(map { $self->new($_) } split $pattern, $$self);
+  return Mojo::Collection->new(map { $self->new($_) } split $pattern, $$self);
 }
 
 sub to_string { ${shift()} }

@@ -1,6 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 333;
+use Test::More tests => 350;
 
 # "Quick Smithers. Bring the mind eraser device!
 #  You mean the revolver, sir?
@@ -411,6 +411,42 @@ is $res->headers->connection, 'keep-alive', 'right "Connection" value';
 is $res->headers->date, 'Sun, 17 Aug 2008 16:27:35 GMT', 'right "Date" value';
 is $res->headers->content_length, '13', 'right "Content-Length" value';
 is $res->body, "Hello World!\n", 'right content';
+
+# Build HTTP 1.1 response parts with progress
+$res = Mojo::Message::Response->new;
+my ($finished, $state);
+my $progress = 0;
+$res->on(finish => sub { $finished = shift->is_finished });
+$res->on(
+  progress => sub {
+    my ($res, $part, $offset) = @_;
+    $state = $part;
+    $progress += $offset;
+  }
+);
+$res->code(200);
+$res->headers->connection('keep-alive');
+$res->headers->date('Sun, 17 Aug 2008 16:27:35 GMT');
+$res->body("Hello World!\n");
+ok !$state,    'no state';
+ok !$progress, 'no progress';
+ok !$finished, 'not finished';
+ok $res->build_start_line, 'built start line';
+is $state, 'start_line', 'made progress on start_line';
+ok $progress, 'made progress';
+$progress = 0;
+ok !$finished, 'not finished';
+ok $res->build_headers, 'built headers';
+is $state, 'headers', 'made progress on headers';
+ok $progress, 'made progress';
+$progress = 0;
+ok !$finished, 'not finished';
+ok $res->build_body, 'built body';
+is $state, 'body', 'made progress on headers';
+ok $progress, 'made progress';
+ok $finished, 'finished';
+is $res->build_headers, $res->content->build_headers, 'headers are equal';
+is $res->build_body,    $res->content->build_body,    'body is equal';
 
 # Build HTTP 0.9 response
 $res = Mojo::Message::Response->new;

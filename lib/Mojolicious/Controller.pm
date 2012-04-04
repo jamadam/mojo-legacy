@@ -23,19 +23,18 @@ has tx => sub { Mojo::Transaction::HTTP->new };
 # Bundled files
 our $H = Mojo::Home->new;
 $H->parse($H->parse($H->mojo_lib_dir)->rel_dir('Mojolicious/templates'));
-our $EXCEPTION     = $H->slurp_rel_file('exception.html.ep');
-our $DEV_EXCEPTION = $H->slurp_rel_file('exception.development.html.ep');
-our $MOJOBAR       = $H->slurp_rel_file('mojobar.html.ep');
-our $NOT_FOUND     = $H->slurp_rel_file('not_found.html.ep');
-our $DEV_NOT_FOUND = $H->slurp_rel_file('not_found.development.html.ep');
+our $MOJOBAR = $H->slurp_rel_file('mojobar.html.ep');
+my $EXCEPTION     = $H->slurp_rel_file('exception.html.ep');
+my $DEV_EXCEPTION = $H->slurp_rel_file('exception.development.html.ep');
+my $NOT_FOUND     = $H->slurp_rel_file('not_found.html.ep');
+my $DEV_NOT_FOUND = $H->slurp_rel_file('not_found.development.html.ep');
 
 # Reserved stash values
 my @RESERVED = (
   qw/action app cb controller data extends format handler json layout/,
   qw/namespace partial path status template text/
 );
-my %RESERVED;
-$RESERVED{$_}++ for @RESERVED;
+my %RESERVED = map { $_ => 1 } @RESERVED;
 
 # "Is all the work done by the children?
 #  No, not the whipping."
@@ -60,7 +59,6 @@ sub DESTROY { }
 #  She also liked to shut up!"
 sub cookie {
   my ($self, $name, $value, $options) = @_;
-  return unless $name;
 
   # Response cookie
   if (defined $value) {
@@ -188,9 +186,7 @@ sub redirect_to {
   my $res     = $self->res;
   my $headers = $res->headers;
   $headers->location($self->url_for(@_)->to_abs);
-  $self->rendered($res->is_status_class(300) ? undef : 302);
-
-  return $self;
+  return $self->rendered($res->is_status_class(300) ? undef : 302);
 }
 
 # "Mamma Mia! The cruel meatball of war has rolled onto our laps and ruined
@@ -258,7 +254,7 @@ sub render_content {
   }
 
   # Get
-  $content = defined $c->{$name} ? $c->{$name} : '';
+  $content = $c->{$name} // '';
   return Mojo::ByteStream->new("$content");
 }
 
@@ -422,14 +418,11 @@ sub respond_to {
 
 sub send {
   my ($self, $message, $cb) = @_;
-
   my $tx = $self->tx;
   Carp::croak('No WebSocket connection to send message to')
     unless $tx->is_websocket;
   $tx->send($message, sub { shift and $self->$cb(@_) if $cb });
-  $self->rendered(101);
-
-  return $self;
+  return $self->rendered(101);
 }
 
 # "Why am I sticky and naked? Did I miss something fun?"
@@ -453,7 +446,6 @@ sub session {
 
 sub signed_cookie {
   my ($self, $name, $value, $options) = @_;
-  return unless $name;
 
   # Response cookie
   my $secret = $self->app->secret;
@@ -461,17 +453,14 @@ sub signed_cookie {
 
     # Sign value
     my $sig = Mojo::Util::hmac_md5_sum $value, $secret;
-    $value = $value .= "--$sig";
 
     # Create cookie
-    my $cookie = $self->cookie($name, $value, $options);
-    return $cookie;
+    return $self->cookie($name, "$value--$sig", $options);
   }
 
   # Request cookies
-  my @values = $self->cookie($name);
   my @results;
-  for my $value (@values) {
+  for my $value ($self->cookie($name)) {
 
     # Check signature
     if ($value =~ s/\-\-([^\-]+)$//) {
@@ -521,7 +510,7 @@ sub ua { shift->app->ua }
 
 sub url_for {
   my $self = shift;
-  my $target = shift; $target = defined $target ? $target : '';
+  my $target = shift // '';
 
   # Absolute URL
   return $target if (Scalar::Util::blessed($target) || '') eq 'Mojo::URL';
@@ -539,7 +528,7 @@ sub url_for {
   if ($target =~ m#^/#) {
     if (my $e = $self->stash->{path}) {
       my $real = Mojo::Util::url_unescape($req->url->path->to_abs_string);
-      $real = defined Mojo::Util::decode('UTF-8', $real) ? Mojo::Util::decode('UTF-8', $real) : $real;
+      $real = Mojo::Util::decode('UTF-8', $real) // $real;
       $real =~ s|/?$e$|$target|;
       $target = $real;
     }
@@ -572,16 +561,14 @@ sub write {
   my ($self, $chunk, $cb) = @_;
   ($cb, $chunk) = ($chunk, undef) if (ref $chunk || '') eq 'CODE';
   $self->res->write($chunk, sub { shift and $self->$cb(@_) if $cb });
-  $self->rendered;
-  return $self;
+  return $self->rendered;
 }
 
 sub write_chunk {
   my ($self, $chunk, $cb) = @_;
   ($cb, $chunk) = ($chunk, undef) if (ref $chunk || '') eq 'CODE';
   $self->res->write_chunk($chunk, sub { shift and $self->$cb(@_) if $cb });
-  $self->rendered;
-  return $self;
+  return $self->rendered;
 }
 
 sub _render_fallbacks {
@@ -634,8 +621,8 @@ implements the following new ones.
   my $app = $c->app;
   $c      = $c->app(Mojolicious->new);
 
-A reference back to the L<Mojolicious> application that dispatched to this
-controller, defaults to a L<Mojolicious> object.
+A reference back to the application that dispatched to this controller,
+defaults to a L<Mojolicious> object.
 
   # Use application logger
   $c->app->log->debug('Hello Mojo!');
@@ -647,6 +634,9 @@ controller, defaults to a L<Mojolicious> object.
 
 Router results for the current request, defaults to a
 L<Mojolicious::Routes::Match> object.
+
+  # Introspect
+  my $foo = $c->match->endpoint->pattern->defaults->{foo};
 
 =head2 C<tx>
 
@@ -685,9 +675,9 @@ Gracefully end WebSocket connection or long poll stream.
 
 =head2 C<flash>
 
-  my $foo   = $c->flash('foo');
-  $c        = $c->flash({foo => 'bar'});
-  $c        = $c->flash(foo => 'bar');
+  my $foo = $c->flash('foo');
+  $c      = $c->flash({foo => 'bar'});
+  $c      = $c->flash(foo => 'bar');
 
 Data storage persistent only for the next request, stored in the C<session>.
 
@@ -763,10 +753,11 @@ C<url_for>.
   my $success = $c->render('foo/bar');
   my $output  = $c->render('foo/bar', partial => 1);
 
-This is a wrapper around L<Mojolicious::Renderer> exposing pretty much all
-functionality provided by it. It will set a default template to use based on
-the controller and action name or fall back to the route name. You can call
-it with a hash of options which can be preceded by an optional template name.
+This is a wrapper around L<Mojolicious::Renderer/"render"> exposing pretty
+much all functionality provided by it. It will set a default template to use
+based on the controller and action name or fall back to the route name. You
+can call it with a hash or hash reference of options which can be preceded by
+an optional template name.
 
 =head2 C<render_content>
 
@@ -834,8 +825,8 @@ Same as C<render> but returns the rendered result.
   my $success = $c->render_static('images/logo.png');
   my $success = $c->render_static('../lib/MyApp.pm');
 
-Render a static file using L<Mojolicious::Static>, relative to the C<public>
-directories of your application.
+Render a static file using L<Mojolicious::Static/"serve">, usually from the
+C<public> directory or C<DATA> section of your application.
 
 =head2 C<render_text>
 
@@ -870,7 +861,7 @@ Alias for C<$c-E<gt>tx-E<gt>req>. Usually refers to a
 L<Mojo::Message::Request> object.
 
   # Extract request information
-  $c->render_json({url => $c->req->url->to_abs->to_string});
+  my $userinfo = $c->req->url->userinfo;
 
 =head2 C<res>
 

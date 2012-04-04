@@ -167,7 +167,7 @@ sub _generate_class {
   # Namespace
   my $namespace = $field->{namespace};
   return unless $class || $namespace;
-  $namespace = defined $namespace ? $namespace : $self->namespace;
+  $namespace //= $self->namespace;
   $class = length $class ? "${namespace}::$class" : $namespace
     if length $namespace;
 
@@ -320,6 +320,9 @@ L<Mojolicious::Controller> and L<Mojo>.
   $r        = $r->cache(Mojo::Cache->new);
 
 Routing cache, defaults to a L<Mojo::Cache> object.
+
+  # Disable caching
+  $r->cache(0);
 
 =head2 C<conditions>
 

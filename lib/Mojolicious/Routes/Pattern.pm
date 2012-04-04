@@ -64,9 +64,9 @@ sub render {
     }
 
     # Relaxed, symbol or wildcard
-    elsif (grep {$_ eq $op} qw/relaxed symbol wildcard/) {
+    elsif ($op ~~ [qw/relaxed symbol wildcard/]) {
       my $name = $token->[1];
-      $rendered = defined $values->{$name} ? $values->{$name} : '';
+      $rendered = $values->{$name} // '';
       my $default = $self->defaults->{$name};
       if (!defined $default || ($default ne $rendered)) { $optional = 0 }
       elsif ($optional) { $rendered = '' }
@@ -111,7 +111,7 @@ sub shape_match {
 sub _compile {
   my $self = shift;
 
-  # Compile format regular expression
+  # Compile format regex
   my $reqs = $self->reqs;
   if (!exists $reqs->{format} || $reqs->{format}) {
     my $format =
@@ -119,7 +119,7 @@ sub _compile {
     $self->format(qr#\.$format$#);
   }
 
-  # Compile tree to regular expression
+  # Compile tree to regex
   my $block    = '';
   my $regex    = '';
   my $optional = 1;
@@ -145,7 +145,7 @@ sub _compile {
     }
 
     # Symbol
-    elsif (grep {$_ eq $op} qw/relaxed symbol wildcard/) {
+    elsif ($op ~~ [qw/relaxed symbol wildcard/]) {
       my $name = $token->[1];
       unshift @{$self->symbols}, $name;
 
@@ -206,7 +206,7 @@ sub _tokenize {
   while (length(my $char = substr $pattern, 0, 1, '')) {
 
     # Inside a symbol
-    my $symbol = grep {$_ eq $state} qw/relaxed symbol wildcard/;
+    my $symbol = $state ~~ [qw/relaxed symbol wildcard/];
 
     # Quote start
     if ($char eq $quote_start) {

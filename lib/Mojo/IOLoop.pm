@@ -160,8 +160,7 @@ sub server {
   return $id;
 }
 
-our $singleton_loop;
-sub singleton { $singleton_loop ||= shift->SUPER::new }
+sub singleton { state $loop ||= shift->SUPER::new }
 
 sub start {
   my $self = shift;
@@ -497,8 +496,9 @@ Check if loop is running.
   Mojo::IOLoop->one_tick;
   $loop->one_tick;
 
-Run reactor for roughly one tick. Note that this method can recurse back into
-the reactor, so you need to be careful.
+Run reactor until at least one event has been handled or no events are being
+watched anymore. Note that this method can recurse back into the reactor, so
+you need to be careful.
 
 =head2 C<recurring>
 
@@ -507,10 +507,6 @@ the reactor, so you need to be careful.
 
 Create a new recurring timer, invoking the callback repeatedly after a given
 amount of time in seconds.
-
-  # Run multiple reactors next to each other
-  my $loop2 = Mojo::IOLoop->new;
-  Mojo::IOLoop->recurring(0 => sub { $loop2->one_tick });
 
 =head2 C<remove>
 
@@ -553,6 +549,9 @@ object from everywhere inside the process.
 
 Start the loop, this will block until C<stop> is called or no events are
 being watched anymore.
+
+  # Start loop only if it is not running already
+  Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
 =head2 C<stop>
 

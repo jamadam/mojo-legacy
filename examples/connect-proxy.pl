@@ -8,8 +8,6 @@ use Mojo::IOLoop;
 # Connection buffer
 my $c = {};
 
-sub say(@) {print @_, "\n"}
-
 # Minimal connect proxy server to test TLS tunneling
 Mojo::IOLoop->server(
   {port => 3000} => sub {
@@ -20,7 +18,7 @@ Mojo::IOLoop->server(
         if (my $server = $c->{$client}->{connection}) {
           return Mojo::IOLoop->stream($server)->write($chunk);
         }
-        $c->{$client}->{client} = defined $c->{$client}->{client} ? $c->{$client}->{client} : '';
+        $c->{$client}->{client} //= '';
         $c->{$client}->{client} .= $chunk;
         if ($c->{$client}->{client} =~ /\x0d?\x0a\x0d?\x0a$/) {
           my $buffer = $c->{$client}->{client};

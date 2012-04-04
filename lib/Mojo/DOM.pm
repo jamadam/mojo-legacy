@@ -33,8 +33,7 @@ sub DESTROY { }
 sub new {
   my $class = shift;
   my $self = bless [Mojo::DOM::HTML->new], ref $class || $class;
-  $self->parse(@_) if @_;
-  return $self;
+  return @_ ? $self->parse(@_) : $self;
 }
 
 sub all_text {
@@ -76,7 +75,7 @@ sub attrs {
 
 sub charset {
   my $self = shift;
-  return $self->[0]->charset if @_ == 0;
+  return $self->[0]->charset unless @_;
   $self->[0]->charset(shift);
   return $self;
 }
@@ -289,7 +288,7 @@ sub to_xml { shift->[0]->render }
 
 sub tree {
   my $self = shift;
-  return $self->[0]->tree if @_ == 0;
+  return $self->[0]->tree unless @_;
   $self->[0]->tree(shift);
   return $self;
 }
@@ -312,7 +311,7 @@ sub type {
 # "I want to set the record straight, I thought the cop was a prostitute."
 sub xml {
   my $self = shift;
-  return $self->[0]->xml if @_ == 0;
+  return $self->[0]->xml unless @_;
   $self->[0]->xml(shift);
   return $self;
 }
@@ -724,7 +723,7 @@ L<Mojo::Collection> object, depending on number of children.
 
 =head1 ELEMENT ATTRIBUTES
 
-Direct hash access to element attributes is also possible.
+Direct hash reference access to element attributes is also possible.
 
   say $dom->{foo};
   say $dom->div->{id};

@@ -220,7 +220,7 @@ sub register {
   $app->helper(
     submit_button => sub {
       my $c = shift;
-      my $value = shift; defined $value || ($value = 'Ok');
+      my $value = shift // 'Ok';
       return $self->_tag('input', value => $value, type => 'submit', @_);
     }
   );
@@ -245,7 +245,7 @@ sub register {
       }
 
       # Make sure value is wrapped
-      if (defined($value = defined $c->param($name) ? $c->param($name) : $value)) {
+      if (defined($value = $c->param($name) // $value)) {
         $cb = sub { xml_escape $value}
       }
 
@@ -278,7 +278,7 @@ sub _input {
   if (@p && $t ne 'submit') {
 
     # Checkbox or radiobutton
-    my $value = defined $attrs{value} ? $attrs{value} : '';
+    my $value = $attrs{value} // '';
     if ($t eq 'checkbox' || $t eq 'radio') {
       $attrs{value} = $value;
       $attrs{checked} = 'checked' if defined first { $value eq $_ } @p;
@@ -309,7 +309,7 @@ sub _tag {
   # Attributes
   my %attrs = @_;
   for my $key (sort keys %attrs) {
-    my $value = xml_escape(defined $attrs{$key} ? $attrs{$key} : '');
+    my $value = xml_escape $attrs{$key} // '';
     $tag .= qq/ $key="$value"/;
   }
 

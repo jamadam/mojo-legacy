@@ -4,41 +4,41 @@ use Mojo::Base -base;
 use Mojo::Util qw/decode encode html_unescape xml_escape/;
 use Scalar::Util 'weaken';
 
+has [qw/charset xml/];
+has tree => sub { ['root'] };
+
 my $ATTR_RE = qr/
   \s*
   ([^=\s>]+)       # Key
   (?:
-    \s*
-    =
-    \s*
+    \s*=\s*
     (?:
       "([^"]*?)"   # Quotation marks
-      |
+    |
       '([^']*?)'   # Apostrophes
-      |
+    |
       ([^>\s]*)    # Unquoted
     )
   )?
   \s*
 /x;
 my $END_RE   = qr#^\s*/\s*(.+)\s*#;
-my $START_RE = qr#([^\s/]+)([\s\S]*)#;
 my $TOKEN_RE = qr/
   ([^<]*)                                           # Text
   (?:
     <\?(.*?)\?>                                     # Processing Instruction
-    |
+  |
     <\!--(.*?)-->                                   # Comment
-    |
+  |
     <\!\[CDATA\[(.*?)\]\]>                          # CDATA
-    |
+  |
     <!DOCTYPE(
       \s+\w+
       (?:(?:\s+\w+)?(?:\s+(?:"[^"]*"|'[^']*'))+)?   # External ID
       (?:\s+\[.+?\])?                               # Int Subset
       \s*
     )>
-    |
+  |
     <(
       \s*
       [^>\s]+                                       # Tag
@@ -48,31 +48,25 @@ my $TOKEN_RE = qr/
 /xis;
 
 # Optional HTML elements
-my @OPTIONAL =
+my %OPTIONAL = map { $_ => 1 }
   qw/body colgroup dd head li optgroup option p rt rp tbody td tfoot th/;
-my %OPTIONAL;
-$OPTIONAL{$_}++ for @OPTIONAL;
 
 # Elements that break HTML paragraphs
 my @PARAGRAPH = (
   qw/address article aside blockquote dir div dl fieldset footer form h1 h2/,
   qw/h3 h4 h5 h6 header hgroup hr menu nav ol p pre section table or ul/
 );
-my %PARAGRAPH;
-$PARAGRAPH{$_}++ for @PARAGRAPH;
+my %PARAGRAPH = map { $_ => 1 } @PARAGRAPH;
 
 # HTML table elements
-my @TABLE = qw/col colgroup tbody td th thead tr/;
-my %TABLE;
-$TABLE{$_}++ for @TABLE;
+my %TABLE = map { $_ => 1 } qw/col colgroup tbody td th thead tr/;
 
 # HTML5 void elements
 my @VOID = (
   qw/area base br col command embed hr img input keygen link meta param/,
   qw/source track wbr/
 );
-my %VOID;
-$VOID{$_}++ for @VOID;
+my %VOID = map { $_ => 1 } @VOID;
 
 # HTML4/5 inline elements
 my @HTML4_INLINE = qw/applet basefont big del font iframe ins s strike u/;
@@ -81,11 +75,7 @@ my @HTML5_INLINE = (
   qw/label map object q samp script select small strong span sub sup/,
   qw/textarea tt var/
 );
-my %INLINE;
-$INLINE{$_}++ for @HTML4_INLINE, @HTML5_INLINE;
-
-has [qw/charset xml/];
-has tree => sub { ['root'] };
+my %INLINE = map { $_ => 1 } @HTML4_INLINE, @HTML5_INLINE;
 
 # "No one believes me.
 #  I believe you, dad.
@@ -94,8 +84,7 @@ sub parse {
   my ($self, $html) = @_;
 
   # Decode
-  my $charset = $self->charset;
-  $html = decode $charset, $html if $charset;
+  if (my $charset = $self->charset) { $html = decode $charset, $html }
 
   # Tokenize
   my $tree    = ['root'];
@@ -114,9 +103,7 @@ sub parse {
     if ($doctype) { $self->_doctype($doctype, \$current) }
 
     # Comment
-    elsif ($comment) {
-      $self->_comment($comment, \$current);
-    }
+    elsif ($comment) { $self->_comment($comment, \$current) }
 
     # CDATA
     elsif ($cdata) { $self->_cdata($cdata, \$current) }
@@ -130,14 +117,14 @@ sub parse {
     if ($tag =~ $END_RE) { $self->_end($cs ? $1 : lc($1), \$current) }
 
     # Start
-    elsif ($tag =~ $START_RE) {
+    elsif ($tag =~ qr#([^\s/]+)([\s\S]*)#) {
       my ($start, $attr) = ($cs ? $1 : lc($1), $2);
 
       # Attributes
       my $attrs = {};
       while ($attr =~ /$ATTR_RE/g) {
         my $key = $cs ? $1 : lc($1);
-        my $value = defined $2 ? $2 : defined $3 ? $3 : $4;
+        my $value = $2 // $3 // $4;
 
         # Empty tag
         next if $key eq '/';
@@ -155,7 +142,7 @@ sub parse {
         if (!$self->xml && $VOID{$start}) || $attr =~ m#/\s*$#;
 
       # Relaxed "script" or "style"
-      if (grep {$_ eq $start } qw/script style/) {
+      if ($start ~~ [qw/script style/]) {
         if ($html =~ m#\G(.*?)<\s*/\s*$start\s*>#gcsi) {
           $self->_raw($1, \$current);
           $self->_end($start, \$current);
@@ -357,7 +344,7 @@ sub _start {
     elsif ($start eq 'optgroup') { $self->_end('optgroup', $current) }
 
     # "<option>"
-    elsif (grep {$_ eq $start} qw/option optgroup/) {
+    elsif ($start ~~ [qw/option optgroup/]) {
       $self->_end('option', $current);
       $self->_end('optgroup', $current) if $start eq 'optgroup';
     }
@@ -378,19 +365,19 @@ sub _start {
     elsif ($start eq 'tr') { $self->_close($current, {tr => 1}) }
 
     # "<th>" and "<td>"
-    elsif (grep {$_ eq $start} qw/th td/) {
+    elsif ($start ~~ [qw/th td/]) {
       $self->_close($current, {th => 1});
       $self->_close($current, {td => 1});
     }
 
     # "<dt>" and "<dd>"
-    elsif (grep {$_ eq $start} qw/dt dd/) {
+    elsif ($start ~~ [qw/dt dd/]) {
       $self->_end('dt', $current);
       $self->_end('dd', $current);
     }
 
     # "<rt>" and "<rp>"
-    elsif (grep {$_ eq $start} qw/rt rp/) {
+    elsif ($start ~~ [qw/rt rp/]) {
       $self->_end('rt', $current);
       $self->_end('rp', $current);
     }

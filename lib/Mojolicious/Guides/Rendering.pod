@@ -692,6 +692,29 @@ you've installed and loaded the plugin, with slightly lower precedence.
     <body>You've been alerted.</body>
   </html>
 
+And it works just the same for assets bundled in the C<DATA> section of your
+plugin.
+
+  package Mojolicious::Plugin::AlertAssets;
+  use Mojo::Base 'Mojolicious::Plugin';
+
+  sub register {
+    my ($self, $app) = @_;
+
+    # Append class
+    push @{$app->renderer->classes}, __PACKAGE__;
+    push @{$app->static->classes},   __PACKAGE__;
+  }
+
+  1;
+  __DATA__
+
+  @@ alertassets.js
+  alert("Hello World!");
+
+  @@ alertassets.html.ep
+  %= javascript "/alertassets.js"
+
 =head2 Custom C<exception> and C<not_found> templates
 
 While the built-in C<exception> and C<not_found> templates are very useful
@@ -711,6 +734,37 @@ templates.
 =head1 ADVANCED
 
 Less commonly used and more powerful features.
+
+=head2 Internationalization
+
+Thanks to L<Locale::Maketext> all you need for basic internationalization
+support in your application is the plugin L<Mojolicious::Plugin::I18N> and a
+few lexicon classes.
+
+  package MyApp::I18N::de;
+  use Mojo::Base -strict;
+  use base 'MyApp::I18N';
+
+  our %Lexicon = ('Hello World' => 'Hallo Welt');
+
+  package main;
+  use Mojolicious::Lite;
+
+  plugin I18N => {namespace => 'MyApp::I18N'};
+
+  get '/' => 'hello';
+
+  app->start;
+  __DATA__
+
+  @@ hello.html.ep
+  <%=l 'Hello World' %>!
+
+Preferred languages will be automatically detected from the
+C<Accept-Language> header or can be manually changed with the helper
+L<Mojolicious::Plugin::I18N/"languages">.
+
+  $ ./myapp.pl get -H 'Accept-Language: de' /
 
 =head2 Chunked transfer encoding
 

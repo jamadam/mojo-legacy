@@ -1,6 +1,7 @@
 package Mojo::UserAgent::Transactor;
 use Mojo::Base -base;
 
+use File::Spec::Functions 'splitpath';
 use Mojo::Asset::File;
 use Mojo::Asset::Memory;
 use Mojo::Content::MultiPart;
@@ -27,104 +28,47 @@ sub form {
   $params->charset($encoding) if defined $encoding;
   my $multipart;
   for my $name (sort keys %$form) {
+    my $value = $form->{$name};
 
     # Array
-    if (ref $form->{$name} eq 'ARRAY') {
-      $params->append($name, $_) for @{$form->{$name}};
-    }
+    if (ref $value eq 'ARRAY') { $params->append($name, $_) for @$value }
 
     # Hash
-    elsif (ref $form->{$name} eq 'HASH') {
-      my $hash = $form->{$name};
+    elsif (ref $value eq 'HASH') {
 
       # Enforce "multipart/form-data"
       $multipart = 1;
 
       # File
-      if (my $file = $hash->{file}) {
-
-        # Upgrade
-        $file = $hash->{file} = Mojo::Asset::File->new(path => $file)
-          unless ref $file;
-
-        # Filename
-        $hash->{filename} ||= $file->path if $file->can('path');
+      if (my $file = $value->{file}) {
+        $value->{file} = Mojo::Asset::File->new(path => $file) if !ref $file;
+        $value->{filename} ||= (splitpath($value->{file}->path))[2]
+          if $value->{file}->isa('Mojo::Asset::File');
       }
 
       # Memory
-      elsif (defined(my $content = delete $hash->{content})) {
-        $hash->{file} = Mojo::Asset::Memory->new->add_chunk($content);
+      elsif (defined(my $content = delete $value->{content})) {
+        $value->{file} = Mojo::Asset::Memory->new->add_chunk($content);
       }
 
-      $hash->{'Content-Type'} ||= 'application/octet-stream';
-      push @{$params->params}, $name, $hash;
+      push @{$params->params}, $name, $value;
     }
 
     # Single value
-    else { $params->append($name, $form->{$name}) }
+    else { $params->append($name, $value) }
   }
 
   # New transaction
   my $tx      = $self->tx(POST => $url);
   my $req     = $tx->req;
-  my $headers = $req->headers;
-  $headers->from_hash(ref $_[0] eq 'HASH' ? $_[0] : {@_});
+  my $headers = $req->headers->from_hash(ref $_[0] eq 'HASH' ? $_[0] : {@_});
 
   # Multipart
   $headers->content_type('multipart/form-data') if $multipart;
-  my $type = $headers->content_type || '';
-  if ($type eq 'multipart/form-data') {
-    my $form = $params->to_hash;
-
-    # Parts
-    my @parts;
-    foreach my $name (sort keys %$form) {
-      my $part = Mojo::Content::Single->new;
-      my $h    = $part->headers;
-      my $f    = $form->{$name};
-
-      # File
-      my $filename;
-      if (ref $f eq 'HASH') {
-        $filename = delete $f->{filename} || $name;
-        $filename = encode $encoding, $filename if $encoding;
-        $filename = url_escape $filename, $Mojo::URL::UNRESERVED;
-        $part->asset(delete $f->{file});
-        $h->from_hash($f);
-        push @parts, $part;
-      }
-
-      # Fields
-      else {
-        my $type = 'text/plain';
-        $type .= qq/;charset=$encoding/ if $encoding;
-        $h->content_type($type);
-
-        # Values
-        for my $value (ref $f ? @$f : ($f)) {
-          $part = Mojo::Content::Single->new(headers => $h);
-          $value = encode $encoding, $value if $encoding;
-          $part->asset->add_chunk($value);
-          push @parts, $part;
-        }
-      }
-
-      # Content-Disposition
-      $name = encode $encoding, $name if $encoding;
-      $name = url_escape $name, $Mojo::URL::UNRESERVED;
-      my $disposition = qq/form-data; name="$name"/;
-      $disposition .= qq/; filename="$filename"/ if $filename;
-      $h->content_disposition($disposition);
-    }
-
-    # Multipart content
-    my $content = Mojo::Content::MultiPart->new;
-    $headers->content_type('multipart/form-data');
-    $content->headers($headers);
-    $content->parts(\@parts);
-
-    # Add content to transaction
-    $req->content($content);
+  if (($headers->content_type || '') eq 'multipart/form-data') {
+    my $parts = $self->_multipart($encoding, $params->to_hash);
+    $req->content(
+      Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
   }
 
   # Urlencoded
@@ -186,7 +130,7 @@ sub redirect {
   # Commonly used codes
   my $res = $old->res;
   my $code = $res->code || 0;
-  return unless grep {$_ eq $code} (301, 302, 303, 307);
+  return unless $code ~~ [301, 302, 303, 307];
 
   # Fix broken location without authority and/or scheme
   return unless my $location = $res->headers->location;
@@ -199,19 +143,14 @@ sub redirect {
   # Clone request if necessary
   my $new    = Mojo::Transaction::HTTP->new;
   my $method = $req->method;
-  if (grep {$_ eq $code} (301, 307)) {
+  if ($code ~~ [301, 307]) {
     return unless $req = $req->clone;
     $new->req($req);
-    my $headers = $req->headers;
-    $headers->remove('Host');
-    $headers->remove('Cookie');
-    $headers->remove('Referer');
+    $req->headers->remove('Host')->remove('Cookie')->remove('Referer');
   }
-  else { $method = 'GET' unless grep {$_ eq $method} qw/GET HEAD/ }
+  else { $method = 'GET' unless $method ~~ [qw/GET HEAD/] }
   $new->req->method($method)->url($location);
-  $new->previous($old);
-
-  return $new;
+  return $new->previous($old);
 }
 
 # "If he is so smart, how come he is dead?"
@@ -258,6 +197,46 @@ sub websocket {
   return wantarray ? ($tx, $cb) : $tx;
 }
 
+sub _multipart {
+  my ($self, $encoding, $form) = @_;
+
+  # Parts
+  my @parts;
+  for my $name (sort keys %$form) {
+    my $values = $form->{$name};
+    my $part   = Mojo::Content::Single->new;
+
+    # File
+    my $filename;
+    my $headers = $part->headers;
+    if (ref $values eq 'HASH') {
+      $filename = delete $values->{filename} || $name;
+      $filename = encode $encoding, $filename if $encoding;
+      $filename = url_escape $filename, $Mojo::URL::UNRESERVED;
+      push @parts, $part->asset(delete $values->{file});
+      $headers->from_hash($values);
+    }
+
+    # Fields
+    else {
+      for my $value (ref $values ? @$values : ($values)) {
+        push @parts, $part = Mojo::Content::Single->new(headers => $headers);
+        $value = encode $encoding, $value if $encoding;
+        $part->asset->add_chunk($value);
+      }
+    }
+
+    # Content-Disposition
+    $name = encode $encoding, $name if $encoding;
+    $name = url_escape $name, $Mojo::URL::UNRESERVED;
+    my $disposition = qq/form-data; name="$name"/;
+    $disposition .= qq/; filename="$filename"/ if $filename;
+    $headers->content_disposition($disposition);
+  }
+
+  return \@parts;
+}
+
 1;
 __END__
 
@@ -284,39 +263,29 @@ implements the following new ones.
 
 =head2 C<form>
 
-  my $tx = $t->form('http://kraih.com/foo' => {test => 123});
-  my $tx = $t->form(
-    'http://kraih.com/foo',
-    'UTF-8',
-    {test => 123}
-  );
-  my $tx = $t->form(
-    'http://kraih.com/foo',
-    {test => 123},
-    {Accept => '*/*'}
-  );
-  my $tx = $t->form(
-    'http://kraih.com/foo',
-    'UTF-8',
-    {test => 123},
-    {Accept => '*/*'}
-  );
-  my $tx = $t->form(
-    'http://kraih.com/foo',
-    {mytext => {file => '/foo/bar.txt'}}
-  );
-  my $tx = $t->form(
-    'http://kraih.com/foo',
-    {mytext => {content => 'lalala'}}
-  );
-  my $tx = $t->form(
-    'http://kraih.com/foo',
-    {myzip => {file => $asset, filename => 'foo.zip'}}
-  );
+  my $tx = $t->form('kraih.com' => {a => 'b'});
+  my $tx = $t->form('http://kraih.com' => {a => 'b'});
+  my $tx = $t->form('http://kraih.com' => {a => ['b', 'c', 'd']});
+  my $tx = $t->form('http://kraih.com' => {mytext => {file => '/foo.txt'}});
+  my $tx = $t->form('http://kraih.com' => {mytext => {content => 'lalala'}});
+  my $tx = $t->form('http://kraih.com' => {
+    myzip => {
+      file     => Mojo::Asset::Memory->new->add_chunk('lalala'),
+      filename => 'foo.zip',
+      DNT      => 1
+    }
+  });
+  my $tx = $t->form('http://kraih.com' => 'UTF-8' => {a => 'b'});
+  my $tx = $t->form('http://kraih.com' => {a => 'b'} => {DNT => 1});
+  my $tx = $t->form('http://kraih.com', 'UTF-8', {a => 'b'}, {DNT => 1});
 
 Versatile L<Mojo::Transaction::HTTP> builder for form requests.
 
-  my $tx = $t->form('http://kraih.com/foo' => {test => 123});
+  # Inspect request
+  say $t->form('mojolicio.us' => {a => [1, 2, 3]})->req->to_string;
+
+  # Submit form and stream response
+  my $tx = $t->form('http://kraih.com/foo' => {a => 'b'});
   $tx->res->body(sub { say $_[1] });
   $ua->start($tx);
 
@@ -324,9 +293,10 @@ While the "multipart/form-data" content type will be automatically used
 instead of "application/x-www-form-urlencoded" when necessary, you can also
 enforce it by setting the header manually.
 
+  # Force multipart
   my $tx = $t->form(
     'http://kraih.com/foo',
-    {test => 123},
+    {a => 'b'},
     {'Content-Type' => 'multipart/form-data'}
   );
 
@@ -352,11 +322,11 @@ or C<307> redirect response if possible.
 
 =head2 C<tx>
 
-  my $tx = $t->tx(GET  => 'mojolicio.us');
-  my $tx = $t->tx(POST => 'http://mojolicio.us');
-  my $tx = $t->tx(GET  => 'http://kraih.com' => {Accept => '*/*'});
+  my $tx = $t->tx(GET  => 'kraih.com');
+  my $tx = $t->tx(POST => 'http://kraih.com');
+  my $tx = $t->tx(GET  => 'http://kraih.com' => {DNT => 1});
   my $tx = $t->tx(PUT  => 'http://kraih.com' => 'Hi!');
-  my $tx = $t->tx(POST => 'http://kraih.com' => {Accept => '*/*'} => 'Hi!');
+  my $tx = $t->tx(POST => 'http://kraih.com' => {DNT => 1} => 'Hi!');
 
 Versatile general purpose L<Mojo::Transaction::HTTP> builder for requests.
 
@@ -373,8 +343,7 @@ Versatile general purpose L<Mojo::Transaction::HTTP> builder for requests.
 =head2 C<websocket>
 
   my $tx = $t->websocket('ws://localhost:3000');
-  my $tx =
-    $t->websocket('ws://localhost:3000' => {'User-Agent' => 'Agent 1.0'});
+  my $tx = $t->websocket('ws://localhost:3000' => {DNT => 1});
 
 Versatile L<Mojo::Transaction::WebSocket> builder for WebSocket handshake
 requests.

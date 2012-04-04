@@ -15,7 +15,7 @@ has base => sub { Mojo::URL->new };
 # Characters (RFC 3986)
 our $UNRESERVED = 'A-Za-z0-9\-\.\_\~';
 our $SUBDELIM   = '!\$\&\'\(\)\*\+\,\;\=';
-our $PCHAR      = "$UNRESERVED$SUBDELIM\%\:\@";
+my $PCHAR = "$UNRESERVED$SUBDELIM\%\:\@";
 
 # "Homer, it's easy to criticize.
 #  Fun, too."
@@ -43,9 +43,7 @@ sub authority {
 
     # Host
     $host = url_unescape $host;
-    return $host =~ /[^\x00-\x7f]/
-      ? $self->ihost($host)
-      : $self->host($host);
+    return $host =~ /[^\x00-\x7f]/ ? $self->ihost($host) : $self->host($host);
   }
 
   # Format
@@ -125,29 +123,28 @@ sub parse {
 sub path {
   my ($self, $path) = @_;
 
+  # Old path
+  return $self->{path} ||= Mojo::Path->new unless $path;
+
   # New path
-  if ($path) {
-    if (!ref $path) {
+  if (!ref $path) {
 
-      # Absolute path
-      if ($path =~ m#^/#) { $path = Mojo::Path->new($path) }
+    # Absolute path
+    if ($path =~ m#^/#) { $path = Mojo::Path->new($path) }
 
-      # Relative path
-      else {
-        my $new = Mojo::Path->new($path);
-        $path = $self->{path} || Mojo::Path->new;
-        pop @{$path->parts} unless $path->trailing_slash;
-        push @{$path->parts}, @{$new->parts};
-        $path->leading_slash(1);
-        $path->trailing_slash($new->trailing_slash);
-      }
+    # Relative path
+    else {
+      my $new = Mojo::Path->new($path);
+      $path = $self->{path} || Mojo::Path->new;
+      pop @{$path->parts} unless $path->trailing_slash;
+      push @{$path->parts}, @{$new->parts};
+      $path->leading_slash(1);
+      $path->trailing_slash($new->trailing_slash);
     }
-    $self->{path} = $path;
-
-    return $self;
   }
+  $self->{path} = $path;
 
-  return $self->{path} ||= Mojo::Path->new;
+  return $self;
 }
 
 sub query {

@@ -16,7 +16,7 @@ use constant BONJOUR => $ENV{MOJO_NO_BONJOUR}
 use constant DEBUG => $ENV{MOJO_DAEMON_DEBUG} || 0;
 
 has [qw/backlog group silent user/];
-has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 15 };
+has inactivity_timeout => sub { $ENV{MOJO_INACTIVITY_TIMEOUT} // 15 };
 has ioloop => sub { Mojo::IOLoop->singleton };
 has listen => sub { [split /,/, $ENV{MOJO_LISTEN} || 'http://*:3000'] };
 has max_clients  => 1000;
@@ -28,8 +28,6 @@ sub DESTROY {
   $loop->remove($_) for keys %{$self->{connections} || {}};
   $loop->remove($_) for @{$self->{listening} || []};
 }
-
-sub say(@) {print @_, "\n"}
 
 # DEPRECATED in Leaf Fluttering In Wind!
 sub prepare_ioloop {
@@ -48,14 +46,11 @@ sub run {
   # Start accepting connections
   $self->start;
 
-  # User and group
-  $self->setuidgid;
-
   # Signals
   $SIG{INT} = $SIG{TERM} = sub { exit 0 };
 
-  # Start loop
-  $self->ioloop->start;
+  # Change user/group and start loop
+  $self->setuidgid->ioloop->start;
 }
 
 sub setuidgid {
@@ -83,18 +78,21 @@ sub _build_tx {
 
   # Store connection information
   my $handle = $self->ioloop->stream($id)->handle;
-  $tx->local_address($handle->sockhost);
-  $tx->local_port($handle->sockport);
-  $tx->remote_address($handle->peerhost);
-  $tx->remote_port($handle->peerport);
+  $tx->local_address($handle->sockhost)->local_port($handle->sockport);
+  $tx->remote_address($handle->peerhost)->remote_port($handle->peerport);
 
   # TLS
   $tx->req->url->base->scheme('https') if $c->{tls};
 
   # Events
   weaken $self;
-  $tx->on(upgrade =>
-      sub { $self->{connections}->{$id}->{ws} = pop->server_handshake });
+  $tx->on(
+    upgrade => sub {
+      my ($tx, $ws) = @_;
+      $ws->server_handshake;
+      $self->{connections}->{$id}->{ws} = $ws;
+    }
+  );
   $tx->on(
     request => sub {
       my $tx = shift;
@@ -170,7 +168,6 @@ sub _group {
 
 sub _listen {
   my ($self, $listen) = @_;
-  return unless $listen;
 
   # Check listen value
   my $url   = Mojo::URL->new($listen);
@@ -243,7 +240,7 @@ sub _listen {
   return if $self->silent;
   $self->app->log->info(qq/Listening at "$listen"./);
   $listen =~ s|//\*|//127.0.0.1|i;
-  say("Server available at $listen.");
+  say "Server available at $listen.";
 }
 
 sub _read {
@@ -477,7 +474,7 @@ Run server.
 
 =head2 C<setuidgid>
 
-  $daemon->setuidgid;
+  $daemon = $daemon->setuidgid;
 
 Set user and group for process.
 

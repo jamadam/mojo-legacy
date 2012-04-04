@@ -33,8 +33,6 @@ sub client_read {
 
   # Check for errors
   $self->{state} = 'finished' if $self->error;
-
-  return $self;
 }
 
 sub client_write {
@@ -85,8 +83,8 @@ sub keep_alive {
   return 1 if $req_conn eq 'keep-alive' || $res_conn eq 'keep-alive';
 
   # No keep alive for 0.9 and 1.0
-  return if grep {$_ eq $req->version} qw/0.9 1.0/;
-  return if grep {$_ eq $res->version} qw/0.9 1.0/;
+  return if $req->version ~~ [qw/0.9 1.0/];
+  return if $res->version ~~ [qw/0.9 1.0/];
 
   return 1;
 }
@@ -133,8 +131,6 @@ sub server_read {
       $self->{continued} = 0;
     }
   }
-
-  return $self;
 }
 
 sub server_write {

@@ -6,8 +6,6 @@ use Mojo::Base -strict;
 #  carpenter or a kid with a BB gun."
 use Mojo::IOLoop;
 
-sub say(@) {print @_, "\n"}
-
 # Run as root only
 die "Server needs to run as user root to be able to listen to port 843.\n"
   unless $> == 0 && $< == 0;

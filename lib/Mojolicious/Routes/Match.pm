@@ -17,7 +17,7 @@ sub new {
 
   # Path
   my $path = url_unescape shift;
-  $self->{path} = defined decode('UTF-8', $path) ? decode('UTF-8', $path) : $path;
+  $self->{path} = decode('UTF-8', $path) // $path;
 
   # WebSocket
   $self->{websocket} = shift;
@@ -95,9 +95,6 @@ sub match {
   return $self;
 }
 
-# "I'm not a robot!
-#  I don't like having discs crammed into me, unless they're Oreos.
-#  And then, only in the mouth."
 sub path_for {
   my $self = shift;
 
@@ -122,7 +119,7 @@ sub path_for {
     # Even
     else {
 
-      # Name and hashref
+      # Name and hash
       if (ref $_[1] eq 'HASH') { ($name, $values) = (shift, shift) }
 
       # Just values

@@ -44,7 +44,7 @@ sub to_string {
 
 sub trace {
   my ($self, $start) = @_;
-  $start = defined $start ? $start : 1;
+  $start //= 1;
   my @frames;
   while (my @trace = caller($start++)) { push @frames, \@trace }
   $self->frames(\@frames);
@@ -69,7 +69,7 @@ sub _detect {
   }
 
   # Search for context
-  foreach my $frame (reverse @trace) {
+  for my $frame (reverse @trace) {
     next unless -r $frame->[0];
     my $handle = IO::File->new($frame->[0], '<:utf8');
     $self->_parse_context($frame->[1], [[<$handle>]]);
@@ -95,9 +95,8 @@ sub _detect {
   }
 
   # Search for better context
-  $name = quotemeta $name;
   my $line;
-  if ($self->message =~ /at\s+$name\s+line\s+(\d+)/) { $line = $1 }
+  if ($self->message =~ /at\s+\Q$name\E\s+line\s+(\d+)/) { $line = $1 }
   else {
     for my $frame (@{$self->frames}) {
       next unless $frame->[1] =~ /^\(eval\ \d+\)$/;
@@ -149,8 +148,6 @@ sub _parse_context {
       }
     }
   }
-
-  return $self;
 }
 
 1;

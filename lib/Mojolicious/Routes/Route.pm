@@ -122,7 +122,7 @@ sub over {
 
 sub parse {
   my $self = shift;
-  my $name = $self->pattern->parse(@_)->pattern; defined $name || ($name = '');
+  my $name = $self->pattern->parse(@_)->pattern // '';
   $name =~ s/\W+//g;
   $self->{name} = $name;
   return $self;
@@ -166,7 +166,6 @@ sub route {
 
 sub to {
   my $self = shift;
-  return $self unless @_;
 
   # Single argument
   my ($shortcut, $defaults);
@@ -181,10 +180,7 @@ sub to {
   else {
 
     # Odd
-    if (@_ % 2) {
-      $shortcut = shift;
-      $defaults = {@_};
-    }
+    if (@_ % 2) { ($shortcut, $defaults) = (shift, {@_}) }
 
     # Even
     else {
@@ -212,10 +208,9 @@ sub to {
     }
   }
 
-  # Defaults
+  # Merge defaults
   my $pattern = $self->pattern;
-  my $old     = $pattern->defaults;
-  $pattern->defaults({%$old, %$defaults}) if $defaults;
+  $pattern->defaults({%{$pattern->defaults}, %$defaults}) if $defaults;
 
   return $self;
 }
@@ -378,6 +373,8 @@ Add a new child to this route.
 Generate route matching any of the listed HTTP request methods or all. See
 also the L<Mojolicious::Lite> tutorial for more argument variations.
 
+  $r->any('/user')->to('user#whatever');
+
 =head2 C<bridge>
 
   my $bridge = $r->bridge;
@@ -385,12 +382,18 @@ also the L<Mojolicious::Lite> tutorial for more argument variations.
 
 Add a new bridge to this route as a nested child.
 
+  my $auth = $r->bridge('/user')->to('user#auth');
+  $auth->route('/show')->to('#show');
+  $auth->route('/create')->to('#create');
+
 =head2 C<delete>
 
   my $route = $r->delete('/:foo' => sub {...});
 
 Generate route matching only C<DELETE> requests. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
+
+  $r->delete('/user')->to('user#remove');
 
 =head2 C<detour>
 
@@ -416,12 +419,16 @@ application embedding.
 Find child route by name, custom names have precedence over automatically
 generated ones.
 
+  $r->find('show_user')->to(foo => 'bar');
+
 =head2 C<get>
 
   my $route = $r->get('/:foo' => sub {...});
 
 Generate route matching only C<GET> requests. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
+
+  $r->get('/user')->to('user#show');
 
 =head2 C<has_conditions>
 
@@ -462,6 +469,8 @@ The name of this route, defaults to an automatically generated name based on
 the route pattern. Note that the name C<current> is reserved for refering to
 the current route.
 
+  $r->get('/user')->to('user#show')->name('show_user');
+
 =head2 C<options>
 
   my $route = $r->options('/:foo' => sub {...});
@@ -469,12 +478,17 @@ the current route.
 Generate route matching only C<OPTIONS> requests. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
 
+  $r->options('/user')->to('user#overview');
+
 =head2 C<over>
 
   my $over = $r->over;
   $r       = $r->over(foo => qr/\w+/);
 
-Activate conditions for this route and disable routing cache.
+Activate conditions for this route. Note that this automatically disables the
+routing cache, since conditions are too complex for caching.
+
+  $r->route('/foo')->over(host => qr/mojolicio\.us/)->to('foo#bar');
 
 =head2 C<parse>
 
@@ -489,6 +503,8 @@ Parse a pattern.
 Generate route matching only C<PATCH> requests. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
 
+  $r->patch('/user')->to('user#update');
+
 =head2 C<post>
 
   my $route = $r->post('/:foo' => sub {...});
@@ -496,12 +512,16 @@ L<Mojolicious::Lite> tutorial for more argument variations.
 Generate route matching only C<POST> requests. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
 
+  $r->post('/user')->to('user#create');
+
 =head2 C<put>
 
   my $route = $r->put('/:foo' => sub {...});
 
 Generate route matching only C<PUT> requests. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
+
+  $r->put('/user')->to('user#replace');
 
 =head2 C<render>
 
@@ -516,6 +536,8 @@ Render route with parameters into a path.
 
 The L<Mojolicious::Routes> object this route is an ancestor of.
 
+  #r->root->caching(0);
+
 =head2 C<route>
 
   my $route = $r->route('/:c/:a', a => qr/\w+/);
@@ -524,7 +546,6 @@ Add a new nested child to this route.
 
 =head2 C<to>
 
-  my $to  = $r->to;
   $r = $r->to(action => 'foo');
   $r = $r->to({action => 'foo'});
   $r = $r->to('controller#action');
@@ -550,8 +571,12 @@ Stringify the whole route.
   my $route = $r->under(sub {...});
   my $route = $r->under('/:foo');
 
-Generate bridges. See also the L<Mojolicious::Lite> tutorial for more
-argument variations.
+Generate bridge. See also the L<Mojolicious::Lite> tutorial for more argument
+variations.
+
+  my $auth = $r->under('/user')->to('user#auth');
+  $auth->get('/show')->to('#show');
+  $auth->post('/create')->to('#create');
 
 =head2 C<via>
 
@@ -563,11 +588,16 @@ argument variations.
 Restrict HTTP methods this route is allowed to handle, defaults to no
 restrictions.
 
+  $r->route('/foo')->via(qw/GET POST/)->to('foo#bar');
+
 =head2 C<waypoint>
 
   my $r = $r->waypoint('/:c/:a', a => qr/\w+/);
 
 Add a waypoint to this route as nested child.
+
+  my $foo = $r->waypoint('/foo')->to('example#foo');
+  $foo->route('/bar')->to('#bar');
 
 =head2 C<websocket>
 
@@ -575,6 +605,8 @@ Add a waypoint to this route as nested child.
 
 Generate route matching only C<WebSocket> handshakes. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
+
+  $r->websocket('/echo')->to('example#echo');
 
 =head1 SHORTCUTS
 

@@ -81,19 +81,13 @@ sub build_frame {
     warn "OPCODE: $op\n";
   }
 
-  # Payload
-  $frame .= $payload;
-
-  return $frame;
+  return $frame . $payload;
 }
 
 sub client_challenge {
   my $self = shift;
-
-  # Solve WebSocket challenge
-  my $solution = $self->_challenge($self->req->headers->sec_websocket_key);
-  return unless $solution eq $self->res->headers->sec_websocket_accept;
-  return 1;
+  return $self->_challenge($self->req->headers->sec_websocket_key) eq
+    $self->res->headers->sec_websocket_accept ? 1 : undef;
 }
 
 sub client_handshake {
@@ -110,8 +104,6 @@ sub client_handshake {
   # Generate WebSocket challenge
   $headers->sec_websocket_key(b64_encode(pack('N*', int(rand 9999999)), ''))
     unless $headers->sec_websocket_key;
-
-  return $self;
 }
 
 sub client_read  { shift->server_read(@_) }
@@ -127,6 +119,7 @@ sub finish {
 
 sub is_websocket {1}
 
+sub kept_alive    { shift->handshake->kept_alive }
 sub local_address { shift->handshake->local_address }
 sub local_port    { shift->handshake->local_port }
 
@@ -239,7 +232,7 @@ sub send {
 
   # Prepare frame
   $self->once(drain => $cb) if $cb;
-  $self->{write} = defined $self->{write} ? $self->{write} : '';
+  $self->{write} //= '';
   $self->{write} .= $self->build_frame(@$frame);
   $self->{state} = 'write';
 
@@ -262,17 +255,15 @@ sub server_handshake {
   $res_headers->sec_websocket_protocol($1) if $1;
   $res_headers->sec_websocket_accept(
     $self->_challenge($req_headers->sec_websocket_key));
-
-  return $self;
 }
 
 sub server_read {
   my ($self, $chunk) = @_;
 
   # Parse frames
-  $self->{read} = defined $self->{read} ? $self->{read} : '';
+  $self->{read} //= '';
   $self->{read} .= $chunk if defined $chunk;
-  $self->{message} = defined $self->{message} ? $self->{message} : '';
+  $self->{message} //= '';
   while (my $frame = $self->parse_frame(\$self->{read})) {
     $self->emit(frame => $frame);
     my $op = $frame->[4] || CONTINUATION;
@@ -303,14 +294,14 @@ sub server_read {
   }
 
   # Resume
-  return $self->emit('resume');
+  $self->emit('resume');
 }
 
 sub server_write {
   my $self = shift;
 
   # Drain
-  $self->{write} = defined $self->{write} ? $self->{write} : '';
+  $self->{write} //= '';
   unless (length $self->{write}) {
     $self->{state} = $self->{finished} ? 'finished' : 'read';
     $self->emit('drain');
@@ -332,9 +323,7 @@ sub _xor_mask {
   $mask = $mask x 128;
   my $output = '';
   $output .= $_ ^ $mask while length($_ = substr($input, 0, 512, '')) == 512;
-  $output .= $_ ^ substr($mask, 0, length, '');
-
-  return $output;
+  return $output .= $_ ^ substr($mask, 0, length, '');
 }
 
 1;
@@ -491,6 +480,12 @@ Finish the WebSocket connection gracefully.
 
 True.
 
+=head2 C<kept_alive>
+
+  my $kept_alive = $ws->kept_alive;
+
+Alias for L<Mojo::Transaction/"kept_alive">.
+
 =head2 C<local_address>
 
   my $local_address = $ws->local_address;
@@ -508,6 +503,15 @@ Alias for L<Mojo::Transaction/"local_port">.
   my $frame = $ws->parse_frame(\$bytes);
 
 Parse WebSocket frame.
+
+  # Parse single frame and remove it from buffer
+  my $frame = $ws->parse_frame(\$buffer);
+  say "Fin: $frame->[0]";
+  say "Rsv1: $frame->[1]";
+  say "Rsv2: $frame->[2]";
+  say "Rsv3: $frame->[3]";
+  say "Op: $frame->[4]";
+  say "Payload: $frame->[5]";
 
 =head2 C<remote_address>
 

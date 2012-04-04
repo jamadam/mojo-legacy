@@ -12,8 +12,6 @@ These options are available:
   -v, --verbose   Print additional details about routes.
 EOF
 
-sub say(@) {print @_, "\n"}
-
 # "I'm finally richer than those snooty ATM machines."
 sub run {
   my $self = shift;
@@ -52,7 +50,7 @@ sub _draw {
   }
 
   # Draw
-  foreach my $node (@$routes) {
+  for my $node (@$routes) {
     my @parts;
 
     # Pattern

@@ -34,15 +34,15 @@ sub is_websocket {undef}
 
 sub is_writing {
   return 1 unless my $state = shift->{state};
-  return grep {$_ eq $state} qw/write write_start_line write_headers write_body/;
+  return $state ~~ [qw/write write_start_line write_headers write_body/];
 }
 
 sub remote_address {
-  my ($self, $address) = @_;
+  my $self = shift;
 
   # New address
-  if ($address) {
-    $self->{remote_address} = $address;
+  if (@_) {
+    $self->{remote_address} = shift;
     return $self;
   }
 
@@ -196,13 +196,13 @@ Transaction closed.
 
   $tx->client_read($chunk);
 
-Read and process client data.
+Read and process client data. Meant to be overloaded in a subclass.
 
 =head2 C<client_write>
 
   my $chunk = $tx->client_write;
 
-Write client data.
+Write client data. Meant to be overloaded in a subclass.
 
 =head2 C<connection>
 
@@ -252,13 +252,13 @@ Transaction closed.
 
   $tx->server_read($chunk);
 
-Read and process server data.
+Read and process server data. Meant to be overloaded in a subclass.
 
 =head2 C<server_write>
 
   my $chunk = $tx->server_write;
 
-Write server data.
+Write server data. Meant to be overloaded in a subclass.
 
 =head2 C<success>
 

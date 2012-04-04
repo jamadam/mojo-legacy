@@ -1,9 +1,6 @@
 package Mojo::Loader;
 use Mojo::Base -base;
 
-# "Don't let Krusty's death get you down, boy.
-#  People die all the time, just like that.
-#  Why, you could wake up dead tomorrow! Well, good night."
 use File::Basename 'fileparse';
 use File::Spec::Functions qw/catdir catfile splitdir/;
 use Mojo::Command;
@@ -41,7 +38,7 @@ sub search {
   # Scan
   my $modules = [];
   my %found;
-  foreach my $directory (exists $INC{'blib.pm'} ? grep {/blib/} @INC : @INC) {
+  for my $directory (exists $INC{'blib.pm'} ? grep {/blib/} @INC : @INC) {
     my $path = catdir $directory, (split /::/, $namespace);
     next unless (-e $path && -d $path);
 
@@ -55,8 +52,7 @@ sub search {
       next if -d catfile splitdir($path), $file;
 
       # Module found
-      my $name = fileparse $file, qr/\.pm/;
-      my $class = "$namespace\::$name";
+      my $class = "$namespace\::" . fileparse $file, qr/\.pm/;
       push @$modules, $class unless $found{$class};
       $found{$class} ||= 1;
     }

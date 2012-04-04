@@ -14,8 +14,6 @@ These options are available:
   -v, --verbose   Print return value to STDOUT.
 EOF
 
-sub say(@) {print @_, "\n"}
-
 # "It worked!
 #  Gravity normal.
 #  Air pressure returning.

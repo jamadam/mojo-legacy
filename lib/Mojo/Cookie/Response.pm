@@ -40,7 +40,7 @@ sub parse {
       if (!$i) {
         push @cookies, Mojo::Cookie::Response->new;
         $cookies[-1]->name($name);
-        $cookies[-1]->value($value = defined $value ? $value : '');
+        $cookies[-1]->value($value //= '');
       }
 
       # Attributes

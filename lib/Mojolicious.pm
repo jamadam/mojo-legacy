@@ -33,7 +33,7 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Leaf Fluttering In Wind';
-our $VERSION  = '2.65';
+our $VERSION  = '2.75';
 
 # "These old doomsday devices are dangerously unstable.
 #  I'll rest easier not knowing where they are."
@@ -66,8 +66,7 @@ sub new {
   push @{$self->static->paths},   $home->rel_dir('public');
 
   # Default to application namespace
-  my $r = $self->routes;
-  $r->namespace(ref $self);
+  my $r = $self->routes->namespace(ref $self);
 
   # Hide controller attributes/methods and "handler"
   $r->hide(qw/AUTOLOAD DESTROY app cookie finish flash handler on on_finish/);
@@ -561,19 +560,20 @@ Perl-ish configuration files.
 
 =item L<Mojolicious::Plugin::DefaultHelpers>
 
-General purpose helper collection.
+General purpose helper collection, loaded automatically.
 
 =item L<Mojolicious::Plugin::EPLRenderer>
 
-Renderer for plain embedded Perl templates.
+Renderer for plain embedded Perl templates, loaded automatically.
 
 =item L<Mojolicious::Plugin::EPRenderer>
 
-Renderer for more sophisiticated embedded Perl templates.
+Renderer for more sophisiticated embedded Perl templates, loaded
+automatically.
 
 =item L<Mojolicious::Plugin::HeaderCondition>
 
-Route condition for all kinds of headers.
+Route condition for all kinds of headers, loaded automatically.
 
 =item L<Mojolicious::Plugin::I18N>
 
@@ -593,32 +593,35 @@ Renderer for POD files and documentation browser.
 
 =item L<Mojolicious::Plugin::PoweredBy>
 
-Add an C<X-Powered-By> header to outgoing responses.
+Add an C<X-Powered-By> header to outgoing responses, loaded automatically.
 
 =item L<Mojolicious::Plugin::RequestTimer>
 
-Log timing information.
+Log timing information, loaded automatically.
 
 =item L<Mojolicious::Plugin::TagHelpers>
 
-Template specific helper collection.
+Template specific helper collection, loaded automatically.
 
 =back
 
 =head2 C<start>
 
-  Mojolicious->start;
-  Mojolicious->start('daemon');
+  $app->start;
+  $app->start(@ARGV);
 
-Start the L<Mojolicious::Commands> command line interface for your
-application.
+Start the command line interface for your application with
+L<Mojolicious::Commands/"start">.
+
+  # Always start daemon and ignore @ARGV
+  $app->start('daemon', '-l', 'http://*:8080');
 
 =head2 C<startup>
 
   $app->startup;
 
 This is your main hook into the application, it will be called at application
-startup.
+startup. Meant to be overloaded in a subclass.
 
   sub startup {
     my $self = shift;
@@ -855,6 +858,8 @@ Nils Diewald
 Oleg Zhelo
 
 Pascal Gaudette
+
+Paul Evans
 
 Paul Tomlin
 

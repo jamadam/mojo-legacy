@@ -2,16 +2,12 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 726;
+use Test::More tests => 725;
 
 # "Homer gave me a kidney: it wasn't his, I didn't need it,
 #  and it came postage due- but I appreciated the gesture!"
-use ojo;
 use Mojo::DOM;
 use Mojo::Util 'encode';
-
-# ojo
-is x('<div>Hello ♥!</div>')->at('div')->text, 'Hello ♥!', 'right text';
 
 # Simple (basics)
 my $dom = Mojo::DOM->new->parse(
@@ -483,7 +479,7 @@ is "$dom", $yadis, 'successful roundtrip';
 # Result and iterator order
 $dom = Mojo::DOM->new->parse('<a><b>1</b></a><b>2</b><b>3</b>');
 my @numbers;
-$dom->find("b")->each(sub { push @numbers, pop, shift->text });
+$dom->find('b')->each(sub { push @numbers, pop, shift->text });
 is_deeply \@numbers, [1, 1, 2, 2, 3, 3], 'right order';
 
 # Attributes on multiple lines

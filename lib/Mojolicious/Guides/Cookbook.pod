@@ -100,7 +100,7 @@ single incoming connection, just by running the command above again.
 
 You might also want to enable proxy support if you're using Hypnotoad behind
 a reverse proxy. This allows L<Mojolicious> to automatically pick up the
-C<X-Forwarded-For>, C<X-Forwarded-Host> and C<X-Forwarded-HTTPS> headers.
+C<X-Forwarded-For> and C<X-Forwarded-HTTPS> headers.
 
   # myapp.conf
   {hypnotoad => {proxy => 1}};
@@ -898,8 +898,8 @@ you can keep many parallel connections active at the same time.
   # Start a bunch of parallel crawlers sharing the same user agent
   $crawl->($_) for 1 .. 3;
 
-  # Start reactor
-  Mojo::IOLoop->start;
+  # Start reactor if necessary
+  Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
 You can take full control of the L<Mojo::IOLoop> reactor.
 
@@ -928,7 +928,7 @@ be able to work standalone as well as inside L<Mojolicious> applications.
   # Synchronize non-blocking requests portably
   my $ua    = Mojo::UserAgent->new;
   my $delay = Mojo::IOLoop->delay(sub {
-    my ($ua, $tx, $tx2) = @_;
+    my ($delay, $tx, $tx2) = @_;
     ...
   });
   $ua->get('http://mojolicio.us'         => $delay->begin);
@@ -976,6 +976,13 @@ Extract just the information you really need from JSON data structures.
 This can be an invaluable tool for testing your applications.
 
   $ ./myapp.pl get /welcome 'head > title'
+
+=head2 Oneliners
+
+For quick hacks and especially testing, L<ojo> oneliners are also a great
+choice.
+
+  $ perl -Mojo -E 'say g("mojolicio.us")->dom->html->head->title->text'
 
 =head1 HACKS
 
@@ -1110,16 +1117,16 @@ rendering kicks in even if no actual code gets executed by the router. The
 renderer just picks up the C<text> value from the stash and generates a
 response.
 
-=head2 Hello World oneliner
+=head2 Hello World oneliners
 
 The C<Hello World> example above can get even a little bit shorter in an
 L<ojo> oneliner.
 
-  $ perl -Mojo -e'a({text => "Hello World!"})->start' daemon
+  $ perl -Mojo -E 'a({text => "Hello World!"})->start' daemon
 
 And you can use all the commands from L<Mojolicious::Commands>.
 
-  $ perl -Mojo -e'a({text => "Hello World!"})->start' get -v /
+  $ perl -Mojo -E 'a({text => "Hello World!"})->start' get -v /
 
 =head1 MORE
 

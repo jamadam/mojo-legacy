@@ -7,23 +7,8 @@ use Mojo::Util;
 has 'error';
 
 # Literal names
-our $FALSE = Mojo::JSON::_Bool->new(0);
-our $TRUE  = Mojo::JSON::_Bool->new(1);
-
-my $BOM_RE = qr/
-  (?:
-  \357\273\277   # UTF-8
-  |
-  \377\376\0\0   # UTF-32LE
-  |
-  \0\0\376\377   # UTF-32BE
-  |
-  \376\377       # UTF-16BE
-  |
-  \377\376       # UTF-16LE
-  )
-/x;
-my $WHITESPACE_RE = qr/[\x20\x09\x0a\x0d]*/;
+my $FALSE = Mojo::JSON::_Bool->new(0);
+my $TRUE  = Mojo::JSON::_Bool->new(1);
 
 # Escaped special character map (with u2028 and u2029)
 my %ESCAPE = (
@@ -38,17 +23,18 @@ my %ESCAPE = (
   'u2028' => "\x{2028}",
   'u2029' => "\x{2029}"
 );
-my %REVERSE;
-for (0x00 .. 0x1F, 0x7F) { $REVERSE{pack 'C', $_} = sprintf '\u%.4X', $_ }
-for my $key (keys %ESCAPE) { $REVERSE{$ESCAPE{$key}} = "\\$key" }
+my %REVERSE = map { $ESCAPE{$_} => "\\$_" } keys %ESCAPE;
+for (0x00 .. 0x1F, 0x7F) { $REVERSE{pack 'C', $_} //= sprintf '\u%.4X', $_ }
 
 # Unicode encoding detection
 my $UTF_PATTERNS = {
-  "\0\0\0[^\0]"    => 'UTF-32BE',
-  "\0[^\0]\0[^\0]" => 'UTF-16BE',
-  "[^\0]\0\0\0"    => 'UTF-32LE',
-  "[^\0]\0[^\0]\0" => 'UTF-16LE'
+  'UTF-32BE' => qr/^\0\0\0[^\0]/,
+  'UTF-16BE' => qr/^\0[^\0]\0[^\0]/,
+  'UTF-32LE' => qr/^[^\0]\0\0\0/,
+  'UTF-16LE' => qr/^[^\0]\0[^\0]\0/
 };
+
+my $WHITESPACE_RE = qr/[\x20\x09\x0a\x0d]*/;
 
 # "Hey...That's not the wallet inspector..."
 sub decode {
@@ -61,7 +47,8 @@ sub decode {
   $self->error('Missing or empty input.') and return unless $string;
 
   # Remove BOM
-  $string =~ s/^$BOM_RE//g;
+  $string
+    =~ s/^(?:\357\273\277|\377\376\0\0|\0\0\376\377|\376\377|\377\376)//g;
 
   # Wide characters
   $self->error('Wide character in input.') and return
@@ -69,11 +56,9 @@ sub decode {
 
   # Detect and decode unicode
   my $encoding = 'UTF-8';
-  for my $pattern (keys %$UTF_PATTERNS) {
-    if ($string =~ /^$pattern/) {
-      $encoding = $UTF_PATTERNS->{$pattern};
-      last;
-    }
+  for my $name (keys %$UTF_PATTERNS) {
+    next unless $string =~ $UTF_PATTERNS->{$name};
+    $encoding = $name;
   }
   $string = Mojo::Util::decode $encoding, $string;
 
@@ -82,7 +67,7 @@ sub decode {
     local $_ = $string;
 
     # Leading whitespace
-    m/\G$WHITESPACE_RE/xgc;
+    m/\G$WHITESPACE_RE/gc;
 
     # Array
     my $ref;
@@ -95,7 +80,7 @@ sub decode {
     else { _exception('Expected array or object') }
 
     # Leftover data
-    unless (m/\G$WHITESPACE_RE\z/xgc) {
+    unless (m/\G$WHITESPACE_RE\z/gc) {
       my $got = ref $ref eq 'ARRAY' ? 'array' : 'object';
       _exception("Unexpected data after $got");
     }
@@ -122,16 +107,16 @@ sub true  {$TRUE}
 
 sub _decode_array {
   my @array;
-  until (m/\G$WHITESPACE_RE\]/xgc) {
+  until (m/\G$WHITESPACE_RE\]/gc) {
 
     # Value
     push @array, _decode_value();
 
     # Separator
-    redo if m/\G$WHITESPACE_RE,/xgc;
+    redo if m/\G$WHITESPACE_RE,/gc;
 
     # End
-    last if m/\G$WHITESPACE_RE\]/xgc;
+    last if m/\G$WHITESPACE_RE\]/gc;
 
     # Invalid character
     _exception('Expected comma or right square bracket while parsing array');
@@ -142,27 +127,27 @@ sub _decode_array {
 
 sub _decode_object {
   my %hash;
-  until (m/\G$WHITESPACE_RE\}/xgc) {
+  until (m/\G$WHITESPACE_RE\}/gc) {
 
     # Quote
-    m/\G$WHITESPACE_RE"/xgc
+    m/\G$WHITESPACE_RE"/gc
       or _exception('Expected string while parsing object');
 
     # Key
     my $key = _decode_string();
 
     # Colon
-    m/\G$WHITESPACE_RE:/xgc
+    m/\G$WHITESPACE_RE:/gc
       or _exception('Expected colon while parsing object');
 
     # Value
     $hash{$key} = _decode_value();
 
     # Separator
-    redo if m/\G$WHITESPACE_RE,/xgc;
+    redo if m/\G$WHITESPACE_RE,/gc;
 
     # End
-    last if m/\G$WHITESPACE_RE\}/xgc;
+    last if m/\G$WHITESPACE_RE\}/gc;
 
     # Invalid character
     _exception('Expected comma or right curly bracket while parsing object');
@@ -181,7 +166,7 @@ sub _decode_string {
   # Missing quote
   unless (m/\G"/gc) {
     _exception('Unexpected character or invalid escape while parsing string')
-      if m/\G[\x00-\x1F\\]/x;
+      if m/\G[\x00-\x1F\\]/;
     _exception('Unterminated string');
   }
 
@@ -236,7 +221,7 @@ sub _decode_string {
 sub _decode_value {
 
   # Leading whitespace
-  m/\G$WHITESPACE_RE/xgc;
+  m/\G$WHITESPACE_RE/gc;
 
   # String
   return _decode_string() if m/\G"/gc;
@@ -265,33 +250,19 @@ sub _decode_value {
 }
 
 sub _encode_array {
-  my $array = shift;
-
-  # Values
-  my @array;
-  for my $value (@$array) {
-    push @array, _encode_values($value);
-  }
-
-  # Stringify
-  my $string = join ',', @array;
-  return "[$string]";
+  return '[' . join(',', map { _encode_values($_) } @{shift()}) . ']';
 }
 
 sub _encode_object {
   my $object = shift;
 
-  # Values
-  my @values;
-  for my $key (keys %$object) {
-    my $name  = _encode_string($key);
-    my $value = _encode_values($object->{$key});
-    push @values, "$name:$value";
-  }
+  # Encode pairs
+  my @pairs =
+    map { _encode_string($_) . ':' . _encode_values($object->{$_}) }
+    keys %$object;
 
   # Stringify
-  my $string = join ',', @values;
-  return "{$string}";
+  return '{' . join(',', @pairs) . '}';
 }
 
 sub _encode_string {
@@ -333,13 +304,13 @@ sub _encode_values {
     if $flags & (B::SVp_IOK | B::SVp_NOK) && !($flags & B::SVp_POK);
 
   # String
-  _encode_string($value);
+  return _encode_string($value);
 }
 
 sub _exception {
 
   # Leading whitespace
-  m/\G$WHITESPACE_RE/xgc;
+  m/\G$WHITESPACE_RE/gc;
 
   # Context
   my $context = 'Malformed JSON: ' . shift;
@@ -384,8 +355,8 @@ L<Mojo::JSON> is a minimalistic and relaxed implementation of RFC 4627. While
 it is possibly the fastest pure-Perl JSON parser available, you should not
 use it for validation.
 
-It supports normal Perl data types like C<Scalar>, C<Array>, C<Hash> and will
-try to stringify blessed references.
+It supports normal Perl data types like C<Scalar>, C<Array> reference,
+C<Hash> reference and will try to stringify blessed references.
 
   [1, -2, 3]     -> [1, -2, 3]
   {"foo": "bar"} -> {foo => 'bar'}

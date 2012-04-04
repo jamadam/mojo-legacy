@@ -8,19 +8,17 @@ use IO::File;
 has handle => sub {
   my $self = shift;
 
-  # Need a log file
-  unless ($self->path) {
-    binmode STDERR, ':utf8';
-    return \*STDERR;
+  # File
+  if (my $path = $self->path) {
+    croak qq/Can't open log file "$path": $!/
+      unless my $file = IO::File->new(">> $path");
+    binmode $file, ':utf8';
+    return $file;
   }
 
-  # Append to file
-  my $path = $self->path;
-  croak qq/Can't open log file "$path": $!/
-    unless my $file = IO::File->new(">> $path");
-  binmode $file, ':utf8';
-
-  return $file;
+  # STDERR
+  binmode STDERR, ':utf8';
+  return \*STDERR;
 };
 has level => 'debug';
 has 'path';
@@ -47,17 +45,16 @@ sub new {
 }
 
 # "Yes, I got the most! I win X-Mas!"
-sub debug { shift->log('debug', @_) }
-sub error { shift->log('error', @_) }
-sub fatal { shift->log('fatal', @_) }
+sub debug { shift->log(debug => @_) }
+sub error { shift->log(error => @_) }
+sub fatal { shift->log(fatal => @_) }
 
 sub format {
   my ($self, $level, @msgs) = @_;
-  my $msgs = join "\n", @msgs;
-  return '[' . localtime(time) . "] [$level] $msgs\n";
+  return '[' . localtime(time) . "] [$level] " . join("\n", @msgs) . "\n";
 }
 
-sub info { shift->log('info', @_) }
+sub info { shift->log(info => @_) }
 
 sub is_debug { shift->is_level('debug') }
 sub is_error { shift->is_level('error') }
@@ -65,11 +62,9 @@ sub is_fatal { shift->is_level('fatal') }
 sub is_info  { shift->is_level('info') }
 
 sub is_level {
-  my ($self, $level) = @_;
-  return unless $level;
-  $level = lc $level;
-  my $current = $ENV{MOJO_LOG_LEVEL} || $self->level;
-  return $LEVEL->{$level} >= $LEVEL->{$current};
+  my $self  = shift;
+  my $level = lc shift;
+  return $LEVEL->{$level} >= $LEVEL->{$ENV{MOJO_LOG_LEVEL} || $self->level};
 }
 
 sub is_warn { shift->is_level('warn') }
@@ -79,32 +74,28 @@ sub is_warn { shift->is_level('warn') }
 sub log {
   my $self  = shift;
   my $level = lc shift;
-  return $self unless $level && $self->is_level($level);
-  $self->emit(message => $level => @_);
-  return $self;
+  return $self unless $self->is_level($level);
+  return $self->emit(message => $level => @_);
 }
 
-sub warn { shift->log('warn', @_) }
+sub warn { shift->log(warn => @_) }
 
 1;
 __END__
 
 =head1 NAME
 
-Mojo::Log - Simple logger for Mojo
+Mojo::Log - Simple logger
 
 =head1 SYNOPSIS
 
   use Mojo::Log;
 
-  # Create a logging object that will log to STDERR by default
+  # Log to STDERR
   my $log = Mojo::Log->new;
 
-  # Customize the log location and minimum log level
-  my $log = Mojo::Log->new(
-    path  => '/var/log/mojo.log',
-    level => 'warn',
-  );
+  # Customize log file location and minimum log level
+  my $log = Mojo::Log->new(path => '/var/log/mojo.log', level => 'warn');
 
   # Log messages
   $log->debug("Why isn't this working?");
@@ -145,8 +136,8 @@ L<Mojo::Log> implements the following attributes.
   my $handle = $log->handle;
   $log       = $log->handle(IO::File->new);
 
-Logfile handle used by default C<message> event, defaults to opening the
-value of C<path> or C<STDERR>.
+Log file handle used by default C<message> event, defaults to opening C<path>
+or C<STDERR>.
 
 =head2 C<level>
 
@@ -177,7 +168,7 @@ These levels are currently available:
   my $path = $log->path
   $log     = $log->path('/var/log/mojo.log');
 
-Logfile path used by C<handle>.
+Log file path used by C<handle>.
 
 =head1 METHODS
 
