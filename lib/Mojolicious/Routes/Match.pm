@@ -17,7 +17,7 @@ sub new {
 
   # Path
   my $path = url_unescape shift;
-  $self->{path} = decode('UTF-8', $path) // $path;
+  $self->{path} = defined decode('UTF-8', $path) ? decode('UTF-8', $path) : $path;
 
   # WebSocket
   $self->{websocket} = shift;

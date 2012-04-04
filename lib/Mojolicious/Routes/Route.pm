@@ -122,7 +122,7 @@ sub over {
 
 sub parse {
   my $self = shift;
-  my $name = $self->pattern->parse(@_)->pattern // '';
+  my $name = $self->pattern->parse(@_)->pattern; defined $name || ($name = '');
   $name =~ s/\W+//g;
   $self->{name} = $name;
   return $self;

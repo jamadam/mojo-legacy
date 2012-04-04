@@ -130,7 +130,7 @@ sub redirect {
   # Commonly used codes
   my $res = $old->res;
   my $code = $res->code || 0;
-  return unless $code ~~ [301, 302, 303, 307];
+  return unless grep {$_ eq $code} (301, 302, 303, 307);
 
   # Fix broken location without authority and/or scheme
   return unless my $location = $res->headers->location;
@@ -143,12 +143,12 @@ sub redirect {
   # Clone request if necessary
   my $new    = Mojo::Transaction::HTTP->new;
   my $method = $req->method;
-  if ($code ~~ [301, 307]) {
+  if (grep {$_ eq $code} (301, 307)) {
     return unless $req = $req->clone;
     $new->req($req);
     $req->headers->remove('Host')->remove('Cookie')->remove('Referer');
   }
-  else { $method = 'GET' unless $method ~~ [qw/GET HEAD/] }
+  else { $method = 'GET' unless grep {$_ eq $method} qw/GET HEAD/ }
   $new->req->method($method)->url($location);
   return $new->previous($old);
 }
@@ -279,9 +279,10 @@ implements the following new ones.
   my $tx = $t->form('http://kraih.com' => {a => 'b'} => {DNT => 1});
   my $tx = $t->form('http://kraih.com', 'UTF-8', {a => 'b'}, {DNT => 1});
 
-Versatile L<Mojo::Transaction::HTTP> builder for form requests.
+Versatile L<Mojo::Transaction::HTTP> builder for C<POST> requests with form
+data.
 
-  # Inspect request
+  # Inspect generated request
   say $t->form('mojolicio.us' => {a => [1, 2, 3]})->req->to_string;
 
   # Submit form and stream response
@@ -329,6 +330,9 @@ or C<307> redirect response if possible.
   my $tx = $t->tx(POST => 'http://kraih.com' => {DNT => 1} => 'Hi!');
 
 Versatile general purpose L<Mojo::Transaction::HTTP> builder for requests.
+
+  # Inspect generated request
+  say $t->tx(GET => 'mojolicio.us' => {DNT => 1} => 'Bye!')->req->to_string;
 
   # Streaming response
   my $tx = $t->tx(GET => 'http://mojolicio.us');

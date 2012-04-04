@@ -36,6 +36,8 @@ These options are available:
   -v, --verbose               Print request and response headers to STDERR.
 EOF
 
+sub say(@) {print @_, "\n"}
+
 # "Objection.
 #  In the absence of pants, defense's suspenders serve no purpose.
 #  I'm going to allow them... for now."
@@ -148,7 +150,7 @@ sub run {
     if ($tx->res->headers->content_type || '') =~ /JSON/i;
 
   # Selector
-  $self->_select($buffer, $charset // $tx->res->content->charset, $selector);
+  $self->_select($buffer, defined $charset ? $charset : $tx->res->content->charset, $selector);
 }
 
 sub _json {

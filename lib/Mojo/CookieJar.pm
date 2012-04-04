@@ -26,7 +26,7 @@ sub add {
     $cookie->max_age(0) unless $cookie->expires || $cookie->max_age;
 
     # Check cookie size
-    next if length($value //= '') > $self->max_cookie_size;
+    next if length($value = defined $value ? $value : '') > $self->max_cookie_size;
 
     # Replace cookie
     $domain =~ s/^\.//;

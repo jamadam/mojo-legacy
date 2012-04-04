@@ -47,7 +47,7 @@ sub generate_body_chunk {
     if !delete $self->{delay} && !length $self->{body_buffer};
 
   # Get chunk
-  my $chunk = $self->{body_buffer} // '';
+  my $chunk = defined $self->{body_buffer} ? $self->{body_buffer} : '';
   $self->{body_buffer} = '';
 
   # EOF or delay
@@ -103,7 +103,7 @@ sub parse {
   if ($self->auto_relax) {
     my $headers    = $self->headers;
     my $connection = $headers->connection || '';
-    my $len        = $headers->content_length // '';
+    my $len        = defined $headers->content_length ? $headers->content_length : '';
     $self->relaxed(1)
       if !length $len
         && ($connection =~ /close/i || $headers->content_type);
@@ -127,7 +127,7 @@ sub parse {
 
   # Chunked or relaxed content
   if ($self->is_chunked || $self->relaxed) {
-    $self->{size} += length($self->{buffer} //= '');
+    $self->{size} += length($self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '');
     $self->emit(read => $self->{buffer});
     $self->{buffer} = '';
   }
@@ -169,8 +169,8 @@ sub parse_until_body {
   my ($self, $chunk) = @_;
 
   # Prepare first buffer
-  $self->{pre_buffer} //= '';
-  $self->{raw_size}   //= 0;
+  $self->{pre_buffer} = defined $self->{pre_buffer} ? $self->{pre_buffer} : '';
+  $self->{raw_size} = defined $self->{raw_size} ? $self->{raw_size} : 0;
 
   # Add chunk
   if (defined $chunk) {
@@ -196,7 +196,7 @@ sub parse_until_body {
 
 sub progress {
   my $self = shift;
-  return 0 unless ($self->{state} || '') ~~ [qw/body finished/];
+  return 0 unless grep {$_ eq ($self->{state} || '')} qw/body finished/;
   return $self->{raw_size} - ($self->{header_size} || 0);
 }
 
@@ -208,7 +208,7 @@ sub write {
 
   # Add chunk
   if (defined $chunk) {
-    $self->{body_buffer} //= '';
+    $self->{body_buffer} = defined $self->{body_buffer} ? $self->{body_buffer} : '';
     $self->{body_buffer} .= $chunk;
   }
 

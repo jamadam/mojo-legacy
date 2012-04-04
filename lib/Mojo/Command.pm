@@ -18,6 +18,8 @@ has usage       => "usage: $0\n";
 # Cache
 my $CACHE = {};
 
+sub say(@) {print @_, "\n"}
+
 sub chmod_file {
   my ($self, $path, $mod) = @_;
   chmod $mod, $path or croak qq/Can't chmod path "$path": $!/;

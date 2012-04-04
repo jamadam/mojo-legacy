@@ -44,7 +44,7 @@ sub to_string {
 
 sub trace {
   my ($self, $start) = @_;
-  $start //= 1;
+  $start = defined $start ? $start : 1;
   my @frames;
   while (my @trace = caller($start++)) { push @frames, \@trace }
   $self->frames(\@frames);

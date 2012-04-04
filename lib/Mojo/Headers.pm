@@ -33,7 +33,7 @@ sub add {
 
   # Make sure we have a normal case entry for name
   my $lcname = lc $name;
-  $NORMALCASE{$lcname} //= $name;
+  $NORMALCASE{$lcname} = defined $NORMALCASE{$lcname} ? $NORMALCASE{$lcname} : $name;
 
   # Add lines
   push @{$self->{headers}->{$lcname}},
@@ -97,7 +97,7 @@ sub parse {
 
   # Parse headers with size limit
   $self->{state} = 'headers';
-  $self->{buffer} //= '';
+  $self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '';
   $self->{buffer} .= $chunk if defined $chunk;
   my $headers = $self->{cache} ||= [];
   my $max = $self->max_line_size;

@@ -16,6 +16,8 @@ These options are available:
   -u, --user <name>           PAUSE username.
 EOF
 
+sub say(@) {print @_, "\n"}
+
 # "Hooray! A happy ending for the rich people!"
 sub run {
   my $self = shift;

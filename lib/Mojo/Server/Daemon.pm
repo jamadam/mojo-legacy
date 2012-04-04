@@ -16,7 +16,7 @@ use constant BONJOUR => $ENV{MOJO_NO_BONJOUR}
 use constant DEBUG => $ENV{MOJO_DAEMON_DEBUG} || 0;
 
 has [qw/backlog group silent user/];
-has inactivity_timeout => sub { $ENV{MOJO_INACTIVITY_TIMEOUT} // 15 };
+has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 15 };
 has ioloop => sub { Mojo::IOLoop->singleton };
 has listen => sub { [split /,/, $ENV{MOJO_LISTEN} || 'http://*:3000'] };
 has max_clients  => 1000;
@@ -28,6 +28,8 @@ sub DESTROY {
   $loop->remove($_) for keys %{$self->{connections} || {}};
   $loop->remove($_) for @{$self->{listening} || []};
 }
+
+sub say(@) {print @_, "\n"}
 
 # DEPRECATED in Leaf Fluttering In Wind!
 sub prepare_ioloop {
@@ -240,7 +242,7 @@ sub _listen {
   return if $self->silent;
   $self->app->log->info(qq/Listening at "$listen"./);
   $listen =~ s|//\*|//127.0.0.1|i;
-  say "Server available at $listen.";
+  say("Server available at $listen.");
 }
 
 sub _read {

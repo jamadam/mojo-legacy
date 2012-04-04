@@ -152,11 +152,13 @@ sub _config {
   $daemon->max_clients($c->{clients} || 1000);
   $daemon->group($c->{group}) if defined $c->{group};
   $daemon->max_requests($c->{keep_alive_requests} || 25);
-  $daemon->inactivity_timeout($c->{inactivity_timeout} // 15);
+  $daemon->inactivity_timeout(defined $c->{inactivity_timeout} ? $c->{inactivity_timeout} : 15);
   $daemon->user($c->{user}) if defined $c->{user};
-  $daemon->ioloop->max_accepts($c->{accepts} // 1000);
+  $daemon->ioloop->max_accepts(defined $c->{accepts} ? $c->{accepts} : 1000);
   $daemon->listen($c->{listen} || ['http://*:8080']);
 }
+
+sub say(@) {print @_, "\n"}
 
 sub _exit { say shift and exit 0 }
 

@@ -160,7 +160,8 @@ sub server {
   return $id;
 }
 
-sub singleton { state $loop ||= shift->SUPER::new }
+our $singleton_loop;
+sub singleton { $singleton_loop ||= shift->SUPER::new }
 
 sub start {
   my $self = shift;

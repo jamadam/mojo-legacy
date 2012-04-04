@@ -81,7 +81,7 @@ sub build {
       if ($type eq 'code' || $multi) { $lines[-1] .= "$value" }
 
       # Expression
-      if ($type ~~ [qw/expr escp/]) {
+      if (grep {$_ eq $type} qw/expr escp/) {
 
         # Start
         unless ($multi) {

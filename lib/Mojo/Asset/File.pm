@@ -23,7 +23,7 @@ has handle => sub {
 
   # Open new or temporary file
   my $base = File::Spec->catfile($self->tmpdir, 'mojo.tmp');
-  my $name = $path // $base;
+  my $name = defined $path ? $path : $base;
   my $fh;
   until (sysopen $fh, $name, O_CREAT | O_EXCL | O_RDWR) {
     croak qq/Can't open file "$name": $!/
@@ -57,7 +57,7 @@ sub add_chunk {
   my ($self, $chunk) = @_;
   my $handle = $self->handle;
   $handle->sysseek(0, SEEK_END);
-  $chunk //= '';
+  $chunk = defined $chunk ? $chunk : '';
   croak "Can't write to asset: $!"
     unless defined $handle->syswrite($chunk, length $chunk);
   return $self;
@@ -71,7 +71,7 @@ sub contains {
   $handle->sysseek($self->start_range, SEEK_SET);
 
   # Calculate window
-  my $end = $self->end_range // $self->size;
+  my $end = defined $self->end_range ? $self->end_range : $self->size;
   my $window_size = length($pattern) * 2;
   $window_size = $end - $self->start_range
     if $window_size > $end - $self->start_range;

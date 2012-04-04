@@ -28,7 +28,7 @@ sub canonicalize {
     }
 
     # "."
-    next if $part ~~ ['.', ''];
+    next if grep {$_ eq $part} ('.', '');
 
     # Part
     push @parts, $part;
@@ -64,7 +64,7 @@ sub contains {
 
 sub parse {
   my ($self, $path) = @_;
-  $path //= '';
+  $path = defined $path ? $path : '';
 
   $path = url_unescape $path;
   utf8::decode $path;

@@ -62,7 +62,7 @@ sub getline {
   my $self = shift;
 
   # No content yet, try again later
-  my $chunk = $self->{tx}->res->get_body_chunk($self->{offset} //= 0);
+  my $chunk = $self->{tx}->res->get_body_chunk($self->{offset} = defined $self->{offset} ? $self->{offset} : 0);
   return '' unless defined $chunk;
 
   # End of content
