@@ -29,8 +29,6 @@ sub DESTROY {
   $loop->remove($_) for @{$self->{listening} || []};
 }
 
-sub say(@) {print @_, "\n"}
-
 # DEPRECATED in Leaf Fluttering In Wind!
 sub prepare_ioloop {
   warn <<EOF;

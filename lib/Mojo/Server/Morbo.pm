@@ -42,8 +42,6 @@ sub run {
   exit 0;
 }
 
-sub say(@) {print @_, "\n"}
-
 # "And so with two weeks left in the campaign, the question on everyone’s
 #  mind is, who will be the president of Earth?
 #  Jack Johnson or bitter rival John Jackson.

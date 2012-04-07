@@ -9,6 +9,8 @@ use warnings;
 # No imports because we get subclassed, a lot!
 use Carp ();
 
+sub say(@) {print @_, "\n"}
+
 # "Kids, you tried your best and you failed miserably.
 #  The lesson is, never try."
 sub import {
@@ -40,6 +42,9 @@ sub import {
     # Can haz?
     *{"${caller}::has"} = sub { attr($caller, @_) };
   }
+  
+  my $caller = caller;
+  *{"${caller}::say"} = sub { say(@_) };
 
   # Mojo modules are strict!
   strict->import;

@@ -158,8 +158,6 @@ sub _config {
   $daemon->listen($c->{listen} || ['http://*:8080']);
 }
 
-sub say(@) {print @_, "\n"}
-
 sub _exit { say shift and exit 0 }
 
 sub _heartbeat {

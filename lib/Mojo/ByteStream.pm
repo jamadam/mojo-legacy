@@ -65,10 +65,13 @@ sub encode {
 # "Old people don't need companionship.
 #  They need to be isolated and studied so it can be determined what
 #  nutrients they have that might be extracted for our personal use."
-sub say {
-  my ($self, $handle) = @_;
-  $handle ||= \*STDOUT;
-  print $handle $$self. "\n";
+{
+  no warnings 'redefine';
+  sub say {
+    my ($self, $handle) = @_;
+    $handle ||= \*STDOUT;
+    print $handle $$self. "\n";
+  }
 }
 
 sub secure_compare {

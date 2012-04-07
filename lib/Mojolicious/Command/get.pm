@@ -36,8 +36,6 @@ These options are available:
   -v, --verbose               Print request and response headers to STDERR.
 EOF
 
-sub say(@) {print @_, "\n"}
-
 # "Objection.
 #  In the absence of pants, defense's suspenders serve no purpose.
 #  I'm going to allow them... for now."
