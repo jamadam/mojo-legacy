@@ -217,6 +217,10 @@ attribute. Pass an optional second argument to set a default value, it should
 be a constant or a sub reference. The sub reference will be excuted at
 accessor read time if there's no set value.
 
+=head2 C<say>
+
+Backported from perl-5.10.1
+
 =head1 DEBUGGING
 
 You can set the C<MOJO_BASE_DEBUG> environment variable to get some advanced

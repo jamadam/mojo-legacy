@@ -15,23 +15,20 @@ use Mojo::Util qw/encode url_escape/;
 sub form {
   my ($self, $url) = (shift, shift);
 
-  # Callback
-  my $cb = pop @_ if (ref $_[-1] || '') eq 'CODE';
-
   # Form
   my $encoding = shift;
   my $form = ref $encoding ? $encoding : shift;
   $encoding = undef if ref $encoding;
 
   # Parameters
-  my $params = Mojo::Parameters->new;
-  $params->charset($encoding) if defined $encoding;
+  my $p = Mojo::Parameters->new;
+  $p->charset($encoding) if defined $encoding;
   my $multipart;
   for my $name (sort keys %$form) {
     my $value = $form->{$name};
 
     # Array
-    if (ref $value eq 'ARRAY') { $params->append($name, $_) for @$value }
+    if (ref $value eq 'ARRAY') { $p->append($name, $_) for @$value }
 
     # Hash
     elsif (ref $value eq 'HASH') {
@@ -51,11 +48,11 @@ sub form {
         $value->{file} = Mojo::Asset::Memory->new->add_chunk($content);
       }
 
-      push @{$params->params}, $name, $value;
+      push @{$p->params}, $name, $value;
     }
 
     # Single value
-    else { $params->append($name, $value) }
+    else { $p->append($name, $value) }
   }
 
   # New transaction
@@ -66,7 +63,7 @@ sub form {
   # Multipart
   $headers->content_type('multipart/form-data') if $multipart;
   if (($headers->content_type || '') eq 'multipart/form-data') {
-    my $parts = $self->_multipart($encoding, $params->to_hash);
+    my $parts = $self->_multipart($encoding, $p->to_hash);
     $req->content(
       Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
   }
@@ -74,10 +71,10 @@ sub form {
   # Urlencoded
   else {
     $headers->content_type('application/x-www-form-urlencoded');
-    $req->body($params->to_string);
+    $req->body($p->to_string);
   }
 
-  return wantarray ? ($tx, $cb) : $tx;
+  return $tx;
 }
 
 # "This kid's a wonder!
@@ -165,9 +162,6 @@ sub tx {
   $url = "http://$url" unless $url =~ m#^/|\://#;
   ref $url ? $req->url($url) : $req->url->parse($url);
 
-  # Callback
-  my $cb = pop @_ if (ref $_[-1] || '') eq 'CODE';
-
   # Body
   $req->body(pop @_)
     if @_ & 1 == 1 && ref $_[0] ne 'HASH' || ref $_[-2] eq 'HASH';
@@ -175,7 +169,7 @@ sub tx {
   # Headers
   $req->headers->from_hash(ref $_[0] eq 'HASH' ? $_[0] : {@_});
 
-  return wantarray ? ($tx, $cb) : $tx;
+  return $tx;
 }
 
 # "She found my one weakness... that I'm weak!"
@@ -183,7 +177,7 @@ sub websocket {
   my $self = shift;
 
   # New WebSocket
-  my ($tx, $cb) = $self->tx(GET => @_);
+  my $tx  = $self->tx(GET => @_);
   my $req = $tx->req;
   my $abs = $req->url->to_abs;
   if (my $scheme = $abs->scheme) {
@@ -194,7 +188,7 @@ sub websocket {
   Mojo::Transaction::WebSocket->new(handshake => $tx, masked => 1)
     ->client_handshake;
 
-  return wantarray ? ($tx, $cb) : $tx;
+  return $tx;
 }
 
 sub _multipart {
