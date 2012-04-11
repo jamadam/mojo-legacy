@@ -115,42 +115,40 @@ sub _dispatch_callback {
 sub _dispatch_controller {
   my ($self, $c, $field, $staging) = @_;
 
-  # Class and method
+  # Load and instantiate controller/application
   return 1
     unless my $app = $field->{app} || $self->_generate_class($field, $c);
-  my $method = $self->_generate_method($field, $c);
-  my $target = (ref $app || $app) . ($method ? "->$method" : '');
-  $c->app->log->debug(qq/Routing to "$target"./);
-
-  # Controller or application
   return unless $self->_load_class($c, $app);
   $app = $app->new($c) unless ref $app;
 
-  # Action
+  # Application
   my $continue;
-  if ($method) {
+  my $class = ref $app;
+  if (my $sub = $app->can('handler')) {
+    $c->app->log->debug(qq/Routing to application "$class"./);
 
-    # Call action
+    # Try to connect routes
+    if (my $sub = $app->can('routes')) {
+      my $r = $app->$sub;
+      weaken $r->parent($c->match->endpoint)->{parent} unless $r->parent;
+    }
+    $app->$sub($c);
+  }
+
+  # Action
+  elsif (my $method = $self->_generate_method($field, $c)) {
+    my $log = $c->app->log;
+    $log->debug(qq/Routing to action "$class->$method"./);
+
+    # Try to call action
     my $stash = $c->stash;
     if (my $sub = $app->can($method)) {
       $stash->{'mojo.routed'}++ unless $staging;
       $continue = $app->$sub;
     }
 
-    # Render
-    else {
-      $c->app->log->debug(
-        qq/Action "$target" not found, assuming template without action./);
-    }
-  }
-
-  # Application
-  else {
-    if (my $sub = $app->can('routes')) {
-      my $r = $app->$sub;
-      weaken $r->parent($c->match->endpoint)->{parent} unless $r->parent;
-    }
-    $app->handler($c);
+    # Action not found
+    else { $log->debug('Action not found, routing to template.') }
   }
 
   return !$staging || $continue ? 1 : undef;
@@ -159,13 +157,9 @@ sub _dispatch_controller {
 sub _generate_class {
   my ($self, $field, $c) = @_;
 
-  # DEPRECATED in Leaf Fluttering In Wind!
-  warn "The class stash value is DEPRECATED in favor of controller!\n"
-    if $field->{class};
-  my $class = camelize $field->{class} || $field->{controller} || '';
-
-  # Namespace
+  # Namespace and class
   my $namespace = $field->{namespace};
+  my $class = camelize $field->{controller} || '';
   return unless $class || $namespace;
   $namespace = defined $namespace ? $namespace : $self->namespace;
   $class = length $class ? "${namespace}::$class" : $namespace
@@ -180,15 +174,9 @@ sub _generate_class {
 sub _generate_method {
   my ($self, $field, $c) = @_;
 
-  # Prepare hidden
-  $self->{hiding} = {map { $_ => 1 } @{$self->hidden}} unless $self->{hiding};
-
-  # DEPRECATED in Leaf Fluttering In Wind!
-  warn "The method stash value is DEPRECATED in favor of action!\n"
-    if $field->{method};
-  return unless my $method = $field->{method} || $field->{action};
-
   # Hidden
+  $self->{hiding} = {map { $_ => 1 } @{$self->hidden}} unless $self->{hiding};
+  return unless my $method = $field->{action};
   $c->app->log->debug(qq/Action "$method" is not allowed./) and return
     if $self->{hiding}->{$method} || index($method, '_') == 0;
 
@@ -384,9 +372,9 @@ Match routes with L<Mojolicious::Routes::Match> and dispatch.
 
 =head2 C<hide>
 
-  $r = $r->hide('new');
+  $r = $r->hide(qw/foo bar/);
 
-Hide controller method or attribute from routes.
+Hide controller methods and attributes from routes.
 
 =head2 C<route>
 

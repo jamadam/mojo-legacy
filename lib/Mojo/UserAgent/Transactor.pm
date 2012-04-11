@@ -12,6 +12,22 @@ use Mojo::Transaction::WebSocket;
 use Mojo::URL;
 use Mojo::Util qw/encode url_escape/;
 
+sub endpoint {
+  my ($self, $tx) = @_;
+
+  # Basic endpoint
+  my $req    = $tx->req;
+  my $url    = $req->url;
+  my $scheme = $url->scheme || 'http';
+  my $host   = $url->ihost;
+  my $port   = $url->port || ($scheme eq 'https' ? 443 : 80);
+
+  # Proxy for normal HTTP requests
+  return $scheme eq 'http' && lc($req->headers->upgrade || '') ne 'websocket'
+    ? $self->_proxy($tx, $scheme, $host, $port)
+    : ($scheme, $host, $port);
+}
+
 sub form {
   my ($self, $url) = (shift, shift);
 
@@ -81,21 +97,7 @@ sub form {
 #  He organized all the law suits against me into one class action suit."
 sub peer {
   my ($self, $tx) = @_;
-
-  # Peer for transaction
-  my $req    = $tx->req;
-  my $url    = $req->url;
-  my $scheme = $url->scheme || 'http';
-  my $host   = $url->ihost;
-  my $port   = $url->port;
-  if (my $proxy = $req->proxy) {
-    $scheme = $proxy->scheme;
-    $host   = $proxy->ihost;
-    $port   = $proxy->port;
-  }
-  $port ||= $scheme eq 'https' ? 443 : 80;
-
-  return $scheme, $host, $port;
+  return $self->_proxy($tx, $self->endpoint($tx));
 }
 
 # "America's health care system is second only to Japan...
@@ -109,13 +111,13 @@ sub proxy_connect {
   return unless my $proxy = $req->proxy;
 
   # WebSocket and/or HTTPS
-  my $url = $req->url;
-  return
-    unless lc($req->headers->upgrade || '') eq 'websocket'
-      || ($url->scheme || '') eq 'https';
+  my $url     = $req->url;
+  my $upgrade = lc($req->headers->upgrade || '');
+  my $scheme  = $url->scheme;
+  return unless $upgrade eq 'websocket' || $scheme eq 'https';
 
   # CONNECT request
-  my $new = $self->tx(CONNECT => $url->clone);
+  my $new = $self->tx(CONNECT => $url->clone->userinfo(undef));
   $new->req->proxy($proxy);
 
   return $new;
@@ -163,7 +165,7 @@ sub tx {
   ref $url ? $req->url($url) : $req->url->parse($url);
 
   # Body
-  $req->body(pop @_)
+  $req->body(pop)
     if @_ & 1 == 1 && ref $_[0] ne 'HASH' || ref $_[-2] eq 'HASH';
 
   # Headers
@@ -231,6 +233,19 @@ sub _multipart {
   return \@parts;
 }
 
+sub _proxy {
+  my ($self, $tx, $scheme, $host, $port) = @_;
+
+  # Update with proxy information
+  if (my $proxy = $tx->req->proxy) {
+    $scheme = $proxy->scheme;
+    $host   = $proxy->ihost;
+    $port   = $proxy->port || ($scheme eq 'https' ? 443 : 80);
+  }
+
+  return $scheme, $host, $port;
+}
+
 1;
 __END__
 
@@ -254,6 +269,12 @@ framework used by L<Mojo::UserAgent>.
 
 L<Mojo::UserAgent::Transactor> inherits all methods from L<Mojo::Base> and
 implements the following new ones.
+
+=head2 C<endpoint>
+
+  my ($scheme, $host, $port) = $t->endpoint($tx);
+
+Actual endpoint for transaction.
 
 =head2 C<form>
 
@@ -279,9 +300,8 @@ data.
   # Inspect generated request
   say $t->form('mojolicio.us' => {a => [1, 2, 3]})->req->to_string;
 
-  # Submit form and stream response
-  my $tx = $t->form('http://kraih.com/foo' => {a => 'b'});
-  $tx->res->body(sub { say $_[1] });
+  # Streaming multipart file upload
+  my $tx = $t->form('mojolicio.us' => {fun => {file => '/etc/passwd'}});
   $ua->start($tx);
 
 While the "multipart/form-data" content type will be automatically used

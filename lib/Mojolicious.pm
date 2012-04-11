@@ -33,7 +33,7 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Leaf Fluttering In Wind';
-our $VERSION  = '2.76';
+our $VERSION  = '2.80';
 
 # "These old doomsday devices are dangerously unstable.
 #  I'll rest easier not knowing where they are."
@@ -69,8 +69,8 @@ sub new {
   my $r = $self->routes->namespace(ref $self);
 
   # Hide controller attributes/methods and "handler"
-  $r->hide(qw/AUTOLOAD DESTROY app cookie finish flash handler on on_finish/);
-  $r->hide(qw/param redirect_to render render_content render_data/);
+  $r->hide(qw/AUTOLOAD DESTROY app cookie finish flash handler on param/);
+  $r->hide(qw/redirect_to render render_content render_data/);
   $r->hide(qw/render_exception render_json render_not_found render_partial/);
   $r->hide(qw/render_static render_text rendered req res respond_to send/);
   $r->hide(qw/session signed_cookie stash tx ua url_for write write_chunk/);
@@ -149,10 +149,7 @@ sub handler {
 
   # Embedded application
   my $stash = {};
-  if (my $sub = $tx->can('stash')) {
-    $stash = $tx->$sub;
-    $tx    = $tx->tx;
-  }
+  if (my $sub = $tx->can('stash')) { ($stash, $tx) = ($tx->$sub, $tx->tx) }
 
   # Build default controller
   my $defaults = $self->defaults;
@@ -385,9 +382,10 @@ new ones.
 
   my $app = Mojolicious->new;
 
-Construct a new L<Mojolicious> application. Will automatically detect your
-home directory and set up logging based on your current operating mode. Also
-sets up the renderer, static dispatcher and a default set of plugins.
+Construct a new L<Mojolicious> application, calling C<${mode}_mode> and
+C<startup> in the process. Will automatically detect your home directory and
+set up logging based on your current operating mode. Also sets up the
+renderer, static dispatcher and a default set of plugins.
 
 =head2 C<build_tx>
 
@@ -516,7 +514,9 @@ object)
 
 Emitted right before the C<before_dispatch> hook and wraps around the whole
 dispatch process, so you have to manually forward to the next hook if you
-want to continue the chain.
+want to continue the chain. Default exception handling with
+L<Mojolicious::Controller/"render_exception"> is the first hook in the chain
+and a call to C<dispatch> the last, yours will be in between.
 
   $app->hook(around_dispatch => sub {
     my ($next, $c) = @_;

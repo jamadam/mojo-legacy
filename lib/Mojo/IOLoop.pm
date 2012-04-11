@@ -178,9 +178,6 @@ sub stream {
   my $self = shift;
   $self = $self->singleton unless ref $self;
 
-  # Make sure garbage gets collected
-  $self->_cleaner;
-
   # Connect stream with reactor
   my $stream = shift;
   return $self->_stream($stream, $self->_id) if blessed $stream;
@@ -275,6 +272,9 @@ sub _remove {
 
 sub _stream {
   my ($self, $stream, $id) = @_;
+
+  # Make sure garbage gets collected
+  $self->_cleaner;
 
   # Connect stream with reactor
   $self->{connections}->{$id}->{stream} = $stream;
@@ -410,6 +410,12 @@ connections.
 
 Low level event reactor, usually a L<Mojo::Reactor::Poll> or
 L<Mojo::Reactor::EV> object.
+
+  # Watch handle for I/O events
+  $loop->reactor->io($handle => sub {
+    my ($reactor, $writable) = @_;
+    say $writable ? 'Handle is writable' : 'Handle is readable';
+  });
 
 =head2 C<server_class>
 

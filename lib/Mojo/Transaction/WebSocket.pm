@@ -26,6 +26,12 @@ has handshake => sub { Mojo::Transaction::HTTP->new };
 has 'masked';
 has max_websocket_size => sub { $ENV{MOJO_MAX_WEBSOCKET_SIZE} || 262144 };
 
+sub new {
+  my $self = shift->SUPER::new(@_);
+  $self->on(frame => sub { shift->_message(@_) });
+  return $self;
+}
+
 sub build_frame {
   my ($self, $fin, $rsv1, $rsv2, $rsv3, $op, $payload) = @_;
   warn "BUILDING FRAME\n" if DEBUG;
@@ -232,7 +238,6 @@ sub send {
 
   # Prepare frame
   $self->once(drain => $cb) if $cb;
-  $self->{write} = defined $self->{write} ? $self->{write} : '';
   $self->{write} .= $self->build_frame(@$frame);
   $self->{state} = 'write';
 
@@ -261,36 +266,9 @@ sub server_read {
   my ($self, $chunk) = @_;
 
   # Parse frames
-  $self->{read} = defined $self->{read} ? $self->{read} : '';
   $self->{read} .= $chunk if defined $chunk;
-  $self->{message} = defined $self->{message} ? $self->{message} : '';
   while (my $frame = $self->parse_frame(\$self->{read})) {
     $self->emit(frame => $frame);
-    my $op = $frame->[4] || CONTINUATION;
-
-    # Ping/Pong
-    $self->send([1, 0, 0, 0, PONG, $frame->[5]]) and next if $op == PING;
-    next if $op == PONG;
-
-    # Close
-    $self->finish and next if $op == CLOSE;
-
-    # Append chunk and check message size
-    next unless $self->has_subscribers('message');
-    $self->{op} = $op unless exists $self->{op};
-    $self->{message} .= $frame->[5];
-    $self->finish and last
-      if length $self->{message} > $self->max_websocket_size;
-
-    # No FIN bit (Continuation)
-    next unless $frame->[0];
-
-    # Message
-    my $message = $self->{message};
-    $self->{message} = '';
-    $message = decode 'UTF-8', $message
-      if $message && delete $self->{op} == TEXT;
-    $self->emit(message => $message);
   }
 
   # Resume
@@ -301,20 +279,46 @@ sub server_write {
   my $self = shift;
 
   # Drain
-  $self->{write} = defined $self->{write} ? $self->{write} : '';
-  unless (length $self->{write}) {
+  unless (length(defined $self->{write} ? $self->{write} : '')) {
     $self->{state} = $self->{finished} ? 'finished' : 'read';
     $self->emit('drain');
   }
 
   # Empty buffer
-  my $write = $self->{write};
-  $self->{write} = '';
-
-  return $write;
+  my $chunk = delete $self->{write};
+  return $chunk ? $chunk : '';
 }
 
 sub _challenge { b64_encode(sha1_bytes((pop() || '') . GUID), '') }
+
+sub _message {
+  my ($self, $frame) = @_;
+
+  # Assume continuation
+  my $op = $frame->[4] || CONTINUATION;
+
+  # Ping/Pong
+  return $self->send([1, 0, 0, 0, PONG, $frame->[5]]) if $op == PING;
+  return if $op == PONG;
+
+  # Close
+  return $self->finish if $op == CLOSE;
+
+  # Append chunk and check message size
+  $self->{op} = $op unless exists $self->{op};
+  $self->{message} .= $frame->[5];
+  $self->finish and last
+    if length $self->{message} > $self->max_websocket_size;
+
+  # No FIN bit (Continuation)
+  return unless $frame->[0];
+
+  # Message
+  my $message = delete $self->{message};
+  $message = decode 'UTF-8', $message
+    if $message && delete $self->{op} == TEXT;
+  $self->emit(message => $message);
+}
 
 sub _xor_mask {
   my ($input, $mask) = @_;
@@ -372,13 +376,14 @@ Emitted once all data has been sent.
 
 Emitted when a WebSocket frame has been received.
 
+  $ws->unsubscribe('frame');
   $ws->on(frame => sub {
     my ($ws, $frame) = @_;
-    say "Fin: $frame->[0]";
-    say "Rsv1: $frame->[1]";
-    say "Rsv2: $frame->[2]";
-    say "Rsv3: $frame->[3]";
-    say "Op: $frame->[4]";
+    say "FIN: $frame->[0]";
+    say "RSV1: $frame->[1]";
+    say "RSV2: $frame->[2]";
+    say "RSV3: $frame->[3]";
+    say "Opcode: $frame->[4]";
     say "Payload: $frame->[5]";
   });
 
@@ -429,14 +434,37 @@ C<MOJO_MAX_WEBSOCKET_SIZE> environment variable or C<262144>.
 L<Mojo::Transaction::WebSocket> inherits all methods from
 L<Mojo::Transaction> and implements the following new ones.
 
+=head2 C<new>
+
+  my $multi = Mojo::Content::MultiPart->new;
+
+Construct a new L<Mojo::Transaction::WebSocket> object and subscribe to
+C<frame> event with default message parser, which also handles C<PING> and
+C<CLOSE> frames automatically.
+
 =head2 C<build_frame>
 
   my $bytes = $ws->build_frame($fin, $rsv1, $rsv2, $rsv3, $op, $payload);
 
 Build WebSocket frame.
 
-  # Build single "Binary" frame
+  # Continuation frame with FIN bit and payload
+  say $ws->build_frame(1, 0, 0, 0, 0, 'World!');
+
+  # Text frame with payload
+  say $ws->build_frame(0, 0, 0, 0, 1, 'Hello');
+
+  # Binary frame with FIN bit and payload
   say $ws->build_frame(1, 0, 0, 0, 2, 'Hello World!');
+
+  # Close frame with FIN bit and without payload
+  say $ws->build_frame(1, 0, 0, 0, 8, '');
+
+  # Ping frame with FIN bit and payload
+  say $ws->build_frame(1, 0, 0, 0, 9, 'Test 123');
+
+  # Pong frame with FIN bit and payload
+  say $ws->build_frame(1, 0, 0, 0, 10, 'Test 123');
 
 =head2 C<client_challenge>
 
@@ -506,11 +534,11 @@ Parse WebSocket frame.
 
   # Parse single frame and remove it from buffer
   my $frame = $ws->parse_frame(\$buffer);
-  say "Fin: $frame->[0]";
-  say "Rsv1: $frame->[1]";
-  say "Rsv2: $frame->[2]";
-  say "Rsv3: $frame->[3]";
-  say "Op: $frame->[4]";
+  say "FIN: $frame->[0]";
+  say "RSV1: $frame->[1]";
+  say "RSV2: $frame->[2]";
+  say "RSV3: $frame->[3]";
+  say "Opcode: $frame->[4]";
   say "Payload: $frame->[5]";
 
 =head2 C<remote_address>

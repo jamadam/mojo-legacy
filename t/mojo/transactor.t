@@ -1,6 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 201;
+use Test::More tests => 238;
 
 # "Once the government approves something, it's no longer immoral!"
 use File::Spec::Functions 'catdir';
@@ -158,11 +158,65 @@ like $tx->req->content->parts->[0]->headers->content_disposition,
 is $tx->req->content->parts->[0]->asset->slurp, 'whatever', 'right part';
 is $tx->req->content->parts->[1], undef, 'no more parts';
 
+# Simple endpoint
+$tx = $t->tx(GET => 'mojolicio.us');
+is(($t->endpoint($tx))[0], 'http',         'right scheme');
+is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
+is(($t->endpoint($tx))[2], 80,             'right port');
+
+# Simple endpoint with proxy
+$tx = $t->tx(GET => 'http://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1:3000');
+is(($t->endpoint($tx))[0], 'http',      'right scheme');
+is(($t->endpoint($tx))[1], '127.0.0.1', 'right host');
+is(($t->endpoint($tx))[2], 3000,        'right port');
+
+# Simple WebSocket endpoint with proxy
+$tx = $t->websocket('ws://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1:3000');
+is(($t->endpoint($tx))[0], 'http',         'right scheme');
+is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
+is(($t->endpoint($tx))[2], 80,             'right port');
+
+# HTTPS endpoint
+$tx = $t->tx(GET => 'https://mojolicio.us');
+is(($t->endpoint($tx))[0], 'https',        'right scheme');
+is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
+is(($t->endpoint($tx))[2], 443,            'right port');
+
+# HTTPS endpoint with proxy
+$tx = $t->tx(GET => 'https://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1:3000');
+is(($t->endpoint($tx))[0], 'https',        'right scheme');
+is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
+is(($t->endpoint($tx))[2], 443,            'right port');
+
+# TLS WebSocket endpoint with proxy
+$tx = $t->websocket('wss://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1:3000');
+is(($t->endpoint($tx))[0], 'https',        'right scheme');
+is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
+is(($t->endpoint($tx))[2], 443,            'right port');
+
 # Simple peer
 $tx = $t->tx(GET => 'mojolicio.us');
 is(($t->peer($tx))[0], 'http',         'right scheme');
 is(($t->peer($tx))[1], 'mojolicio.us', 'right host');
 is(($t->peer($tx))[2], 80,             'right port');
+
+# Simple peer with proxy
+$tx = $t->tx(GET => 'http://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1:3000');
+is(($t->peer($tx))[0], 'http',      'right scheme');
+is(($t->peer($tx))[1], '127.0.0.1', 'right host');
+is(($t->peer($tx))[2], 3000,        'right port');
+
+# Simple WebSocket peer with proxy
+$tx = $t->websocket('ws://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1:3000');
+is(($t->peer($tx))[0], 'http',      'right scheme');
+is(($t->peer($tx))[1], '127.0.0.1', 'right host');
+is(($t->peer($tx))[2], 3000,        'right port');
 
 # HTTPS peer
 $tx = $t->tx(GET => 'https://mojolicio.us');
@@ -170,8 +224,15 @@ is(($t->peer($tx))[0], 'https',        'right scheme');
 is(($t->peer($tx))[1], 'mojolicio.us', 'right host');
 is(($t->peer($tx))[2], 443,            'right port');
 
-# Proxy peer
+# HTTPS peer with proxy
 $tx = $t->tx(GET => 'https://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1:3000');
+is(($t->peer($tx))[0], 'http',      'right scheme');
+is(($t->peer($tx))[1], '127.0.0.1', 'right host');
+is(($t->peer($tx))[2], 3000,        'right port');
+
+# TLS WebSocket peer with proxy
+$tx = $t->websocket('wss://mojolicio.us');
 $tx->req->proxy('http://127.0.0.1:3000');
 is(($t->peer($tx))[0], 'http',      'right scheme');
 is(($t->peer($tx))[1], '127.0.0.1', 'right host');
@@ -203,12 +264,28 @@ ok $tx->req->headers->sec_websocket_version,
 is $tx->req->headers->upgrade, 'websocket', 'right "Upgrade" value';
 
 # Proxy CONNECT
-$tx = $t->tx(GET => 'https://mojolicio.us');
-$tx->req->proxy('http://127.0.0.1:3000');
+$tx = $t->tx(GET => 'https://sri:secr3t@mojolicio.us');
+$tx->req->proxy('http://sri:secr3t@127.0.0.1:3000');
+ok !$tx->req->headers->authorization,       'no "Authorization" header';
+ok !$tx->req->headers->proxy_authorization, 'no "Proxy-Authorization" header';
+$tx->req->fix_headers;
+is $tx->req->headers->authorization, 'Basic c3JpOnNlY3IzdA==',
+  'right "Authorization" header';
+is $tx->req->headers->proxy_authorization, 'Basic c3JpOnNlY3IzdA==',
+  'right "Proxy-Authorization" header';
 $tx = $t->proxy_connect($tx);
 is $tx->req->method, 'CONNECT', 'right method';
-is $tx->req->url->to_abs,   'https://mojolicio.us',  'right URL';
-is $tx->req->proxy->to_abs, 'http://127.0.0.1:3000', 'right proxy URL';
+is $tx->req->url->to_abs, 'https://mojolicio.us', 'right URL';
+is $tx->req->proxy->to_abs, 'http://sri:secr3t@127.0.0.1:3000',
+  'right proxy URL';
+ok !$tx->req->headers->authorization,       'no "Authorization" header';
+ok !$tx->req->headers->proxy_authorization, 'no "Proxy-Authorization" header';
+ok !$tx->req->headers->host,                'no "Host" header';
+$tx->req->fix_headers;
+ok !$tx->req->headers->authorization, 'no "Authorization" header';
+is $tx->req->headers->proxy_authorization, 'Basic c3JpOnNlY3IzdA==',
+  'right "Proxy-Authorization" header';
+is $tx->req->headers->host, '127.0.0.1:3000', 'right "Host" header';
 
 # Simple 302 redirect
 $tx =

@@ -6,7 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 9;
+use Test::More tests => 12;
 
 # "I cheated the wrong way!
 #  I wrote the Lisa name and gave the Ralph answers!"
@@ -54,8 +54,7 @@ $daemon->listen(["http://127.0.0.1:$port"])->start;
 
 # Connect proxy server for testing
 my $proxy = Mojo::IOLoop->generate_port;
-my $c     = {};
-my $connected;
+my (%buffer, $connected);
 my ($read, $sent, $fail) = 0;
 my $nf =
     "HTTP/1.1 404 NOT FOUND\x0d\x0a"
@@ -68,14 +67,13 @@ Mojo::IOLoop->server(
     $stream->on(
       read => sub {
         my ($stream, $chunk) = @_;
-        if (my $server = $c->{$client}->{connection}) {
+        if (my $server = $buffer{$client}->{connection}) {
           return Mojo::IOLoop->stream($server)->write($chunk);
         }
-        $c->{$client}->{client} = defined $c->{$client}->{client} ? $c->{$client}->{client} : '';
-        $c->{$client}->{client} .= $chunk;
-        if ($c->{$client}->{client} =~ /\x0d?\x0a\x0d?\x0a$/) {
-          my $buffer = $c->{$client}->{client};
-          $c->{$client}->{client} = '';
+        $buffer{$client}->{client} .= $chunk;
+        if ($buffer{$client}->{client} =~ /\x0d?\x0a\x0d?\x0a$/) {
+          my $buffer = $buffer{$client}->{client};
+          $buffer{$client}->{client} = '';
           if ($buffer =~ /CONNECT (\S+):(\d+)?/) {
             $connected = "$1:$2";
             $fail = 1 if $2 == $port + 1;
@@ -85,9 +83,9 @@ Mojo::IOLoop->server(
                 my ($loop, $err, $stream) = @_;
                 if ($err) {
                   Mojo::IOLoop->remove($client);
-                  return delete $c->{$client};
+                  return delete $buffer{$client};
                 }
-                $c->{$client}->{connection} = $server;
+                $buffer{$client}->{connection} = $server;
                 $stream->on(
                   read => sub {
                     my ($stream, $chunk) = @_;
@@ -99,7 +97,7 @@ Mojo::IOLoop->server(
                 $stream->on(
                   close => sub {
                     Mojo::IOLoop->remove($client);
-                    delete $c->{$client};
+                    delete $buffer{$client};
                   }
                 );
                 Mojo::IOLoop->stream($client)->write($fail ? $nf : $ok);
@@ -112,9 +110,9 @@ Mojo::IOLoop->server(
     );
     $stream->on(
       close => sub {
-        Mojo::IOLoop->remove($c->{$client}->{connection})
-          if $c->{$client}->{connection};
-        delete $c->{$client};
+        Mojo::IOLoop->remove($buffer{$client}->{connection})
+          if $buffer{$client}->{connection};
+        delete $buffer{$client};
       }
     );
   }
@@ -152,22 +150,47 @@ is $result, 'test1test2', 'right result';
 
 # GET http://kraih.com/proxy (proxy request)
 $ua->http_proxy("http://localhost:$port");
+my $kept_alive;
 $result = undef;
 $ua->get(
   "http://kraih.com/proxy" => sub {
-    $result = pop->success->body;
+    my ($ua, $tx) = @_;
+    $kept_alive = $tx->kept_alive;
+    $result     = $tx->success->body;
     Mojo::IOLoop->stop;
   }
 );
 Mojo::IOLoop->start;
+ok !$kept_alive, 'connection was not kept alive';
 is $result, 'http://kraih.com/proxy', 'right content';
 
+# WebSocket /test (kept alive proxy websocket)
+($kept_alive, $result) = undef;
+$ua->websocket(
+  "ws://localhost:$port/test" => sub {
+    my ($ua, $tx) = @_;
+    $kept_alive = $tx->kept_alive;
+    $tx->on(finish => sub { Mojo::IOLoop->stop });
+    $tx->on(
+      message => sub {
+        my ($tx, $message) = @_;
+        $result = $message;
+        $tx->finish;
+      }
+    );
+    $tx->send('test1');
+  }
+);
+Mojo::IOLoop->start;
+ok $kept_alive, 'connection was kept alive';
+is $result, 'test1test2', 'right result';
+
 # WebSocket /test (proxy websocket)
-$ua->http_proxy("http://localhost:$proxy");
+$ua = Mojo::UserAgent->new(http_proxy => "http://localhost:$proxy");
 $result = undef;
 $ua->websocket(
   "ws://localhost:$port/test" => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
@@ -191,7 +214,7 @@ my $port2 = $port + 1;
 my ($success, $err);
 $ua->websocket(
   "ws://localhost:$port2/test" => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $success = $tx->success;
     $err     = $tx->error;
     Mojo::IOLoop->stop;

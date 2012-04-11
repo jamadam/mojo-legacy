@@ -102,7 +102,7 @@ sub start {
     # Start non-blocking
     warn "NEW NON-BLOCKING REQUEST\n" if DEBUG;
     unless ($self->{nb}) {
-      croak 'Blocking request in progress' if $self->{processing};
+      croak 'Blocking request in progress' if keys %{$self->{connections}};
       warn "SWITCHING TO NON-BLOCKING MODE\n" if DEBUG;
       $self->_cleanup;
       $self->{nb} = 1;
@@ -113,7 +113,7 @@ sub start {
   # Start blocking
   warn "NEW BLOCKING REQUEST\n" if DEBUG;
   if (delete $self->{nb}) {
-    croak 'Non-blocking requests in progress' if $self->{processing};
+    croak 'Non-blocking requests in progress' if keys %{$self->{connections}};
     warn "SWITCHING TO BLOCKING MODE\n" if DEBUG;
     $self->_cleanup;
   }
@@ -182,24 +182,23 @@ sub _cleanup {
 sub _connect {
   my ($self, $tx, $cb) = @_;
 
-  # Keep alive connection
+  # Cached connection
   my $id = $tx->connection;
-  my ($scheme, $host, $port) = $self->transactor->peer($tx);
+  my ($scheme, $host, $port) = $self->transactor->endpoint($tx);
   $id ||= $self->_cache("$scheme:$host:$port");
   if ($id && !ref $id) {
-    warn "KEEP ALIVE CONNECTION ($scheme:$host:$port)\n" if DEBUG;
+    warn "CACHED CONNECTION ($scheme:$host:$port)\n" if DEBUG;
     $self->{connections}->{$id} = {cb => $cb, tx => $tx};
-    $tx->kept_alive(1);
+    $tx->kept_alive(1) unless $tx->connection;
     $self->_connected($id);
     return $id;
   }
 
   # CONNECT request to proxy required
-  return
-    if ($tx->req->method || '') ne 'CONNECT'
-    && $self->_connect_proxy($tx, $cb);
+  return if $tx->req->method ne 'CONNECT' && $self->_connect_proxy($tx, $cb);
 
-  # Connect
+  # New connection
+  ($scheme, $host, $port) = $self->transactor->peer($tx);
   warn "NEW CONNECTION ($scheme:$host:$port)\n" if DEBUG;
   weaken $self;
   $id = $self->_loop->client(
@@ -241,10 +240,12 @@ sub _connect_proxy {
         return $self->_finish($old, $cb);
       }
 
+      # Prevent proxy reassignment
+      $old->req->proxy(0);
+
       # TLS upgrade
       if ($tx->req->url->scheme eq 'https') {
         return unless my $id = $tx->connection;
-        $old->req->proxy(undef);
         my $loop   = $self->_loop;
         my $handle = $loop->stream($id)->steal_handle;
         my $c      = delete $self->{connections}->{$id};
@@ -345,7 +346,6 @@ sub _handle {
   # Finish WebSocket
   my $old = $c->{tx};
   if ($old && $old->is_websocket) {
-    $self->{processing} -= 1;
     delete $self->{connections}->{$id};
     $self->_remove($id, $close);
     $old->client_close;
@@ -363,7 +363,6 @@ sub _handle {
     $self->_remove($id, $close);
     return unless $old;
     if (my $jar = $self->cookie_jar) { $jar->extract($old) }
-    $self->{processing} -= 1;
     $old->client_close;
 
     # Handle redirects
@@ -372,7 +371,7 @@ sub _handle {
   }
 
   # Stop loop
-  $self->ioloop->stop if !$self->{nb} && !$self->{processing};
+  $self->ioloop->stop if !$self->{nb} && !keys %{$self->{connections}};
 }
 
 sub _loop {
@@ -405,9 +404,8 @@ sub _remove {
   }
 
   # Keep connection alive
-  $self->_cache(join(':', $self->transactor->peer($tx)), $id)
-    unless (($tx->req->method || '') eq 'CONNECT'
-    && ($tx->res->code || '') eq '200');
+  $self->_cache(join(':', $self->transactor->endpoint($tx)), $id)
+    unless $tx->req->method eq 'CONNECT' && ($tx->res->code || '') eq '200';
 }
 
 sub _redirect {
@@ -464,12 +462,12 @@ sub _start {
 
     # HTTP proxy
     if (my $proxy = $self->http_proxy) {
-      $req->proxy($proxy) if !$req->proxy && $scheme eq 'http';
+      $req->proxy($proxy) if !defined($req->proxy) && $scheme eq 'http';
     }
 
     # HTTPS proxy
     if (my $proxy = $self->https_proxy) {
-      $req->proxy($proxy) if !$req->proxy && $scheme eq 'https';
+      $req->proxy($proxy) if !defined($req->proxy) && $scheme eq 'https';
     }
   }
 
@@ -483,7 +481,6 @@ sub _start {
   # Connect
   $self->emit(start => $tx);
   return unless my $id = $self->_connect($tx, $cb);
-  $self->{processing} += 1;
 
   # Request timeout
   if (my $t = $self->request_timeout) {

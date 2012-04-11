@@ -5,7 +5,7 @@ use Carp 'croak';
 use Cwd 'getcwd';
 use File::Path 'mkpath';
 use File::Spec::Functions qw/catdir catfile splitdir/;
-use IO::File;
+use IO::Handle;
 use Mojo::Server;
 use Mojo::Template;
 use Mojo::Util qw/b64_decode decamelize/;
@@ -16,7 +16,7 @@ has quiet       => 0;
 has usage       => "usage: $0\n";
 
 # Cache
-my $CACHE = {};
+my %CACHE;
 
 sub chmod_file {
   my ($self, $path, $mod) = @_;
@@ -68,7 +68,7 @@ sub get_all_data {
 
   # Refresh or use cached data
   my $d = do { no strict 'refs'; \*{"$class\::DATA"} };
-  return $CACHE->{$class} || {} unless fileno $d;
+  return $CACHE{$class} || {} unless fileno $d;
   seek $d, 0, 0;
   my $content = join '', <$d>;
   close $d;
@@ -84,7 +84,7 @@ sub get_all_data {
   shift @data;
 
   # Find data
-  my $all = $CACHE->{$class} = {};
+  my $all = $CACHE{$class} = {};
   while (@data) {
     my ($name, $content) = splice @data, 0, 2;
     $content = b64_decode $content if $name =~ s/\s*\(\s*base64\s*\)$//;
@@ -136,8 +136,7 @@ sub write_file {
   $self->create_dir($dir);
 
   # Write unbuffered
-  croak qq/Can't open file "$path": $!/
-    unless my $file = IO::File->new("> $path");
+  croak qq/Can't open file "$path": $!/ unless open my $file, '>', $path;
   croak qq/Can't write to file "$path": $!/
     unless defined $file->syswrite($data);
   say "  [write] $path" unless $self->quiet;

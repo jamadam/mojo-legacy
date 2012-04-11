@@ -30,11 +30,10 @@ my $NOT_FOUND     = $H->slurp_rel_file('not_found.html.ep');
 my $DEV_NOT_FOUND = $H->slurp_rel_file('not_found.development.html.ep');
 
 # Reserved stash values
-my @RESERVED = (
+my %RESERVED = map { $_ => 1 } (
   qw/action app cb controller data extends format handler json layout/,
   qw/namespace partial path status template text/
 );
-my %RESERVED = map { $_ => 1 } @RESERVED;
 
 # "Is all the work done by the children?
 #  No, not the whipping."
@@ -272,12 +271,11 @@ sub render_exception {
   return if $self->stash->{'mojo.exception'};
 
   # Filtered stash snapshot
-  my $snapshot = {};
-  my $stash    = $self->stash;
+  my %snapshot;
+  my $stash = $self->stash;
   for my $key (keys %$stash) {
     next if $key =~ /^mojo\./;
-    next unless defined(my $value = $stash->{$key});
-    $snapshot->{$key} = $value;
+    $snapshot{$key} = $stash->{$key} if defined $stash->{$key};
   }
 
   # Render with fallbacks
@@ -287,7 +285,7 @@ sub render_exception {
     format           => $stash->{format} || 'html',
     handler          => undef,
     status           => 500,
-    snapshot         => $snapshot,
+    snapshot         => \%snapshot,
     exception        => $e,
     'mojo.exception' => 1
   };
@@ -691,13 +689,13 @@ or L<Mojo::Transaction::WebSocket> object.
   # Emitted when the transaction has been finished
   $c->on(finish => sub {
     my $c = shift;
-    say 'We are done!';
+    $c->app->log->debug('We are done!');
   });
 
   # Emitted when new WebSocket messages arrive
   $c->on(message => sub {
     my ($c, $message) = @_;
-    say "Message: $message";
+    $c->app->log->debug("Message: $message");
   });
 
 =head2 C<param>

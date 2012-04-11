@@ -1,7 +1,6 @@
 package Mojolicious::Plugin::PODRenderer;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use IO::File;
 use Mojo::Asset::File;
 use Mojo::ByteStream 'b';
 use Mojo::DOM;
@@ -19,9 +18,9 @@ my $PERLDOC = $Mojolicious::Controller::H->slurp_rel_file('perldoc.html.ep');
 #  pleasant one."
 sub register {
   my ($self, $app, $conf) = @_;
+  $conf ||= {};
 
   # Config
-  $conf ||= {};
   my $name       = $conf->{name}       || 'pod';
   my $preprocess = $conf->{preprocess} || 'ep';
 
@@ -54,7 +53,7 @@ sub register {
         unless $path && -r $path;
 
       # Turn POD into HTML
-      my $file = IO::File->new("< $path");
+      open my $file, '<', $path;
       my $html = _pod_to_html(join '', <$file>);
 
       # Rewrite links
@@ -82,8 +81,8 @@ sub register {
       );
 
       # Rewrite headers
-      my $url      = $self->req->url->clone;
-      my $sections = [];
+      my $url = $self->req->url->clone;
+      my @sections;
       $dom->find('h1, h2, h3')->each(
         sub {
           my $e = shift;
@@ -91,8 +90,8 @@ sub register {
           $anchor =~ s/\s+/_/g;
           $anchor = url_escape $anchor, 'A-Za-z0-9_';
           $anchor =~ s/\%//g;
-          push @$sections, [] if $e->type eq 'h1' || !@$sections;
-          push @{$sections->[-1]}, $text, $url->fragment($anchor)->to_abs;
+          push @sections, [] if $e->type eq 'h1' || !@sections;
+          push @{$sections[-1]}, $text, $url->fragment($anchor)->to_abs;
           $e->replace_content(
             $self->link_to(
               $text => $url->fragment('toc')->to_abs,
@@ -112,7 +111,7 @@ sub register {
       $self->render(
         inline   => $PERLDOC,
         title    => $title,
-        sections => $sections
+        sections => \@sections
       );
       $self->res->headers->content_type('text/html;charset="UTF-8"');
     }
@@ -173,7 +172,8 @@ Mojolicious::Plugin::PODRenderer - POD renderer plugin
 =head1 DESCRIPTION
 
 L<Mojolicious::Plugin::PODRenderer> is a renderer for true Perl hackers,
-rawr!
+rawr! The code of this plugin is a good example for learning to build new
+plugins.
 
 =head1 OPTIONS
 
@@ -198,7 +198,7 @@ Disable perldoc browser.
   # Mojolicious::Lite
   plugin PODRenderer => {preprocess => 'epl'};
 
-Handler name of preprocessor.
+Name of handler used to preprocess POD.
 
 =head1 HELPERS
 

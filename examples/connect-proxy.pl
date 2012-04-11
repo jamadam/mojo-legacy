@@ -6,7 +6,7 @@ use Mojo::Base -strict;
 use Mojo::IOLoop;
 
 # Connection buffer
-my $c = {};
+my %buffer;
 
 sub say(@) {print @_, "\n"}
 
@@ -17,14 +17,13 @@ Mojo::IOLoop->server(
     $stream->on(
       read => sub {
         my ($stream, $chunk) = @_;
-        if (my $server = $c->{$client}->{connection}) {
+        if (my $server = $buffer{$client}->{connection}) {
           return Mojo::IOLoop->stream($server)->write($chunk);
         }
-        $c->{$client}->{client} = defined $c->{$client}->{client} ? $c->{$client}->{client} : '';
-        $c->{$client}->{client} .= $chunk;
-        if ($c->{$client}->{client} =~ /\x0d?\x0a\x0d?\x0a$/) {
-          my $buffer = $c->{$client}->{client};
-          $c->{$client}->{client} = '';
+        $buffer{$client}->{client} .= $chunk;
+        if ($buffer{$client}->{client} =~ /\x0d?\x0a\x0d?\x0a$/) {
+          my $buffer = $buffer{$client}->{client};
+          $buffer{$client}->{client} = '';
           if ($buffer =~ /CONNECT (\S+):(\d+)?/) {
             my $address = $1;
             my $port = $2 || 80;
@@ -35,10 +34,10 @@ Mojo::IOLoop->server(
                 if ($err) {
                   say "Connection error for $address:$port: $err";
                   Mojo::IOLoop->remove($client);
-                  return delete $c->{$client};
+                  return delete $buffer{$client};
                 }
                 say "Forwarding to $address:$port.";
-                $c->{$client}->{connection} = $server;
+                $buffer{$client}->{connection} = $server;
                 $stream->on(
                   read => sub {
                     my ($stream, $chunk) = @_;
@@ -48,7 +47,7 @@ Mojo::IOLoop->server(
                 $stream->on(
                   close => sub {
                     Mojo::IOLoop->remove($client);
-                    delete $c->{$client};
+                    delete $buffer{$client};
                   }
                 );
                 Mojo::IOLoop->stream($client)
@@ -63,9 +62,9 @@ Mojo::IOLoop->server(
     );
     $stream->on(
       close => sub {
-        Mojo::IOLoop->remove($c->{$client}->{connection})
-          if $c->{$client}->{connection};
-        delete $c->{$client};
+        Mojo::IOLoop->remove($buffer{$client}->{connection})
+          if $buffer{$client}->{connection};
+        delete $buffer{$client};
       }
     );
   }
