@@ -29,15 +29,6 @@ sub DESTROY {
   $loop->remove($_) for @{$self->{listening} || []};
 }
 
-# DEPRECATED in Leaf Fluttering In Wind!
-sub prepare_ioloop {
-  warn <<EOF;
-Mojo::Server::Daemon->prepare_ioloop is DEPRECATED in favor of
-Mojo::Server::Daemon->start!
-EOF
-  shift->start(@_);
-}
-
 # "40 dollars!? This better be the best damn beer ever..
 #  *drinks beer* You got lucky."
 sub run {
@@ -90,19 +81,18 @@ sub _build_tx {
     upgrade => sub {
       my ($tx, $ws) = @_;
       $ws->server_handshake;
-      $self->{connections}->{$id}->{ws} = $ws;
+      $self->{connections}{$id}{ws} = $ws;
     }
   );
   $tx->on(
     request => sub {
       my $tx = shift;
-      $self->emit(request => $self->{connections}->{$id}->{ws} || $tx);
+      $self->emit(request => $self->{connections}{$id}{ws} || $tx);
       $tx->on(resume => sub { $self->_write($id) });
     }
   );
 
   # Kept alive if we have more than one request on the connection
-  $c->{requests} ||= 0;
   $tx->kept_alive(1) if ++$c->{requests} > 1;
 
   return $tx;
@@ -129,7 +119,7 @@ sub _finish {
   $tx->server_close;
 
   # Upgrade connection to WebSocket
-  my $c = $self->{connections}->{$id};
+  my $c = $self->{connections}{$id};
   if (my $ws = $c->{tx} = delete $c->{ws}) {
 
     # Successful upgrade
@@ -206,7 +196,8 @@ sub _listen {
       my ($loop, $stream, $id) = @_;
 
       # Add new connection
-      $self->{connections}->{$id} = {tls => $tls};
+      $self->{connections}{$id} = {tls => $tls};
+      warn "-- Accept (@{[$stream->handle->peerhost]})\n" if DEBUG;
 
       # Inactivity timeout
       $stream->timeout($self->inactivity_timeout);
@@ -215,7 +206,7 @@ sub _listen {
       $stream->on(
         timeout => sub {
           $self->_error($id, 'Inactivity timeout.')
-            if $self->{connections}->{$id}->{tx};
+            if $self->{connections}{$id}{tx};
         }
       );
       $stream->on(close => sub { $self->_close($id) });
@@ -245,13 +236,13 @@ sub _listen {
 
 sub _read {
   my ($self, $id, $chunk) = @_;
-  warn "< $chunk\n" if DEBUG;
 
   # Make sure we have a transaction
-  my $c = $self->{connections}->{$id};
+  my $c = $self->{connections}{$id};
   my $tx = $c->{tx} ||= $self->_build_tx($id, $c);
 
   # Parse chunk
+  warn "-- Server <<< Client (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
   $tx->server_read($chunk);
 
   # Last keep alive request
@@ -267,10 +258,10 @@ sub _remove {
   my ($self, $id) = @_;
 
   # Finish gracefully
-  if (my $tx = $self->{connections}->{$id}->{tx}) { $tx->server_close }
+  if (my $tx = $self->{connections}{$id}{tx}) { $tx->server_close }
 
   # Remove connection
-  delete $self->{connections}->{$id};
+  delete $self->{connections}{$id};
 }
 
 sub _user {
@@ -285,7 +276,7 @@ sub _write {
   my ($self, $id) = @_;
 
   # Not writing
-  my $c = $self->{connections}->{$id};
+  my $c = $self->{connections}{$id};
   return unless my $tx = $c->{tx};
   return unless $tx->is_writing;
 
@@ -293,7 +284,7 @@ sub _write {
   return if $c->{writing}++;
   my $chunk = $tx->server_write;
   delete $c->{writing};
-  warn "> $chunk\n" if DEBUG;
+  warn "-- Server >>> Client (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
 
   # Write
   my $stream = $self->ioloop->stream($id);

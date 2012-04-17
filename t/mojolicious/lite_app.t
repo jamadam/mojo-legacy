@@ -9,7 +9,7 @@ BEGIN {
   $ENV{MOJO_REACTOR}    = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 703;
+use Test::More tests => 685;
 
 # "Wait you're the only friend I have...
 #  You really want a robot for a friend?
@@ -122,11 +122,6 @@ get '/data/exception' => 'dies';
 # GET /template/exception
 get '/template/exception' => 'dies_too';
 
-# GET /waypoint
-# GET /waypoint/foo
-app->routes->waypoint('/waypoint')->to(text => 'waypoints rule!')
-  ->get('/foo' => {text => 'waypoints work!'});
-
 # GET /with-format
 get '/with-format' => {format => 'html'} => 'with-format';
 
@@ -212,7 +207,7 @@ get '/root.html' => 'root_path';
 get '/root' => sub { shift->render_text('root fallback!') };
 
 # GET /template.txt
-get '/template.txt' => 'template';
+get '/template.txt' => {template => 'template', format => 'txt'};
 
 # GET /0
 get ':number' => [number => qr/0/] => sub {
@@ -253,7 +248,7 @@ get '/source' => sub {
 };
 
 # GET /foo_relaxed/*
-get '/foo_relaxed/(.test)' => sub {
+get '/foo_relaxed/#test' => sub {
   my $self = shift;
   $self->render_text(
     $self->stash('test') . ($self->req->headers->dnt ? 1 : 0));
@@ -716,28 +711,6 @@ $t->get_ok('/template/exception')->status_is(500)
   ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
   ->content_is(
   qq/Died at template "dies_too.html.ep" line 2, near "321".\n\n/);
-
-# GET /waypoint
-$t->get_ok('/waypoint')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
-  ->content_is('waypoints rule!');
-
-# GET /waypoint/foo
-$t->get_ok('/waypoint/foo')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
-  ->content_is('waypoints work!');
-
-# POST /waypoint/foo
-$t->post_ok('/waypoint/foo')->status_is(404)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)');
-
-# GET /waypoint/bar
-$t->get_ok('/waypoint/bar')->status_is(404)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)');
 
 # GET /with-format
 $t->get_ok('/with-format')->content_is("/without-format\n");

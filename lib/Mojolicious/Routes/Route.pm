@@ -33,6 +33,8 @@ sub add_child {
   my ($self, $route) = @_;
   weaken $route->parent($self)->{parent};
   push @{$self->children}, $route;
+  my $format = $self->pattern->reqs->{format};
+  $route->pattern->reqs->{format} = defined $route->pattern->reqs->{format} ? $route->pattern->reqs->{format} : 0 if defined $format && !$format;
   return $self;
 }
 
@@ -53,10 +55,8 @@ sub find {
   while (my $child = shift @children) {
 
     # Match
-    if ($child->name eq $name) {
-      $candidate = $child;
-      return $candidate if $child->has_custom_name;
-    }
+    $candidate = $child->has_custom_name ? return $child : $child
+      if $child->name eq $name;
 
     # Search children too
     push @children, @{$child->children};
@@ -85,8 +85,14 @@ sub has_websocket {
 
 sub is_endpoint {
   my $self = shift;
-  return   if $self->inline;
+
+  # Bridge
+  return if $self->inline;
+
+  # DEPRECATED in Leaf Fluttering In Wind!
   return 1 if $self->block;
+
+  # Check number of children
   return !@{$self->children};
 }
 
@@ -122,9 +128,9 @@ sub over {
 
 sub parse {
   my $self = shift;
-  my $name = $self->pattern->parse(@_)->pattern; defined $name || ($name = '');
-  $name =~ s/\W+//g;
-  $self->{name} = $name;
+  $self->{name} = $self->pattern->parse(@_)->pattern;
+  defined $self->{name} || ($self->{name} = '');
+  $self->{name} =~ s/\W+//g;
   return $self;
 }
 
@@ -135,19 +141,12 @@ sub put   { shift->_generate_route(PUT   => @_) }
 sub render {
   my ($self, $path, $values) = @_;
 
-  # Path prefix
-  my $prefix = $self->pattern->render($values);
-  $path = $prefix . $path unless $prefix eq '/';
+  # Render pattern
+  my $prefix = $self->pattern->render($values, !$path);
+  $path = "$prefix$path" unless $prefix eq '/';
+  $path ||= '/' unless my $parent = $self->parent;
 
-  # Make sure there is always a root
-  my $parent = $self->parent;
-  $path = '/' if !$path && !$parent;
-
-  # Format
-  if ((my $format = $values->{format}) && !$parent) {
-    $path .= ".$format" unless $path =~ m#\.[^/]+$#;
-  }
-
+  # Let parent render
   return $parent ? $parent->render($path, $values) : $path;
 }
 
@@ -158,10 +157,8 @@ sub root {
 }
 
 sub route {
-  my $self  = shift;
-  my $route = $self->new(@_);
-  $self->add_child($route);
-  return $route;
+  my $self = shift;
+  return $self->add_child($self->new(@_))->children->[-1];
 }
 
 sub to {
@@ -232,7 +229,11 @@ sub via {
   return $self;
 }
 
-sub waypoint { shift->route(@_)->block(1) }
+# DEPRECATED in Leaf Fluttering In Wind!
+sub waypoint {
+  warn "Mojolicious::Routes::Route->waypoint is DEPRECATED!\n";
+  shift->route(@_)->block(1);
+}
 
 sub websocket {
   my $self  = shift;
@@ -271,12 +272,12 @@ sub _generate_route {
   $defaults{cb} = $cb if $cb;
 
   # Create bridge
-  return $self->bridge($pattern, {@constraints})->over(\@conditions)
+  return $self->bridge($pattern, @constraints)->over(\@conditions)
     ->to(\%defaults)->name($name)
     if !ref $methods && $methods eq 'under';
 
   # Create route
-  return $self->route($pattern, {@constraints})->over(\@conditions)
+  return $self->route($pattern, @constraints)->over(\@conditions)
     ->via($methods)->to(\%defaults)->name($name);
 }
 
@@ -302,19 +303,12 @@ L<Mojolicious::Routes>.
 
 L<Mojolicious::Routes::Route> implements the following attributes.
 
-=head2 C<block>
-
-  my $block = $r->block;
-  $r        = $r->block(1);
-
-Allow this route to match even if it's not an endpoint, used for waypoints.
-
 =head2 C<children>
 
   my $children = $r->children;
   $r           = $r->children([Mojolicious::Routes::Route->new]);
 
-The children of this routes object, used for nesting routes.
+The children of this route, used for nesting routes.
 
 =head2 C<inline>
 
@@ -375,13 +369,15 @@ also the L<Mojolicious::Lite> tutorial for more argument variations.
 =head2 C<bridge>
 
   my $bridge = $r->bridge;
-  my $bridge = $r->bridge('/:controller/:action');
+  my $bridge = $r->bridge('/:action');
+  my $bridge = $r->bridge('/:action', action => qr/\w+/);
+  my $bridge = $r->bridge(format => 0);
 
 Add a new bridge to this route as a nested child.
 
   my $auth = $r->bridge('/user')->to('user#auth');
-  $auth->route('/show')->to('#show');
-  $auth->route('/create')->to('#create');
+  $auth->get('/show')->to('#show');
+  $auth->post('/create')->to('#create');
 
 =head2 C<delete>
 
@@ -485,11 +481,13 @@ L<Mojolicious::Lite> tutorial for more argument variations.
 Activate conditions for this route. Note that this automatically disables the
 routing cache, since conditions are too complex for caching.
 
-  $r->route('/foo')->over(host => qr/mojolicio\.us/)->to('foo#bar');
+  $r->get('/foo')->over(host => qr/mojolicio\.us/)->to('foo#bar');
 
 =head2 C<parse>
 
-  $r = $r->parse('/:controller/:action');
+  $r = $r->parse('/:action');
+  $r = $r->parse('/:action', action => qr/\w+/);
+  $r = $r->parse(format => 0);
 
 Parse a pattern.
 
@@ -537,7 +535,10 @@ The L<Mojolicious::Routes> object this route is an ancestor of.
 
 =head2 C<route>
 
-  my $route = $r->route('/:c/:a', a => qr/\w+/);
+  my $route = $r->route;
+  my $route = $r->route('/:action');
+  my $route = $r->route('/:action', action => qr/\w+/);
+  my $route = $r->route(format => 0);
 
 Add a new nested child to this route.
 
@@ -586,15 +587,6 @@ Restrict HTTP methods this route is allowed to handle, defaults to no
 restrictions.
 
   $r->route('/foo')->via(qw/GET POST/)->to('foo#bar');
-
-=head2 C<waypoint>
-
-  my $r = $r->waypoint('/:c/:a', a => qr/\w+/);
-
-Add a waypoint to this route as nested child.
-
-  my $foo = $r->waypoint('/foo')->to('example#foo');
-  $foo->route('/bar')->to('#bar');
 
 =head2 C<websocket>
 

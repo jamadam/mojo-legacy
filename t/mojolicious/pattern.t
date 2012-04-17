@@ -1,6 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 49;
+use Test::More tests => 90;
 
 # "People said I was dumb, but I proved them."
 use Mojo::ByteStream 'b';
@@ -9,7 +9,7 @@ use Mojolicious::Routes::Pattern;
 # Normal pattern with text, symbols and a default value
 my $pattern = Mojolicious::Routes::Pattern->new('/test/(controller)/:action');
 $pattern->defaults({action => 'index'});
-my $result = $pattern->match('/test/foo/bar');
+my $result = $pattern->match('/test/foo/bar', 1);
 is $result->{controller}, 'foo', 'right value';
 is $result->{action},     'bar', 'right value';
 $result = $pattern->match('/test/foo');
@@ -58,13 +58,13 @@ $result = $pattern->match('/test/lala');
 is $result, undef, 'no result';
 
 # Relaxed
-$pattern = Mojolicious::Routes::Pattern->new('/test/(.controller)/:action');
+$pattern = Mojolicious::Routes::Pattern->new('/test/#controller/:action');
 $result  = $pattern->match('/test/foo.bar/baz');
 is $result->{controller}, 'foo.bar', 'right value';
 is $result->{action},     'baz',     'right value';
 is $pattern->render({controller => 'foo.bar', action => 'baz'}),
   '/test/foo.bar/baz', 'right result';
-$pattern = Mojolicious::Routes::Pattern->new('/test/(.groovy)');
+$pattern = Mojolicious::Routes::Pattern->new('/test/(#groovy)');
 $result  = $pattern->match('/test/foo.bar');
 is $pattern->defaults->{format}, undef, 'no value';
 is $result->{groovy}, 'foo.bar', 'right value';
@@ -123,3 +123,81 @@ $value  = b('abc%20cba')->url_unescape->to_string;
 $result = $pattern->match("/$value");
 is $result->{test}, $value, 'right value';
 is $pattern->render({test => $value}), "/$value", 'right result';
+
+# Format detection
+$pattern = Mojolicious::Routes::Pattern->new('/test');
+$pattern->defaults({action => 'index'});
+ok !$pattern->regex,  'no regex';
+ok !$pattern->format, 'no format regex';
+$result = $pattern->match('/test.xml', 1);
+ok $pattern->regex,  'regex has been compiled on demand';
+ok $pattern->format, 'format regex has been compiled on demand';
+is $result->{action}, 'index', 'right value';
+is $result->{format}, 'xml',   'right value';
+$pattern = Mojolicious::Routes::Pattern->new('/test.json');
+$pattern->defaults({action => 'index'});
+ok !$pattern->regex,  'no regex';
+ok !$pattern->format, 'no format regex';
+$result = $pattern->match('/test.json');
+ok $pattern->regex, 'regex has been compiled on demand';
+ok !$pattern->format, 'no format regex';
+is $result->{action}, 'index', 'right value';
+is $result->{format}, undef,   'no value';
+$result = $pattern->match('/test.json', 1);
+is $result->{action}, 'index', 'right value';
+is $result->{format}, undef,   'no value';
+$result = $pattern->match('/test.xml');
+is $result, undef, 'no result';
+$result = $pattern->match('/test');
+is $result, undef, 'no result';
+
+# Formats without detection
+$pattern = Mojolicious::Routes::Pattern->new('/test');
+$pattern->defaults({action => 'index'});
+ok !$pattern->regex,  'no regex';
+ok !$pattern->format, 'no format regex';
+$result = $pattern->match('/test.xml');
+ok $pattern->regex, 'regex has been compiled on demand';
+ok !$pattern->format, 'no format regex';
+is $result, undef, 'no result';
+$result = $pattern->match('/test');
+is $result->{action}, 'index', 'right value';
+
+# Format detection disabled
+$pattern = Mojolicious::Routes::Pattern->new('/test', format => 0);
+$pattern->defaults({action => 'index'});
+$result = $pattern->match('/test', 1);
+is $result->{action}, 'index', 'right value';
+is $result->{format}, undef,   'no value';
+$result = $pattern->match('/test.xml', 1);
+is $result, undef, 'no result';
+
+# Special pattern for disabling format detection
+$pattern = Mojolicious::Routes::Pattern->new(format => 0);
+is $pattern->reqs->{format}, 0, 'right value';
+$pattern->defaults({action => 'index'});
+$result = $pattern->match('/', 1);
+is $result->{action}, 'index', 'right value';
+is $result->{format}, undef,   'no value';
+$result = $pattern->match('/.xml', 1);
+is $result, undef, 'no result';
+
+# Versioned pattern
+$pattern = Mojolicious::Routes::Pattern->new('/:test/v1.0');
+$pattern->defaults({action => 'index', format => 'html'});
+$result = $pattern->match('/foo/v1.0', 1);
+is $result->{test},   'foo',   'right value';
+is $result->{action}, 'index', 'right value';
+is $result->{format}, 'html',  'right value';
+is $pattern->render($result), '/foo/v1.0', 'right result';
+is $pattern->render($result, 1), '/foo/v1.0.html', 'right result';
+is $pattern->render({%$result, format => undef}, 1), '/foo/v1.0',
+  'right result';
+$result = $pattern->match('/foo/v1.0.txt', 1);
+is $result->{test},   'foo',   'right value';
+is $result->{action}, 'index', 'right value';
+is $result->{format}, 'txt',   'right value';
+is $pattern->render($result), '/foo/v1.0', 'right result';
+is $pattern->render($result, 1), '/foo/v1.0.txt', 'right result';
+$result = $pattern->match('/foo/v2.0', 1);
+is $result, undef, 'no result';

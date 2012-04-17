@@ -14,19 +14,19 @@ use constant DEBUG => $ENV{MOJO_EVENTEMITTER_DEBUG} || 0;
 #  ...Where are we going?"
 sub emit {
   my ($self, $name) = (shift, shift);
-  if (my $s = $self->{events}->{$name}) {
-    warn 'EMIT ', blessed($self), " $name (", scalar(@$s), ")\n" if DEBUG;
+  if (my $s = $self->{events}{$name}) {
+    warn "-- Emit @{[blessed($self)]} $name (@{[scalar(@$s)]})\n" if DEBUG;
     for my $cb (@$s) { $self->$cb(@_) }
   }
-  elsif (DEBUG) { warn 'EMIT ', blessed($self), " $name (0)\n" }
+  elsif (DEBUG) { warn "-- Emit @{[blessed($self)]} $name (0)\n" }
   return $self;
 }
 
 sub emit_safe {
   my ($self, $name) = (shift, shift);
 
-  if (my $s = $self->{events}->{$name}) {
-    warn 'SAFE ', blessed($self), " $name (", scalar(@$s), ")\n" if DEBUG;
+  if (my $s = $self->{events}{$name}) {
+    warn "-- Safe @{[blessed($self)]} $name (@{[scalar(@$s)]})\n" if DEBUG;
     for my $cb (@$s) {
       if (!eval { $self->$cb(@_); 1 } && $name ne 'error') {
         $self->once(error => sub { warn $_[1] })
@@ -35,7 +35,7 @@ sub emit_safe {
       }
     }
   }
-  elsif (DEBUG) { warn 'SAFE ', blessed($self), " $name (0)\n" }
+  elsif (DEBUG) { warn "-- Safe @{[blessed($self)]} $name (0)\n" }
 
   return $self;
 }
@@ -44,7 +44,7 @@ sub has_subscribers { scalar @{shift->subscribers(shift)} }
 
 sub on {
   my ($self, $name, $cb) = @_;
-  push @{$self->{events}->{$name} ||= []}, $cb;
+  push @{$self->{events}{$name} ||= []}, $cb;
   return $cb;
 }
 
@@ -63,7 +63,7 @@ sub once {
   return $wrapper;
 }
 
-sub subscribers { shift->{events}->{shift()} || [] }
+sub subscribers { shift->{events}{shift()} || [] }
 
 # "Back you robots!
 #  Nobody ruins my family vacation but me!
@@ -73,12 +73,12 @@ sub unsubscribe {
 
   # All
   unless ($cb) {
-    delete $self->{events}->{$name};
+    delete $self->{events}{$name};
     return $self;
   }
 
   # One
-  $self->{events}->{$name} = [grep { $cb ne $_ } @{$self->{events}->{$name}}];
+  $self->{events}{$name} = [grep { $cb ne $_ } @{$self->{events}{$name}}];
 
   return $self;
 }

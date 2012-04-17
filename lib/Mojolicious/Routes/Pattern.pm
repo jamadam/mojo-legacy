@@ -2,11 +2,10 @@ package Mojolicious::Routes::Pattern;
 use Mojo::Base -base;
 
 has [qw/defaults reqs/] => sub { {} };
-has format => sub {qr#\.([^/]+)$#};
-has [qw/pattern regex/];
+has [qw/format pattern regex/];
 has quote_end     => ')';
 has quote_start   => '(';
-has relaxed_start => '.';
+has relaxed_start => '#';
 has symbol_start  => ':';
 has [qw/symbols tree/] => sub { [] };
 has wildcard_start => '*';
@@ -15,36 +14,30 @@ has wildcard_start => '*';
 sub new { shift->SUPER::new->parse(@_) }
 
 sub match {
-  my ($self, $path) = @_;
-  my $result = $self->shape_match(\$path);
-  return $result if !$path || $path eq '/';
-  return;
+  my ($self, $path, $detect) = @_;
+  my $result = $self->shape_match(\$path, $detect);
+  return !$path || $path eq '/' ? $result : undef;
 }
 
 sub parse {
-  my ($self, $pattern) = (shift, shift);
+  my $self = shift;
 
   # Make sure we have a viable pattern
-  return $self if !defined $pattern || $pattern eq '/';
+  my $pattern = @_ % 2 ? (shift || '/') : '/';
   $pattern = "/$pattern" unless $pattern =~ m#^/#;
 
   # Requirements
-  my $reqs = ref $_[0] eq 'HASH' ? $_[0] : {@_};
-  $self->reqs($reqs);
-
-  # Format in pattern
-  $reqs->{format} = quotemeta($self->{strict} = $1)
-    if $pattern =~ m#\.([^/\)]+)$#;
+  $self->reqs({@_});
 
   # Tokenize
-  return $self->pattern($pattern)->_tokenize;
+  return $pattern eq '/' ? $self : $self->pattern($pattern)->_tokenize;
 }
 
 sub render {
-  my ($self, $values) = @_;
-  $values ||= {};
+  my ($self, $values, $render) = @_;
 
   # Merge values with defaults
+  my $format = ($values ||= {})->{format};
   $values = {%{$self->defaults}, %$values};
 
   # Turn pattern into path
@@ -75,15 +68,17 @@ sub render {
     $string = "$rendered$string";
   }
 
-  return $string || '/';
+  # Format is optional
+  $string ||= '/';
+  return $render && $format ? "$string.$format" : $string;
 }
 
 sub shape_match {
   my ($self, $pathref, $detect) = @_;
 
   # Compile on demand
-  my $regex;
-  $regex = $self->_compile unless $regex = $self->regex;
+  my $regex = $self->regex || $self->_compile;
+  my $format = $detect ? ($self->format || $self->_compile_format) : undef;
 
   # Match
   return unless my @captures = $$pathref =~ $regex;
@@ -98,12 +93,10 @@ sub shape_match {
   }
 
   # Format
-  $result->{format} ||= $self->{strict} if $detect && exists $self->{strict};
   my $req = $self->reqs->{format};
-  return $result if defined $req && !$req;
-  my $format = $self->format;
-  if ($detect && $$pathref =~ s|^/?$format||) { $result->{format} ||= $1 }
-  elsif ($req) { return if !$result->{format} }
+  return $result if !$detect || defined $req && !$req;
+  if ($$pathref =~ s|^/?$format||) { $result->{format} = $1 }
+  elsif ($req) { return unless $result->{format} }
 
   return $result;
 }
@@ -111,17 +104,9 @@ sub shape_match {
 sub _compile {
   my $self = shift;
 
-  # Compile format regex
-  my $reqs = $self->reqs;
-  if (!exists $reqs->{format} || $reqs->{format}) {
-    my $format =
-      defined $reqs->{format} ? _compile_req($reqs->{format}) : '([^/]+)';
-    $self->format(qr#\.$format$#);
-  }
-
   # Compile tree to regex
-  my $block    = '';
-  my $regex    = '';
+  my $block = my $regex = '';
+  my $reqs = $self->reqs;
   my $optional = 1;
   my $defaults = $self->defaults;
   for my $token (reverse @{$self->tree}) {
@@ -175,10 +160,21 @@ sub _compile {
   $regex = "$block$regex" if $block;
 
   # Compile
-  $regex = qr/^$regex/s;
-  $self->regex($regex);
+  return $self->regex(qr/^$regex/s)->regex;
+}
 
-  return $regex;
+sub _compile_format {
+  my $self = shift;
+
+  # Default regex
+  my $reqs = $self->reqs;
+  return $self->format(qr#\.([^/]+)$#)->format
+    if !exists $reqs->{format} && $reqs->{format};
+
+  # Compile custom regex
+  my $regex =
+    defined $reqs->{format} ? _compile_req($reqs->{format}) : '([^/]+)';
+  return $self->format(qr#\.$regex$#)->format;
 }
 
 # "Interesting... Oh no wait, the other thing, tedious."
@@ -192,11 +188,11 @@ sub _tokenize {
   my $self = shift;
 
   # Token
-  my $quote_end      = $self->quote_end;
-  my $quote_start    = $self->quote_start;
-  my $relaxed_start  = $self->relaxed_start;
-  my $symbol_start   = $self->symbol_start;
-  my $wildcard_start = $self->wildcard_start;
+  my $quote_end   = $self->quote_end;
+  my $quote_start = $self->quote_start;
+  my $relaxed     = $self->relaxed_start;
+  my $symbol      = $self->symbol_start;
+  my $wildcard    = $self->wildcard_start;
 
   # Parse the pattern character wise
   my $pattern = $self->pattern;
@@ -204,8 +200,14 @@ sub _tokenize {
   my (@tree, $quoted);
   while (length(my $char = substr $pattern, 0, 1, '')) {
 
-    # Inside a symbol
-    my $symbol = grep {$_ eq $state} qw/relaxed symbol wildcard/;
+    # Inside a placeholder
+    my $placeholder = grep {$_ eq $state} qw/relaxed symbol wildcard/;
+
+    # DEPRECATED in Leaf Fluttering In Wind!
+    if ($quoted && $char eq '.' && $state eq 'symbol') {
+      warn "Relaxed placeholders /(.foo) are DEPRECATED in favor of /#foo!\n";
+      $char = $relaxed;
+    }
 
     # Quote start
     if ($char eq $quote_start) {
@@ -215,22 +217,15 @@ sub _tokenize {
     }
 
     # Symbol start
-    elsif ($char eq $symbol_start) {
+    elsif ($char eq $symbol) {
       push @tree, ['symbol', ''] if $state ne 'symbol';
       $state = 'symbol';
     }
 
-    # Relaxed start (needs to be quoted)
-    elsif ($quoted && $char eq $relaxed_start && $state eq 'symbol') {
-      $state = 'relaxed';
-      $tree[-1]->[0] = 'relaxed';
-    }
-
-    # Wildcard start (upgrade when quoted)
-    elsif ($char eq $wildcard_start) {
+    # Relaxed or wildcard start (upgrade when quoted)
+    elsif ($char eq $relaxed || $char eq $wildcard) {
       push @tree, ['symbol', ''] unless $quoted;
-      $state = 'wildcard';
-      $tree[-1]->[0] = 'wildcard';
+      $tree[-1]->[0] = $state = $char eq $relaxed ? 'relaxed' : 'wildcard';
     }
 
     # Quote end
@@ -246,17 +241,14 @@ sub _tokenize {
     }
 
     # Relaxed, symbol or wildcard
-    elsif ($symbol && $char =~ /\w/) { $tree[-1]->[-1] .= $char }
+    elsif ($placeholder && $char =~ /\w/) { $tree[-1]->[-1] .= $char }
 
     # Text
     else {
       $state = 'text';
 
       # New text element
-      unless ($tree[-1]->[0] eq 'text') {
-        push @tree, ['text', $char];
-        next;
-      }
+      push @tree, ['text', $char] and next unless $tree[-1]->[0] eq 'text';
 
       # More text
       $tree[-1]->[-1] .= $char;
@@ -304,7 +296,7 @@ Default parameters.
   my $regex = $pattern->format;
   $pattern  = $pattern->format($regex);
 
-Compiled regex for format matching, defaults to C<\.([^/]+)$>.
+Compiled regex for format matching.
 
 =head2 C<pattern>
 
@@ -339,7 +331,7 @@ Pattern in compiled regex form.
   my $relaxed = $pattern->relaxed_start;
   $pattern    = $pattern->relaxed_start('*');
 
-Character indicating a relaxed placeholder, defaults to C<.>.
+Character indicating a relaxed placeholder, defaults to C<#>.
 
 =head2 C<reqs>
 
@@ -383,36 +375,43 @@ implements the following ones.
 
 =head2 C<new>
 
-  my $pattern = Mojolicious::Routes::Pattern->new('/:controller/:action',
-    action => qr/\w+/
-  );
+  my $pattern = Mojolicious::Routes::Pattern->new('/:action');
+  my $pattern =
+    Mojolicious::Routes::Pattern->new('/:action', action => qr/\w+/);
+  my $pattern = Mojolicious::Routes::Pattern->new(format => 0);
 
 Construct a new pattern object.
 
 =head2 C<match>
 
   my $result = $pattern->match('/foo/bar');
+  my $result = $pattern->match('/foo/bar', 1);
 
-Match pattern against a path.
+Match pattern against entire path, format detection is disabled by default.
 
 =head2 C<parse>
 
-  $pattern = $pattern->parse('/:controller/:action', action => qr/\w+/);
+  $pattern = $pattern->parse('/:action');
+  $pattern = $pattern->parse('/:action', action => qr/\w+/);
+  $pattern = $pattern->parse(format => 0);
 
 Parse a raw pattern.
 
 =head2 C<render>
 
   my $path = $pattern->render({action => 'foo'});
+  my $path = $pattern->render({action => 'foo'}, 1);
 
-Render pattern into a path with parameters.
+Render pattern into a path with parameters, format rendering is disabled by
+default.
 
 =head2 C<shape_match>
 
   my $result = $pattern->shape_match(\$path);
-  my $result = $pattern->shape_match(\$path, $detect);
+  my $result = $pattern->shape_match(\$path, 1);
 
-Match pattern against a path and remove matching parts.
+Match pattern against path and remove matching parts, format detection is
+disabled by default.
 
 =head1 SEE ALSO
 

@@ -416,6 +416,13 @@ Current transaction, usually a L<Mojo::Transaction::HTTP> object.
   is $t->tx->res->json->{foo}, 'bar', 'right value';
   ok $t->tx->res->is_multipart, 'multipart content';
 
+  # Test custom transaction
+  my $tx = $t->ua->build_form_tx('/user/99' => {name => 'sri'});
+  $tx->req->method('PUT');
+  $t->tx($t->ua->start($tx))
+    ->status_is(200)
+    ->text_is('div#message' => 'User has been replaced.');
+
 =head2 C<ua>
 
   my $ua = $t->ua;
@@ -425,6 +432,12 @@ User agent used for testing, defaults to a L<Mojo::UserAgent> object.
 
   # Allow redirects
   $t->ua->max_redirects(10);
+
+  # Customize all transactions (including followed redirects)
+  $t->ua->on(start => sub {
+    my ($ua, $tx) = @_;
+    $tx->req->headers->accept_language('en-US');
+  });
 
   # Request with Basic authentication
   $t->get_ok($t->ua->app_url->userinfo('sri:secr3t')->path('/secrets'));
@@ -455,6 +468,13 @@ Alias for L<Mojo::UserAgent/"app">.
   # Test application directly
   is $t->app->defaults->{foo}, 'bar', 'right value';
   ok $t->app->routes->find('echo')->is_websocket, 'WebSocket route';
+
+  # Change application behavior
+  $t->app->hook(before_dispatch => sub {
+    my $self = shift;
+    $self->render(text => 'This request did not reach the router.')
+      if $self->req->url->path->contains('/user');
+  });
 
 =head2 C<content_is>
 

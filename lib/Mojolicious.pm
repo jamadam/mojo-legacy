@@ -33,7 +33,7 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Leaf Fluttering In Wind';
-our $VERSION  = '2.80';
+our $VERSION  = '2.83';
 
 # "These old doomsday devices are dangerously unstable.
 #  I'll rest easier not knowing where they are."
@@ -326,7 +326,7 @@ startup method to define the url endpoints for your application.
     my $self = shift;
 
     my $r = $self->routes;
-    $r->route('/:controller/:action')->to('test#welcome');
+    $r->get('/:controller/:action')->to('test#welcome');
   }
 
 =head2 C<secret>
@@ -528,7 +528,7 @@ and a call to C<dispatch> the last, yours will be in between.
 This is a very powerful hook and should not be used lightly, it allows you to
 customize application wide exception handling for example, consider it the
 sledgehammer in your toolbox. (Passed a closure leading to the next hook and
-the current controller object)
+the default controller object)
 
 =back
 

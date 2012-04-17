@@ -51,7 +51,7 @@ sub detect {
 sub type {
   my ($self, $ext) = (shift, shift);
   my $types = $self->types;
-  return ref $types->{$ext} ? $types->{$ext}->[0] : $types->{$ext} unless @_;
+  return ref $types->{$ext} ? $types->{$ext}[0] : $types->{$ext} unless @_;
   $types->{$ext} = shift;
   return $self;
 }
@@ -102,7 +102,7 @@ contain more than one MIME type are ignored.
   $types   = $types->type(png => 'image/png');
   $types   = $types->type(json => ['application/json', 'text/x-json']);
 
-Get or set MIME type for file extension, alternatives are only used for
+Get or set MIME types for file extension, alternatives are only used for
 detection.
 
 =head1 SEE ALSO
