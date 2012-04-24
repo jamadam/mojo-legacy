@@ -29,8 +29,6 @@ sub DESTROY { shift->_cleanup }
 sub connect {
   my $self = shift;
   my $args = ref $_[0] ? $_[0] : {@_};
-  $args->{address} ||= '127.0.0.1';
-  $args->{address} = '127.0.0.1' if $args->{address} eq 'localhost';
   weaken $self;
   $self->{delay} = $self->reactor->timer(0 => sub { $self->_connect($args) });
 }
@@ -49,10 +47,11 @@ sub _connect {
   # New socket
   my $handle;
   my $reactor = $self->reactor;
+  my $address = $args->{address} ||= 'localhost';
   unless ($handle = $args->{handle}) {
     my %options = (
       Blocking => 0,
-      PeerAddr => $args->{address},
+      PeerAddr => $address eq 'localhost' ? '127.0.0.1' : $address,
       PeerPort => $args->{port} || ($args->{tls} ? 443 : 80),
       Proto    => 'tcp'
     );
@@ -85,16 +84,19 @@ sub _connect {
 
     # Upgrade
     my %options = (
-      SSL_startHandshake => 0,
-      SSL_error_trap     => sub {
+      SSL_ca_file => $args->{tls_ca}
+        && -T $args->{tls_ca} ? $args->{tls_ca} : undef,
+      SSL_cert_file  => $args->{tls_cert},
+      SSL_error_trap => sub {
         $self->_cleanup;
         $self->emit_safe(error => $_[1]);
       },
-      SSL_cert_file => $args->{tls_cert},
-      SSL_key_file  => $args->{tls_key},
-      SSL_ca_file   => $args->{tls_ca}
-        && -T $args->{tls_ca} ? $args->{tls_ca} : undef,
-      SSL_verify_mode => $args->{tls_ca} ? 0x01 : 0x00
+      SSL_hostname        => $args->{address},
+      SSL_key_file        => $args->{tls_key},
+      SSL_startHandshake  => 0,
+      SSL_verify_mode     => $args->{tls_ca} ? 0x01 : 0x00,
+      SSL_verifycn_name   => $args->{address},
+      SSL_verifycn_scheme => $args->{tls_ca} ? 'http' : undef
     );
     $self->{tls} = 1;
     return $self->emit_safe(error => 'TLS upgrade failed.')
@@ -212,7 +214,7 @@ These options are currently available:
 
 =item C<address>
 
-Address or host name of the peer to connect to.
+Address or host name of the peer to connect to, defaults to C<localhost>.
 
 =item C<handle>
 
@@ -237,7 +239,7 @@ Enable TLS.
 
 =item C<tls_ca>
 
-Path to TLS certificate authority file.
+Path to TLS certificate authority file. Also activates hostname verification.
 
 =item C<tls_cert>
 

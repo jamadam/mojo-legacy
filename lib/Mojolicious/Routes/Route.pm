@@ -128,8 +128,7 @@ sub over {
 
 sub parse {
   my $self = shift;
-  $self->{name} = $self->pattern->parse(@_)->pattern;
-  defined $self->{name} || ($self->{name} = '');
+  $self->{name} = defined $self->pattern->parse(@_)->pattern ? $self->pattern->parse(@_)->pattern : '';
   $self->{name} =~ s/\W+//g;
   return $self;
 }
@@ -531,7 +530,7 @@ Render route with parameters into a path.
 
 The L<Mojolicious::Routes> object this route is an ancestor of.
 
-  #r->root->caching(0);
+  $r->root->cache(0);
 
 =head2 C<route>
 

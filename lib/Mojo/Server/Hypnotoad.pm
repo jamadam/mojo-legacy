@@ -136,7 +136,7 @@ sub _config {
   $self->{config} = $c;
   $c->{graceful_timeout}   ||= 30;
   $c->{heartbeat_interval} ||= 5;
-  $c->{heartbeat_timeout}  ||= 10;
+  $c->{heartbeat_timeout}  ||= 20;
   $c->{lock_file}          ||= catfile tmpdir, 'hypnotoad.lock';
   $c->{lock_file} .= ".$$";
   $c->{lock_timeout} ||= 0.5;
@@ -348,8 +348,8 @@ sub _spawn {
   );
 
   # Clean worker environment
-  $SIG{INT} = $SIG{TERM} = $SIG{CHLD} = $SIG{USR2} = $SIG{TTIN} = $SIG{TTOU} =
-    'DEFAULT';
+  $SIG{INT} = $SIG{TERM} = $SIG{CHLD} = $SIG{USR2} = $SIG{TTIN} = $SIG{TTOU}
+    = 'DEFAULT';
   $SIG{QUIT} = sub { $loop->max_connections(0) };
   delete $self->{reader};
   delete $self->{poll};
@@ -401,9 +401,9 @@ For L<Mojolicious> and L<Mojolicious::Lite> applications it will default to
 C<production> mode.
 
 Optional modules L<EV>, L<IO::Socket::IP>, L<IO::Socket::SSL> and
-L<Net::Rendezvous::Publish> are supported transparently and used if
-installed. Individual features can also be disabled with the
-C<MOJO_NO_BONJOUR>, C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
+L<Net::Rendezvous::Publish> are supported transparently and used if installed.
+Individual features can also be disabled with the C<MOJO_NO_BONJOUR>,
+C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for deployment recipes.
 
@@ -491,16 +491,16 @@ Listen backlog size, defaults to C<SOMAXCONN>.
   clients => 100
 
 Maximum number of parallel client connections per worker process, defaults to
-C<1000>. Note that depending on how much your application may block, you
-might want to decrease this value and increase C<workers> instead for better
+C<1000>. Note that depending on how much your application may block, you might
+want to decrease this value and increase C<workers> instead for better
 performance.
 
 =head2 C<graceful_timeout>
 
   graceful_timeout => 15
 
-Maximum amount of time in seconds a graceful worker stop may take before
-being forced, defaults to C<30>.
+Maximum amount of time in seconds a graceful worker stop may take before being
+forced, defaults to C<30>.
 
 =head2 C<group>
 
@@ -519,15 +519,15 @@ Heartbeat interval in seconds, defaults to C<5>.
   heartbeat_timeout => 2
 
 Maximum amount of time in seconds before a worker without a heartbeat will be
-stopped, defaults to C<10>.
+stopped, defaults to C<20>.
 
 =head2 C<inactivity_timeout>
 
   inactivity_timeout => 10
 
 Maximum amount of time in seconds a connection can be inactive before getting
-closed, defaults to C<15>. Setting the value to C<0> will allow connections
-to be inactive indefinitely.
+closed, defaults to C<15>. Setting the value to C<0> will allow connections to
+be inactive indefinitely.
 
 =head2 C<keep_alive_requests>
 

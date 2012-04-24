@@ -6,7 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 19;
+use Test::More tests => 24;
 
 # "For example, if you killed your grandfather, you'd cease to exist!
 #  But existing is basically all I do!"
@@ -38,6 +38,7 @@ get '/foo';
 # GET /bar
 get '/bar' => sub {
   my $self = shift;
+  $self->flash(just => 'works!')->flash({works => 'too!'});
   $self->redirect_to($self->url_for('foo'));
 };
 
@@ -72,8 +73,22 @@ foo
 EOF
 
 # GET /bar
+ok !$t->ua->cookie_jar->find($t->ua->app_url->path('/foo')),
+  'no session cookie';
 $t->get_ok('/bar')->status_is(302)->header_is('X-Route' => 'bar')
   ->header_is(Location => 'http://kraih.com/rebased/foo');
+ok $t->ua->cookie_jar->find($t->ua->app_url->path('/foo')), 'session cookie';
+
+# GET /foo (with flash message)
+$t->get_ok('/foo')->status_is(200)->content_is(<<EOF);
+<base href="http://kraih.com/rebased/" />works!too!
+<link href="/rebased/b.css" media="test" rel="stylesheet" type="text/css" />
+<img alt="Test" src="/rebased/images/test.png" />
+http://kraih.com/rebased
+/rebased
+http://kraih.com/
+foo
+EOF
 
 # GET /baz
 $t->get_ok('/baz')->status_is(200)->header_is('X-Route' => 'baz')
@@ -104,7 +119,7 @@ __DATA__
 % }
 
 @@ foo.html.ep
-%= base_tag
+<%= base_tag %><%= flash 'just' || '' %><%= flash 'works' || '' %>
 %= stylesheet '/b.css', media => 'test'
 %= image '/images/test.png', alt => 'Test'
 %= url_for('root')->to_abs

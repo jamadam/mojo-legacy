@@ -19,8 +19,8 @@ is $res->code(102)->default_message, 'Processing',          'right message';
 is $res->code(200)->default_message, 'OK',                  'right message';
 is $res->code(201)->default_message, 'Created',             'right message';
 is $res->code(202)->default_message, 'Accepted',            'right message';
-is $res->code(203)->default_message,
-  'Non-Authoritative Information', 'right message';
+is $res->code(203)->default_message, 'Non-Authoritative Information',
+  'right message';
 is $res->code(204)->default_message, 'No Content',         'right message';
 is $res->code(205)->default_message, 'Reset Content',      'right message';
 is $res->code(206)->default_message, 'Partial Content',    'right message';
@@ -39,21 +39,19 @@ is $res->code(403)->default_message, 'Forbidden',          'right message';
 is $res->code(404)->default_message, 'Not Found',          'right message';
 is $res->code(405)->default_message, 'Method Not Allowed', 'right message';
 is $res->code(406)->default_message, 'Not Acceptable',     'right message';
-is $res->code(407)->default_message,
-  'Proxy Authentication Required', 'right message';
+is $res->code(407)->default_message, 'Proxy Authentication Required',
+  'right message';
 is $res->code(408)->default_message, 'Request Timeout',     'right message';
 is $res->code(409)->default_message, 'Conflict',            'right message';
 is $res->code(410)->default_message, 'Gone',                'right message';
 is $res->code(411)->default_message, 'Length Required',     'right message';
 is $res->code(412)->default_message, 'Precondition Failed', 'right message';
-is $res->code(413)->default_message,
-  'Request Entity Too Large', 'right message';
-is $res->code(414)->default_message, 'Request-URI Too Large', 'right message';
-is $res->code(415)->default_message,
-  'Unsupported Media Type',
+is $res->code(413)->default_message, 'Request Entity Too Large',
   'right message';
-is $res->code(416)->default_message,
-  'Request Range Not Satisfiable', 'right message';
+is $res->code(414)->default_message, 'Request-URI Too Large',  'right message';
+is $res->code(415)->default_message, 'Unsupported Media Type', 'right message';
+is $res->code(416)->default_message, 'Request Range Not Satisfiable',
+  'right message';
 is $res->code(417)->default_message, 'Expectation Failed',    'right message';
 is $res->code(418)->default_message, "I'm a teapot",          'right message';
 is $res->code(422)->default_message, 'Unprocessable Entity',  'right message';
@@ -63,24 +61,24 @@ is $res->code(425)->default_message, 'Unordered Colection',   'right message';
 is $res->code(426)->default_message, 'Upgrade Required',      'right message';
 is $res->code(428)->default_message, 'Precondition Required', 'right message';
 is $res->code(429)->default_message, 'Too Many Requests',     'right message';
-is $res->code(431)->default_message,
-  'Request Header Fields Too Large', 'right message';
+is $res->code(431)->default_message, 'Request Header Fields Too Large',
+  'right message';
 is $res->code(449)->default_message, 'Retry With',            'right message';
 is $res->code(500)->default_message, 'Internal Server Error', 'right message';
 is $res->code(501)->default_message, 'Not Implemented',       'right message';
 is $res->code(502)->default_message, 'Bad Gateway',           'right message';
 is $res->code(503)->default_message, 'Service Unavailable',   'right message';
 is $res->code(504)->default_message, 'Gateway Timeout',       'right message';
-is $res->code(505)->default_message,
-  'HTTP Version Not Supported', 'right message';
-is $res->code(506)->default_message,
-  'Variant Also Negotiates', 'right message';
+is $res->code(505)->default_message, 'HTTP Version Not Supported',
+  'right message';
+is $res->code(506)->default_message, 'Variant Also Negotiates',
+  'right message';
 is $res->code(507)->default_message, 'Insufficient Storage', 'right message';
-is $res->code(509)->default_message,
-  'Bandwidth Limit Exceeded', 'right message';
+is $res->code(509)->default_message, 'Bandwidth Limit Exceeded',
+  'right message';
 is $res->code(510)->default_message, 'Not Extended', 'right message';
-is $res->code(511)->default_message,
-  'Network Authentication Required', 'right message';
+is $res->code(511)->default_message, 'Network Authentication Required',
+  'right message';
 
 # Status code and message
 $res = Mojo::Message::Response->new;
@@ -185,8 +183,8 @@ is $res->message,     'Damn it', 'right message';
 is $res->version,     '1.0', 'right version';
 ok $res->at_least_version('1.0'), 'at least version 1.0';
 ok !$res->at_least_version('1.2'), 'not version 1.2';
-is $res->headers->content_type, 'text/plain', 'right "Content-Type" value';
-is $res->headers->content_length, 0, 'right "Content-Length" value';
+is $res->headers->content_type,   'text/plain', 'right "Content-Type" value';
+is $res->headers->content_length, 0,            'right "Content-Length" value';
 
 # Parse full HTTP 1.0 response
 $res = Mojo::Message::Response->new;
@@ -200,8 +198,8 @@ is $res->message,     'Internal Server Error', 'right message';
 is $res->version,     '1.0', 'right version';
 ok $res->at_least_version('1.0'), 'at least version 1.0';
 ok !$res->at_least_version('1.2'), 'not version 1.2';
-is $res->headers->content_type, 'text/plain', 'right "Content-Type" value';
-is $res->headers->content_length, 27, 'right "Content-Length" value';
+is $res->headers->content_type,   'text/plain', 'right "Content-Type" value';
+is $res->headers->content_length, 27,           'right "Content-Length" value';
 
 # Parse full HTTP 1.0 response (missing Content-Length)
 $res = Mojo::Message::Response->new;
@@ -281,9 +279,9 @@ is $res->message,     'Internal Server Error', 'right message';
 is $res->version,     '1.1', 'right version';
 ok $res->at_least_version('1.0'), 'at least version 1.0';
 ok !$res->at_least_version('1.2'), 'not version 1.2';
-is $res->headers->content_type, 'text/plain', 'right "Content-Type" value';
-is $res->headers->content_length, 13, 'right "Content-Length" value';
-is $res->content->body_size,      13, 'right size';
+is $res->headers->content_type,   'text/plain', 'right "Content-Type" value';
+is $res->headers->content_length, 13,           'right "Content-Length" value';
+is $res->content->body_size,      13,           'right size';
 
 # Parse HTTP 1.1 multipart response
 $res = Mojo::Message::Response->new;
@@ -508,8 +506,8 @@ is $res->message,     'OK', 'right message';
 is $res->version,     '1.0', 'right version';
 ok $res->at_least_version('1.0'), 'at least version 1.0';
 ok !$res->at_least_version('1.2'), 'not version 1.2';
-is $res->headers->content_type, 'text/plain', 'right "Content-Type" value';
-is $res->headers->content_length, 27, 'right "Content-Length" value';
+is $res->headers->content_type,   'text/plain', 'right "Content-Type" value';
+is $res->headers->content_length, 27,           'right "Content-Length" value';
 is $res->headers->set_cookie, 'foo=bar; Version=1; Path=/test',
   'right "Set-Cookie" value';
 my $cookies = $res->cookies;
@@ -561,8 +559,8 @@ is $res->headers->upgrade,        'websocket', 'right "Upgrade" value';
 is $res->headers->content_length, 0,           'right "Content-Length" value';
 is $res->headers->sec_websocket_accept, 'abcdef=',
   'right "Sec-WebSocket-Accept" value';
-is $res->headers->sec_websocket_protocol,
-  'sample', 'right "Sec-WebSocket-Protocol" value';
+is $res->headers->sec_websocket_protocol, 'sample',
+  'right "Sec-WebSocket-Protocol" value';
 is $res->body, '', 'no content';
 
 # Build and parse HTTP 1.1 response with 3 cookies

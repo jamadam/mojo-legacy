@@ -1,8 +1,16 @@
+package JSONTest;
+use Mojo::Base -base;
+
+has 'something' => sub { {} };
+
+sub TO_JSON { shift->something }
+
+package main;
 use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 117;
+use Test::More tests => 119;
 
 # "We should be safe up here. I'm pretty sure fires can't climb trees."
 use Mojo::ByteStream 'b';
@@ -199,23 +207,23 @@ $array = $json->decode(b("\x{feff}[true]")->encode('UTF-32BE'));
 is_deeply $array, [$json->true], 'decode \x{feff}[true]';
 
 # Decode UTF-16LE without BOM
-$array =
-  $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-16LE')->to_string);
+$array
+  = $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-16LE')->to_string);
 is_deeply $array, ["\x{10346}"], 'decode [\"\\ud800\\udf46\"]';
 
 # Decode UTF-16BE without BOM
-$array =
-  $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-16BE')->to_string);
+$array
+  = $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-16BE')->to_string);
 is_deeply $array, ["\x{10346}"], 'decode [\"\\ud800\\udf46\"]';
 
 # Decode UTF-32LE without BOM
-$array =
-  $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-32LE')->to_string);
+$array
+  = $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-32LE')->to_string);
 is_deeply $array, ["\x{10346}"], 'decode [\"\\ud800\\udf46\"]';
 
 # Decode UTF-32BE without BOM
-$array =
-  $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-32BE')->to_string);
+$array
+  = $json->decode(b("[\"\\ud800\\udf46\"]")->encode('UTF-32BE')->to_string);
 is_deeply $array, ["\x{10346}"], 'decode [\"\\ud800\\udf46\"]';
 
 # Complicated roudtrips
@@ -252,30 +260,32 @@ is_deeply $json->decode($string), ["\x{2028}test\x{2029}123"],
 $string = $json->encode([b('test')]);
 is_deeply $json->decode($string), ['test'], 'right roundtrip';
 
+# Blessed reference with TO_JSON method
+$string = $json->encode(JSONTest->new);
+is_deeply $json->decode($string), {}, 'right roundtrip';
+$string = $json->encode(
+  JSONTest->new(something => {just => 'works'}, else => {not => 'working'}));
+is_deeply $json->decode($string), {just => 'works'}, 'right roundtrip';
+
 # Errors
 is $json->decode('["♥"]'), undef, 'wide character in input';
 is $json->error, 'Wide character in input.', 'right error';
 is $json->decode(b("\x{feff}[\"\\ud800\"]")->encode('UTF-16LE')), undef,
   'missing high surrogate';
-is $json->error,
-  'Malformed JSON: Missing low-surrogate at line 1, offset 8.',
+is $json->error, 'Malformed JSON: Missing low-surrogate at line 1, offset 8.',
   'right error';
 is $json->decode(b("\x{feff}[\"\\udf46\"]")->encode('UTF-16LE')), undef,
   'missing low surrogate';
-is $json->error,
-  'Malformed JSON: Missing high-surrogate at line 1, offset 8.',
+is $json->error, 'Malformed JSON: Missing high-surrogate at line 1, offset 8.',
   'right error';
 is $json->decode('[[]'), undef, 'missing right square bracket';
-is $json->error,
-  'Malformed JSON: Expected comma or right square bracket while'
+is $json->error, 'Malformed JSON: Expected comma or right square bracket while'
   . ' parsing array at line 1, offset 3.', 'right error';
 is $json->decode('{{}'), undef, 'missing right curly bracket';
-is $json->error,
-  'Malformed JSON: Expected string while'
+is $json->error, 'Malformed JSON: Expected string while'
   . ' parsing object at line 1, offset 1.', 'right error';
 is $json->decode('[[]...'), undef, 'syntax error';
-is $json->error,
-  'Malformed JSON: Expected comma or right square bracket while'
+is $json->error, 'Malformed JSON: Expected comma or right square bracket while'
   . ' parsing array at line 1, offset 3.', 'right error';
 is $json->decode('{{}...'), undef, 'syntax error';
 is $json->error, 'Malformed JSON: Expected string while'

@@ -5,7 +5,7 @@ use utf8;
 # "Homer, we're going to ask you a few simple yes or no questions.
 #  Do you understand?
 #  Yes. *lie dectector blows up*"
-use Test::More tests => 141;
+use Test::More tests => 145;
 
 # Need to be loaded first to trigger edge case
 use MIME::Base64;
@@ -63,22 +63,24 @@ is "$stream", "Zm9vw5/EgGJhciUyM+KYug==\n", 'right base64 encoded result';
 
 # utf8 b64_decode
 $stream = b("Zm9vw5/EgGJhciUyM+KYug==\n")->b64_decode->decode('UTF-8');
-is "$stream", "foo\x{df}\x{0100}bar%23\x{263a}",
-  'right base64 decoded result';
+is "$stream", "foo\x{df}\x{0100}bar%23\x{263a}", 'right base64 decoded result';
 
 # utf8 b64_decode
 $stream = b("Zm9vw5/EgGJhciUyM+KYug==\n")->b64_decode->decode;
-is "$stream", "foo\x{df}\x{0100}bar%23\x{263a}",
-  'right base64 decoded result';
+is "$stream", "foo\x{df}\x{0100}bar%23\x{263a}", 'right base64 decoded result';
 
 # b64_encode (custom line ending)
 $stream = b('foobar$%^&3217');
-is $stream->b64_encode(''),
-  "Zm9vYmFyJCVeJjMyMTc=", 'right base64 encoded result';
+is $stream->b64_encode(''), 'Zm9vYmFyJCVeJjMyMTc=',
+  'right base64 encoded result';
 
 # url_escape
 $stream = b('business;23');
 is $stream->url_escape, 'business%3B23', 'right url escaped result';
+
+# url_escape (custom pattern)
+$stream = b('&business;23')->url_escape('s&');
+is "$stream", '%26bu%73ine%73%73;23', 'right url escaped result';
 
 # url_unescape
 $stream = b('business%3B23');
@@ -165,8 +167,8 @@ is b(
   'Test Using Larger Than Block-Size Key and Larger Than One Block-Size Data')
   ->hmac_md5_sum(chr(0xaa) x 80), '6f630fad67cda0ee1fb1f562db3aa53e',
   'right hmac md5 checksum';
-is b('Hi there')->hmac_md5_sum(1234567890),
-  'e3b5fab1b3f5b9d1fe391d09fce7b2ae', 'right hmac md5 checksum';
+is b('Hi there')->hmac_md5_sum(1234567890), 'e3b5fab1b3f5b9d1fe391d09fce7b2ae',
+  'right hmac md5 checksum';
 
 # hmac_sha1_sum (RFC 2202)
 is b('Hi There')->hmac_sha1_sum(chr(0x0b) x 20),
@@ -186,14 +188,14 @@ is b('Test Using Larger Than Block-Size Key - Hash Key First')
   'right hmac sha1 checksum';
 is b(
   'Test Using Larger Than Block-Size Key and Larger Than One Block-Size Data')
-  ->hmac_sha1_sum(chr(0xaa) x 80),
-  'e8e99d0f45237d786d6bbaa7965c7808bbff1a91', 'right hmac sha1 checksum';
+  ->hmac_sha1_sum(chr(0xaa) x 80), 'e8e99d0f45237d786d6bbaa7965c7808bbff1a91',
+  'right hmac sha1 checksum';
 is b('Hi there')->hmac_sha1_sum(1234567890),
   '4fd7160f392dc54308608cae6587e137c62c2e39', 'right hmac sha1 checksum';
 
 # html_escape
-$stream = b("foobar'<baz>");
-is $stream->html_escape, 'foobar&#39;&lt;baz&gt;',
+$stream = b("foo bar'<baz>");
+is $stream->html_escape, 'foo bar&#39;&lt;baz&gt;',
   'right html escaped result';
 
 # html_escape (nothing to escape)
@@ -204,6 +206,11 @@ is $stream->html_escape, 'foobar', 'right html escaped result';
 $stream = b('foobar&lt;baz&gt;&#x26;&#34;');
 is $stream->html_unescape, "foobar<baz>&\"", 'right html unescaped result';
 
+# html_unescape (special entities)
+$stream = b('foo &CounterClockwiseContourIntegral; bar &b.Sigma; &sup1baz');
+is $stream->html_unescape, "foo \x{2233} bar \x{1d6ba} \x{00b9}baz",
+  'right html unescaped result';
+
 # html_unescape (apos)
 $stream = b('foobar&apos;&lt;baz&gt;&#x26;&#34;');
 is $stream->html_unescape, "foobar'<baz>&\"", 'right html unescaped result';
@@ -212,21 +219,29 @@ is $stream->html_unescape, "foobar'<baz>&\"", 'right html unescaped result';
 $stream = b('foobar');
 is $stream->html_unescape, 'foobar', 'right html unescaped result';
 
+# html_unescape (relaxed)
+$stream = b('&Ltf&amp&0oo&nbspba;&ltr');
+is $stream->html_unescape, "&Ltf&&0oo\x{00a0}ba;<r",
+  'right html unescaped result';
+
 # utf8 html_escape
-$stream = b("foobar<baz>&\"\x{152}")->html_escape;
-is "$stream", 'foobar&lt;baz&gt;&amp;&quot;&OElig;',
+$stream = b("fo\nobar<baz>&\"\x{152}")->html_escape;
+is "$stream", "fo\nobar&lt;baz&gt;&amp;&quot;&OElig;",
   'right html escaped result';
 
 # utf8 html_unescape
-$stream =
-  b('foo&lt;baz&gt;&#x26;&#34;&OElig;&Foo;')->decode('UTF-8')->html_unescape;
+$stream
+  = b('foo&lt;baz&gt;&#x26;&#34;&OElig;&Foo;')->decode('UTF-8')->html_unescape;
 is "$stream", "foo<baz>&\"\x{152}&Foo;", 'right html unescaped result';
 
 # html_escape (path)
-$stream =
-  b('/usr/local/lib/perl5/site_perl/5.10.0/Mojo/ByteStream.pm')->html_escape;
-is "$stream", '/usr/local/lib/perl5/site_perl/5.10.0/Mojo/ByteStream.pm',
+$stream = b('/home/sri/perl/site_perl/5.10.0/Mojo.pm')->html_escape;
+is "$stream", '/home/sri/perl/site_perl/5.10.0/Mojo.pm',
   'right html escaped result';
+
+# html_escape (custom pattern)
+$stream = b("fo\no b<a>r")->html_escape('o<');
+is "$stream", "f&#111;\n&#111; b&lt;a>r", 'right html escaped result';
 
 # xml_escape
 $stream = b(qq/la<f>\nbar"baz"'yada\n'&lt;la/)->xml_escape;
@@ -374,10 +389,10 @@ is_deeply [b('')->split('')->each],    [], 'no elements';
 is_deeply [b('')->split(',')->each],   [], 'no elements';
 is_deeply [b('')->split(qr/,/)->each], [], 'no elements';
 $stream = b('1/2/3');
-is $stream->split('/')->map(sub { $_->quote })->join(', '),
-  '"1", "2", "3"', 'right result';
-is $stream->split('/')->map(sub { shift->quote })->join(', '),
-  '"1", "2", "3"', 'right result';
+is $stream->split('/')->map(sub { $_->quote })->join(', '), '"1", "2", "3"',
+  'right result';
+is $stream->split('/')->map(sub { shift->quote })->join(', '), '"1", "2", "3"',
+  'right result';
 
 # say and autojoin
 my $buffer = '';

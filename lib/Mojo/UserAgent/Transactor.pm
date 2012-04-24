@@ -208,7 +208,7 @@ sub _multipart {
     if (ref $values eq 'HASH') {
       $filename = delete $values->{filename} || $name;
       $filename = encode $encoding, $filename if $encoding;
-      $filename = url_escape $filename, $Mojo::URL::UNRESERVED;
+      $filename = url_escape $filename, "^$Mojo::URL::UNRESERVED";
       push @parts, $part->asset(delete $values->{file});
       $headers->from_hash($values);
     }
@@ -224,7 +224,7 @@ sub _multipart {
 
     # Content-Disposition
     $name = encode $encoding, $name if $encoding;
-    $name = url_escape $name, $Mojo::URL::UNRESERVED;
+    $name = url_escape $name, "^$Mojo::URL::UNRESERVED";
     my $disposition = qq/form-data; name="$name"/;
     $disposition .= qq/; filename="$filename"/ if $filename;
     $headers->content_disposition($disposition);
@@ -302,7 +302,6 @@ data.
 
   # Streaming multipart file upload
   my $tx = $t->form('mojolicio.us' => {fun => {file => '/etc/passwd'}});
-  $ua->start($tx);
 
 While the "multipart/form-data" content type will be automatically used
 instead of "application/x-www-form-urlencoded" when necessary, you can also
@@ -351,12 +350,10 @@ Versatile general purpose L<Mojo::Transaction::HTTP> builder for requests.
   # Streaming response
   my $tx = $t->tx(GET => 'http://mojolicio.us');
   $tx->res->body(sub { say $_[1] });
-  $ua->start($tx);
 
   # Custom socket
   my $tx = $t->tx(GET => 'http://mojolicio.us');
   $tx->connection($sock);
-  $ua->start($tx);
 
 =head2 C<websocket>
 

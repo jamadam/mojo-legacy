@@ -44,10 +44,9 @@ sub canonicalize {
 sub clone {
   my $self  = shift;
   my $clone = Mojo::Path->new;
-  $clone->parts([@{$self->parts}]);
   $clone->leading_slash($self->leading_slash);
   $clone->trailing_slash($self->trailing_slash);
-  return $clone;
+  return $clone->parts([@{$self->parts}]);
 }
 
 sub contains {
@@ -88,7 +87,7 @@ sub to_string {
   my $self = shift;
 
   # Escape
-  my $chars = "$Mojo::URL::UNRESERVED$Mojo::URL::SUBDELIM\:\@";
+  my $chars = "^$Mojo::URL::UNRESERVED$Mojo::URL::SUBDELIM\:\@";
   my @parts = map { url_escape(encode('UTF-8', $_), $chars) } @{$self->parts};
 
   # Format

@@ -15,8 +15,7 @@ use Mojo::Home;
   local $ENV{MOJO_HOME} = '.';
   my $home = Mojo::Home->new->detect;
   is_deeply [split /\\|\//, canonpath($home->to_string)],
-    [split /\\|\//, canonpath(realpath cwd())],
-    'right path detected';
+    [split /\\|\//, canonpath(realpath cwd())], 'right path detected';
 }
 
 # Class detection
@@ -30,8 +29,7 @@ is_deeply [split /\\|\//, $target], [split /\\|\//, $home],
 $INC{'MyClass.pm'} = 'MyClass.pm';
 $home = Mojo::Home->new->detect('MyClass');
 is_deeply [split /\\|\//, canonpath($home->to_string)],
-  [split /\\|\//, canonpath(realpath cwd())],
-  'right path detected';
+  [split /\\|\//, canonpath(realpath cwd())], 'right path detected';
 
 # FindBin detection
 $home = Mojo::Home->new->app_class(undef)->detect;
@@ -44,20 +42,18 @@ is $home->lib_dir, catdir(splitdir($FindBin::Bin), 'lib'), 'right path';
 is $home->rel_file('foo.txt'), catdir(splitdir($FindBin::Bin), 'foo.txt'),
   'right path';
 is $home->rel_file('foo/bar.txt'),
-  catdir(splitdir($FindBin::Bin), 'foo', 'bar.txt'),
-  'right path';
-is $home->rel_dir('foo'), catdir(splitdir($FindBin::Bin), 'foo'),
-  'right path';
+  catdir(splitdir($FindBin::Bin), 'foo', 'bar.txt'), 'right path';
+is $home->rel_dir('foo'), catdir(splitdir($FindBin::Bin), 'foo'), 'right path';
 is $home->rel_dir('foo/bar'), catdir(splitdir($FindBin::Bin), 'foo', 'bar'),
   'right path';
 
 # List files
-is first(sub {/Base1\.pm$/}, @{$home->list_files('lib')}),
-  'BaseTest/Base1.pm', 'right result';
-is first(sub {/Base2\.pm$/}, @{$home->list_files('lib')}),
-  'BaseTest/Base2.pm', 'right result';
-is first(sub {/Base3\.pm$/}, @{$home->list_files('lib')}),
-  'BaseTest/Base3.pm', 'right result';
+is first(sub {/Base1\.pm$/}, @{$home->list_files('lib')}), 'BaseTest/Base1.pm',
+  'right result';
+is first(sub {/Base2\.pm$/}, @{$home->list_files('lib')}), 'BaseTest/Base2.pm',
+  'right result';
+is first(sub {/Base3\.pm$/}, @{$home->list_files('lib')}), 'BaseTest/Base3.pm',
+  'right result';
 
 # Slurp files
 like $home->slurp_rel_file('lib/BaseTest/Base1.pm'), qr/Base1/,

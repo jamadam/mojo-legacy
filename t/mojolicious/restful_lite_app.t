@@ -40,8 +40,7 @@ post sub {
 my $t = Test::Mojo->new;
 
 # GET /rest
-$t->get_ok('/rest')->status_is(200)
-  ->content_type_is('text/html;charset=UTF-8')
+$t->get_ok('/rest')->status_is(200)->content_type_is('text/html;charset=UTF-8')
   ->text_is('html > body', 'works');
 
 # GET /rest.html (html format)
@@ -127,9 +126,8 @@ $t->get_ok('/rest.json?format=json')->status_is(200)
   ->content_type_is('application/json')->json_content_is({just => 'works'});
 
 # GET /rest (accept json with query)
-$t->get_ok('/rest?format=json', {Accept => 'application/json'})
-  ->status_is(200)->content_type_is('application/json')
-  ->json_content_is({just => 'works'});
+$t->get_ok('/rest?format=json', {Accept => 'application/json'})->status_is(200)
+  ->content_type_is('application/json')->json_content_is({just => 'works'});
 
 # GET /rest (accept json with everything)
 $t->get_ok('/rest.json?format=json', {Accept => 'application/json'})
@@ -165,8 +163,8 @@ $t->get_ok('/rest?format=xml')->status_is(200)->content_type_is('text/xml')
   ->text_is(just => 'works');
 
 # GET /rest (xml format with query)
-$t->get_ok('/rest.xml?format=xml')->status_is(200)
-  ->content_type_is('text/xml')->text_is(just => 'works');
+$t->get_ok('/rest.xml?format=xml')->status_is(200)->content_type_is('text/xml')
+  ->text_is(just => 'works');
 
 # GET /rest (accept json with query)
 $t->get_ok('/rest?format=xml', {Accept => 'text/xml'})->status_is(200)
@@ -250,8 +248,7 @@ $t->post_form_ok('/rest' => {format => 'html'} => {Accept => 'text/html'})
   ->text_is('html > body', 'works too');
 
 # POST /rest (accept html with everything, form alternative)
-$t->post_form_ok(
-  '/rest.html' => {format => 'html'} => {Accept => 'text/html'})
+$t->post_form_ok('/rest.html' => {format => 'html'} => {Accept => 'text/html'})
   ->status_is(200)->content_type_is('text/html;charset=UTF-8')
   ->text_is('html > body', 'works too');
 
@@ -402,8 +399,8 @@ $t->post_ok('/rest.png?format=json')->status_is(201)
 $t->get_ok('/nothing', {Accept => 'image/png'})->status_is(404);
 
 # GET /rest.html (Internet Explorer 8)
-my $ie =
-  'image/jpeg, application/x-ms-application, image/gif, application/xaml+xml'
+my $ie
+  = 'image/jpeg, application/x-ms-application, image/gif, application/xaml+xml'
   . ', image/pjpeg, application/x-ms-xbap, application/x-shockwave-flash'
   . ', application/msword, */*';
 $t->get_ok('/rest.html' => {Accept => $ie})->status_is(200)

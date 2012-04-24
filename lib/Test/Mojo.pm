@@ -66,16 +66,16 @@ sub content_unlike {
 sub content_type_is {
   my ($self, $type) = @_;
   local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is $self->tx->res->headers->content_type,
-    $type, "Content-Type: $type";
+  Test::More::is $self->tx->res->headers->content_type, $type,
+    "Content-Type: $type";
   return $self;
 }
 
 sub content_type_isnt {
   my ($self, $type) = @_;
   local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt $self->tx->res->headers->content_type,
-    $type, "not Content-Type: $type";
+  Test::More::isnt $self->tx->res->headers->content_type, $type,
+    "not Content-Type: $type";
   return $self;
 }
 
@@ -133,16 +133,16 @@ sub head_ok { shift->_request_ok(head => @_) }
 sub header_is {
   my ($self, $name, $value) = @_;
   local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is scalar $self->tx->res->headers->header($name),
-    $value, "$name: " . ($value ? $value : '');
+  Test::More::is scalar $self->tx->res->headers->header($name), $value,
+    "$name: " . ($value ? $value : '');
   return $self;
 }
 
 sub header_isnt {
   my ($self, $name, $value) = @_;
   local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt scalar $self->tx->res->headers->header($name),
-    $value, "not $name: " . ($value ? $value : '');
+  Test::More::isnt scalar $self->tx->res->headers->header($name), $value,
+    "not $name: " . ($value ? $value : '');
   return $self;
 }
 
@@ -173,8 +173,8 @@ sub json_content_is {
 sub json_is {
   my ($self, $p, $data, $desc) = @_;
   local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is_deeply $self->tx->res->json($p),
-    $data, $desc || qq/exact match for JSON Pointer "$p"/;
+  Test::More::is_deeply $self->tx->res->json($p), $data,
+    $desc || qq/exact match for JSON Pointer "$p"/;
   return $self;
 }
 
@@ -573,8 +573,8 @@ arguments as L<Mojo::UserAgent/"get">.
   $t = $t->head_ok('/foo');
   $t = $t->head_ok('/foo' => {DNT => 1} => 'Hi!');
 
-Perform a C<HEAD> request and check for transport errors, takes the exact
-same arguments as L<Mojo::UserAgent/"head">.
+Perform a C<HEAD> request and check for transport errors, takes the exact same
+arguments as L<Mojo::UserAgent/"head">.
 
 =head2 C<header_is>
 
@@ -616,16 +616,16 @@ Check response content for JSON data.
   $t = $t->json_is('/foo/bar' => [1, 2, 3]);
   $t = $t->json_is('/foo/bar/1' => 2, 'right value');
 
-Check the value extracted from JSON response using the given JSON Pointer
-with L<Mojo::JSON::Pointer>.
+Check the value extracted from JSON response using the given JSON Pointer with
+L<Mojo::JSON::Pointer>.
 
 =head2 C<json_has>
 
   $t = $t->json_has('/foo');
   $t = $t->json_has('/minibar', 'has a minibar');
 
-Check if JSON response contains a value that can be identified using the
-given JSON Pointer with L<Mojo::JSON::Pointer>.
+Check if JSON response contains a value that can be identified using the given
+JSON Pointer with L<Mojo::JSON::Pointer>.
 
 =head2 C<json_hasnt>
 
@@ -683,8 +683,8 @@ same arguments as L<Mojo::UserAgent/"patch">.
   $t = $t->post_ok('/foo');
   $t = $t->post_ok('/foo' => {DNT => 1} => 'Hi!');
 
-Perform a C<POST> request and check for transport errors, takes the exact
-same arguments as L<Mojo::UserAgent/"post">.
+Perform a C<POST> request and check for transport errors, takes the exact same
+arguments as L<Mojo::UserAgent/"post">.
 
 =head2 C<post_form_ok>
 

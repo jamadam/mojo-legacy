@@ -58,8 +58,8 @@ is_deeply [$p->param], [qw/q t w/], 'right structure';
 
 # Append
 $p->append('a', 4, 'a', 5, 'b', 6, 'b', 7);
-is_deeply $p->to_hash,
-  {a => [4, 5], b => [6, 7], q => 1, w => 2, t => 7}, 'right structure';
+is_deeply $p->to_hash, {a => [4, 5], b => [6, 7], q => 1, w => 2, t => 7},
+  'right structure';
 $p = Mojo::Parameters->new(foo => undef, bar => 'bar');
 is $p->to_string, 'foo=&bar=bar', 'right format';
 $p = Mojo::Parameters->new(bar => 'bar', foo => undef);
@@ -148,8 +148,7 @@ is_deeply [$p->param('foo')], [qw/bar baz/], 'right values';
 is $p->param('a'), 'b', 'right value';
 is_deeply [$p->param('bar')], [qw/bas test/], 'right values';
 is_deeply $p->to_hash,
-  {foo => ['bar', 'baz'], a => 'b', bar => ['bas', 'test']},
-  'right structure';
+  {foo => ['bar', 'baz'], a => 'b', bar => ['bas', 'test']}, 'right structure';
 
 # Unicode
 $p = Mojo::Parameters->new;

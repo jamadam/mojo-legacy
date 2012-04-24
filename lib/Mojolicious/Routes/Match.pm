@@ -45,7 +45,7 @@ sub match {
 
   # Conditions
   if (my $over = $r->over) {
-    my $conditions = $self->{conditions} ||= $r->root->conditions;
+    my $conditions = $self->{conditions} ||= $self->root->conditions;
     for (my $i = 0; $i < @$over; $i += 2) {
       return unless my $condition = $conditions->{$over->[$i]};
       return if !$condition->($r, $c, $captures, $over->[$i + 1]);
@@ -88,7 +88,7 @@ sub match {
 
     # Reset
     $self->{path} = $path;
-    if   ($r->parent) { $self->stack([@$snapshot]) }
+    if   ($r->parent) { $self->captures($captures)->stack([@$snapshot]) }
     else              { $self->captures({})->stack([]) }
   }
 
@@ -140,8 +140,8 @@ sub path_for {
   my $captures = $self->captures;
   %values = (%$captures, format => undef, %values);
   my $pattern = $endpoint->pattern;
-  $values{format} =
-    defined $captures->{format}
+  $values{format}
+    = defined $captures->{format}
     ? $captures->{format}
     : $pattern->defaults->{format}
     if $pattern->reqs->{format};

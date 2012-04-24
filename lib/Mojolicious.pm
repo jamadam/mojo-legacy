@@ -33,7 +33,7 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Leaf Fluttering In Wind';
-our $VERSION  = '2.83';
+our $VERSION  = '2.87';
 
 # "These old doomsday devices are dangerously unstable.
 #  I'll rest easier not knowing where they are."
@@ -81,20 +81,15 @@ sub new {
     if -w $home->rel_file('log');
 
   # Load default plugins
-  $self->plugin('HeaderCondition');
-  $self->plugin('DefaultHelpers');
-  $self->plugin('TagHelpers');
-  $self->plugin('EPLRenderer');
-  $self->plugin('EPRenderer');
-  $self->plugin('RequestTimer');
-  $self->plugin('PoweredBy');
+  $self->plugin($_) for qw/HeaderCondition DefaultHelpers TagHelpers/;
+  $self->plugin($_) for qw/EPLRenderer EPRenderer RequestTimer PoweredBy/;
 
   # Exception handling
   $self->hook(
     around_dispatch => sub {
       my ($next, $c) = @_;
-      local $SIG{__DIE__} =
-        sub { ref $_[0] ? CORE::die($_[0]) : Mojo::Exception->throw(@_) };
+      local $SIG{__DIE__}
+        = sub { ref $_[0] ? CORE::die($_[0]) : Mojo::Exception->throw(@_) };
       $c->render_exception($@) unless eval { $next->(); 1 };
     }
   );
@@ -103,8 +98,7 @@ sub new {
   $self->log->level('info') unless $mode eq 'development';
 
   # Run mode
-  $mode = $mode . '_mode';
-  $self->$mode(@_) if $self->can($mode);
+  if (my $sub = $self->can("${mode}_mode")) { $self->$sub(@_) }
 
   # Startup
   $self->startup(@_);
@@ -128,8 +122,7 @@ sub dispatch {
   my $tx = $c->tx;
   $c->res->code(undef) if $tx->is_websocket;
   $self->sessions->load($c);
-  my $plugins = $self->plugins;
-  $plugins->emit_hook(before_dispatch => $c);
+  my $plugins = $self->plugins->emit_hook(before_dispatch => $c);
 
   # Try to find a static file
   $self->static->dispatch($c);
@@ -154,8 +147,8 @@ sub handler {
   # Build default controller
   my $defaults = $self->defaults;
   @{$stash}{keys %$defaults} = values %$defaults;
-  my $c =
-    $self->controller_class->new(app => $self, stash => $stash, tx => $tx);
+  my $c
+    = $self->controller_class->new(app => $self, stash => $stash, tx => $tx);
   weaken $c->{app};
   weaken $c->{tx};
 
@@ -468,8 +461,8 @@ parsed.
   });
 
 This is a very powerful hook and should not be used lightly, it makes some
-rather advanced features such as upload progress bars possible, just note
-that it will not work for embedded applications. (Passed the transaction and
+rather advanced features such as upload progress bars possible, just note that
+it will not work for embedded applications. (Passed the transaction and
 application object)
 
 =item B<before_dispatch>
@@ -513,8 +506,8 @@ object)
 =item B<around_dispatch>
 
 Emitted right before the C<before_dispatch> hook and wraps around the whole
-dispatch process, so you have to manually forward to the next hook if you
-want to continue the chain. Default exception handling with
+dispatch process, so you have to manually forward to the next hook if you want
+to continue the chain. Default exception handling with
 L<Mojolicious::Controller/"render_exception"> is the first hook in the chain
 and a call to C<dispatch> the last, yours will be in between.
 
@@ -632,10 +625,10 @@ startup. Meant to be overloaded in a subclass.
 
 In addition to the attributes and methods above you can also call helpers on
 L<Mojolicious> objects. This includes all helpers from
-L<Mojolicious::Plugin::DefaultHelpers> and
-L<Mojolicious::Plugin::TagHelpers>. Note that application helpers are always
-called with a new C<controller_class> object, so they can't depend on or
-change controller state, which includes request, response and stash.
+L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
+Note that application helpers are always called with a new C<controller_class>
+object, so they can't depend on or change controller state, which includes
+request, response and stash.
 
   $app->log->debug($app->dumper({foo => 'bar'}));
 
@@ -686,8 +679,8 @@ L<http://www.apache.org/licenses/LICENSE-2.0>.
 
 =head1 CODE NAMES
 
-Every major release of L<Mojolicious> has a code name, these are the ones
-that have been used in the past.
+Every major release of L<Mojolicious> has a code name, these are the ones that
+have been used in the past.
 
 2.0, C<Leaf Fluttering In Wind> (u1F343)
 

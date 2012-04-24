@@ -23,8 +23,7 @@ sub startup {
   push @{$self->renderer->classes}, 'MojoliciousTest';
 
   # Plugins in custom namespace
-  unshift @{$self->plugins->namespaces},
-    $self->routes->namespace . '::Plugin';
+  unshift @{$self->plugins->namespaces}, $self->routes->namespace . '::Plugin';
   $self->plugin('test-some_plugin2');
   $self->plugin('UPPERCASETestPlugin');
 
@@ -107,10 +106,8 @@ sub startup {
   );
 
   # /test5 (only namespace test)
-  $r->route('/test5')->to(
-    namespace => 'MojoliciousTest2::Foo',
-    action    => 'test'
-  );
+  $r->route('/test5')
+    ->to(namespace => 'MojoliciousTest2::Foo', action => 'test');
 
   # /test6 (no namespace test)
   $r->route('/test6')->to(

@@ -176,8 +176,8 @@ EOF
 is $dom->at('script')->text, "alert('lalala');", 'right script content';
 
 # HTML5 (unquoted values)
-$dom =
-  Mojo::DOM->new->parse(qq#<div id = test foo ="bar" class=tset>works</div>#);
+$dom = Mojo::DOM->new->parse(
+  qq#<div id = test foo ="bar" class=tset>works</div>#);
 is $dom->at('#test')->text,       'works', 'right text';
 is $dom->at('div')->text,         'works', 'right text';
 is $dom->at('[foo="bar"]')->text, 'works', 'right text';
@@ -380,11 +380,11 @@ is $dom->at('extension')->attrs('foo:id'), 'works', 'right id';
 like $dom->at('#works')->text,       qr/\[awesome\]\]/, 'right text';
 like $dom->at('[id="works"]')->text, qr/\[awesome\]\]/, 'right text';
 is $dom->find('description')->[1]->text, '<p>trololololo>', 'right text';
-is $dom->at('pubDate')->text,       'Mon, 12 Jul 2010 20:42:00', 'right text';
-like $dom->at('[id*="ork"]')->text, qr/\[awesome\]\]/,           'right text';
-like $dom->at('[id*="orks"]')->text, qr/\[awesome\]\]/, 'right text';
-like $dom->at('[id*="work"]')->text, qr/\[awesome\]\]/, 'right text';
-like $dom->at('[id*="or"]')->text,   qr/\[awesome\]\]/, 'right text';
+is $dom->at('pubDate')->text,        'Mon, 12 Jul 2010 20:42:00', 'right text';
+like $dom->at('[id*="ork"]')->text,  qr/\[awesome\]\]/,           'right text';
+like $dom->at('[id*="orks"]')->text, qr/\[awesome\]\]/,           'right text';
+like $dom->at('[id*="work"]')->text, qr/\[awesome\]\]/,           'right text';
+like $dom->at('[id*="or"]')->text,   qr/\[awesome\]\]/,           'right text';
 
 # Namespace
 $dom = Mojo::DOM->new->parse(<<EOF);
@@ -506,8 +506,8 @@ is $dom->at('div')->text,        'content', 'right text';
 is $dom->at('div')->content_xml, 'content', 'right text';
 
 # Class with hyphen
-$dom =
-  Mojo::DOM->new->parse(qq#<div class="a">A</div><div class="a-1">A1</div>#);
+$dom
+  = Mojo::DOM->new->parse(qq#<div class="a">A</div><div class="a-1">A1</div>#);
 @div = ();
 $dom->find('.a')->each(sub { push @div, shift->text });
 is_deeply \@div, ['A'], 'found first element only';
@@ -1258,10 +1258,9 @@ is $dom->find('thead > tr > .three')->[0]->text, 'Three',       'right text';
 is $dom->find('thead > tr > .four')->[0]->text,  'Four',        'right text';
 is $dom->find('tbody > tr > .beta')->[0]->text,  'Beta',        'right text';
 is $dom->find('tbody > tr > .gamma')->[0]->text, '',            'no text';
-is $dom->find('tbody > tr > .gamma > a')->[0]->text, 'Gamma', 'right text';
-is $dom->find('tbody > tr > .alpha')->[1]->text, 'Alpha Two', 'right text';
-is $dom->find('tbody > tr > .gamma > a')->[1]->text, 'Gamma Two',
-  'right text';
+is $dom->find('tbody > tr > .gamma > a')->[0]->text, 'Gamma',     'right text';
+is $dom->find('tbody > tr > .alpha')->[1]->text,     'Alpha Two', 'right text';
+is $dom->find('tbody > tr > .gamma > a')->[1]->text, 'Gamma Two', 'right text';
 
 # Real world list
 $dom = Mojo::DOM->new->parse(<<EOF);
@@ -1295,11 +1294,11 @@ is $dom->find('body > ul > li > p')->[0]->text,  '',            'no text';
 is $dom->find('body > ul > li')->[1]->text,      'Test 321',    'right text';
 is $dom->find('body > ul > li > p')->[1]->text,  '',            'no text';
 is $dom->find('body > ul > li')->[1]->all_text,  'Test 321',    'right text';
-is $dom->find('body > ul > li > p')->[1]->all_text, '', 'no text';
-is $dom->find('body > ul > li')->[2]->text,     'Test 3 2 1', 'right text';
-is $dom->find('body > ul > li > p')->[2]->text, '',           'no text';
-is $dom->find('body > ul > li')->[2]->all_text, 'Test 3 2 1', 'right text';
-is $dom->find('body > ul > li > p')->[2]->all_text, '', 'no text';
+is $dom->find('body > ul > li > p')->[1]->all_text, '',           'no text';
+is $dom->find('body > ul > li')->[2]->text,         'Test 3 2 1', 'right text';
+is $dom->find('body > ul > li > p')->[2]->text,     '',           'no text';
+is $dom->find('body > ul > li')->[2]->all_text,     'Test 3 2 1', 'right text';
+is $dom->find('body > ul > li > p')->[2]->all_text, '',           'no text';
 
 # Advanced whitespace trimming (punctuation)
 $dom = Mojo::DOM->new->parse(<<EOF);
@@ -1337,8 +1336,7 @@ is $dom->find('html > body')->[0]->text, 'Foo!', 'right text';
 is $dom->find('html > head > style')->[0]->text,
   "#style { foo: style('<test>'); }", 'right text';
 is $dom->find('html > head > script')->[0]->text,
-  "\n      if (a < b) {\n        alert('<123>');\n      }\n    ",
-  'right text';
+  "\n      if (a < b) {\n        alert('<123>');\n      }\n    ", 'right text';
 is $dom->find('html > head > script')->[1]->text,
   "if (b > c) { alert('&<ohoh>') }", 'right text';
 
@@ -1947,21 +1945,17 @@ is $dom->find('entry')->[0]->id->text,          '1286823',       'right text';
 is $dom->find('entry')->[0]->addresses->children('type')->[0]->text, 'home',
   'right text';
 is $dom->find('entry')->[0]->addresses->formatted->text,
-  "742 Evergreen Terrace\nSpringfield, VT 12345 USA",
-  'right text';
+  "742 Evergreen Terrace\nSpringfield, VT 12345 USA", 'right text';
 is $dom->find('entry')->[0]->addresses->formatted->text(0),
-  "742 Evergreen Terrace\nSpringfield, VT 12345 USA",
-  'right text';
+  "742 Evergreen Terrace\nSpringfield, VT 12345 USA", 'right text';
 is $dom->find('entry')->[1]->displayName->text, 'Marge Simpson', 'right text';
 is $dom->find('entry')->[1]->id->text,          '1286822',       'right text';
 is $dom->find('entry')->[1]->addresses->children('type')->[0]->text, 'home',
   'right text';
 is $dom->find('entry')->[1]->addresses->formatted->text,
-  '742 Evergreen Terrace Springfield, VT 12345 USA',
-  'right text';
+  '742 Evergreen Terrace Springfield, VT 12345 USA', 'right text';
 is $dom->find('entry')->[1]->addresses->formatted->text(0),
-  "742 Evergreen Terrace\nSpringfield, VT 12345 USA",
-  'right text';
+  "742 Evergreen Terrace\nSpringfield, VT 12345 USA", 'right text';
 is $dom->find('entry')->[2], undef, 'no result';
 is $dom->find('entry')->size, 2, 'right number of elements';
 
@@ -1983,13 +1977,13 @@ is $dom->find('head > [http-equiv$="-type"]')->[0]{content}, 'text/html',
   'right attribute';
 is $dom->find('head > [http-equiv$="-type"]')->[1], undef, 'no result';
 
-# Find "0" attribute value
+# Find "0" attribute value and unescape relaxed entity
 $dom = Mojo::DOM->new(<<EOF);
 <a accesskey="0">Zero</a>
-<a accesskey="1">One</a>
+<a accesskey="1">O&gTn&gte</a>
 EOF
-is $dom->find('a[accesskey]')->[0]->text, 'Zero', 'right text';
-is $dom->find('a[accesskey]')->[1]->text, 'One',  'right text';
+is $dom->find('a[accesskey]')->[0]->text, 'Zero',    'right text';
+is $dom->find('a[accesskey]')->[1]->text, 'O&gTn>e', 'right text';
 is $dom->find('a[accesskey]')->[2], undef, 'no result';
 is $dom->find('a[accesskey="0"]')->[0]->text, 'Zero', 'right text';
 is $dom->find('a[accesskey="0"]')->[1], undef, 'no result';
@@ -2001,15 +1995,15 @@ is $dom->find('a[accesskey~="0"]')->[0]->text, 'Zero', 'right text';
 is $dom->find('a[accesskey~="0]')->[1], undef, 'no result';
 is $dom->find('a[accesskey*="0"]')->[0]->text, 'Zero', 'right text';
 is $dom->find('a[accesskey*="0]')->[1], undef, 'no result';
-is $dom->find('a[accesskey="1"]')->[0]->text, 'One', 'right text';
+is $dom->find('a[accesskey="1"]')->[0]->text, 'O&gTn>e', 'right text';
 is $dom->find('a[accesskey="1"]')->[1], undef, 'no result';
-is $dom->find('a[accesskey^="1"]')->[0]->text, 'One', 'right text';
+is $dom->find('a[accesskey^="1"]')->[0]->text, 'O&gTn>e', 'right text';
 is $dom->find('a[accesskey^="1"]')->[1], undef, 'no result';
-is $dom->find('a[accesskey$="1"]')->[0]->text, 'One', 'right text';
+is $dom->find('a[accesskey$="1"]')->[0]->text, 'O&gTn>e', 'right text';
 is $dom->find('a[accesskey$="1]')->[1], undef, 'no result';
-is $dom->find('a[accesskey~="1"]')->[0]->text, 'One', 'right text';
+is $dom->find('a[accesskey~="1"]')->[0]->text, 'O&gTn>e', 'right text';
 is $dom->find('a[accesskey~="1]')->[1], undef, 'no result';
-is $dom->find('a[accesskey*="1"]')->[0]->text, 'One', 'right text';
+is $dom->find('a[accesskey*="1"]')->[0]->text, 'O&gTn>e', 'right text';
 is $dom->find('a[accesskey*="1]')->[1], undef, 'no result';
 
 # Empty attribute value

@@ -113,17 +113,12 @@ $r->route('/format7', format => [qw/foo foobar/])->to('perl#rocks');
 
 # /articles/1/edit
 # /articles/1/delete
-my $bridge = $r->bridge('/articles/:id')->to(
-  controller => 'articles',
-  action     => 'load',
-  format     => 'html'
-);
+my $bridge = $r->bridge('/articles/:id')
+  ->to(controller => 'articles', action => 'load', format => 'html');
 $bridge->route('/edit')->to(controller => 'articles', action => 'edit');
-$bridge->route('/delete')->to(
-  controller => 'articles',
-  action     => 'delete',
-  format     => undef
-)->name('articles_delete');
+$bridge->route('/delete')
+  ->to(controller => 'articles', action => 'delete', format => undef)
+  ->name('articles_delete');
 
 # GET /method/get
 $r->route('/method/get')->via('GET')
@@ -148,8 +143,7 @@ $auth->bridge->to('album#allow')->route('/album/create/')->to('album#create');
 $auth->route('/gift/')->to('gift#index')->name('gift');
 
 # /regex/alternatives/*
-$r->route('/regex/alternatives/:alternatives',
-  alternatives => qr/foo|bar|baz/)
+$r->route('/regex/alternatives/:alternatives', alternatives => qr/foo|bar|baz/)
   ->to(controller => 'regex', action => 'alternatives');
 
 # /versioned/1.0/test
@@ -194,8 +188,7 @@ is @{$m->stack}, 1, 'right number of elements';
 # Introspect
 is $r->find('very_clean')->to_string, '/clean', 'right pattern';
 is $r->find('0')->to_string,          '/0',     'right pattern';
-is $r->find('test_edit')->to_string, '/:controller/test/edit',
-  'right pattern';
+is $r->find('test_edit')->to_string, '/:controller/test/edit', 'right pattern';
 is $r->find('articles_delete')->to_string, '/articles/:id/delete',
   'right pattern';
 is $r->find('nodetect')->pattern->reqs->{format}, 0, 'right value';
@@ -260,8 +253,8 @@ $m = Mojolicious::Routes::Match->new(GET => '/alternatives3/foo')->match($r);
 is $m->stack->[0]{foo}, 'foo', 'right value';
 is @{$m->stack}, 1, 'right number of elements';
 is $m->path_for, '/alternatives3/foo', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/alternatives3/foobar')->match($r);
+$m
+  = Mojolicious::Routes::Match->new(GET => '/alternatives3/foobar')->match($r);
 is $m->stack->[0]{foo}, 'foobar', 'right value';
 is @{$m->stack}, 1, 'right number of elements';
 is $m->path_for, '/alternatives3/foobar', 'right path';
@@ -271,18 +264,18 @@ $m = Mojolicious::Routes::Match->new(GET => '/alternatives4/foo')->match($r);
 is $m->stack->[0]{foo}, 'foo', 'right value';
 is @{$m->stack}, 1, 'right number of elements';
 is $m->path_for, '/alternatives4/foo', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/alternatives4/foo.bar')->match($r);
+$m = Mojolicious::Routes::Match->new(GET => '/alternatives4/foo.bar')
+  ->match($r);
 is $m->stack->[0]{foo}, 'foo.bar', 'right value';
 is @{$m->stack}, 1, 'right number of elements';
 is $m->path_for, '/alternatives4/foo.bar', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/alternatives4/fooobar')->match($r);
+$m = Mojolicious::Routes::Match->new(GET => '/alternatives4/fooobar')
+  ->match($r);
 is @{$m->stack}, 0, 'right number of elements';
 $m = Mojolicious::Routes::Match->new(GET => '/alternatives4/bar')->match($r);
 is @{$m->stack}, 0, 'right number of elements';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/alternatives4/bar.foo')->match($r);
+$m = Mojolicious::Routes::Match->new(GET => '/alternatives4/bar.foo')
+  ->match($r);
 is @{$m->stack}, 0, 'right number of elements';
 
 # Real world example using most features at once
@@ -386,8 +379,7 @@ is $m->path_for('test_edit', {controller => 'foo'}), '/foo/test/edit',
 is @{$m->stack}, 1, 'right number of elements';
 
 # Wildcards
-$m =
-  Mojolicious::Routes::Match->new(GET => '/wildcards/1/hello/there')
+$m = Mojolicious::Routes::Match->new(GET => '/wildcards/1/hello/there')
   ->match($r);
 is $m->stack->[0]{controller}, 'wild',        'right value';
 is $m->stack->[0]{action},     'card',        'right value';
@@ -395,24 +387,21 @@ is $m->stack->[0]{wildcard},   'hello/there', 'right value';
 is $m->path_for, '/wildcards/1/hello/there', 'right path';
 is $m->path_for(wildcard => ''), '/wildcards/1/', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/wildcards/2/hello/there')
+$m = Mojolicious::Routes::Match->new(GET => '/wildcards/2/hello/there')
   ->match($r);
 is $m->stack->[0]{controller}, 'card',        'right value';
 is $m->stack->[0]{action},     'wild',        'right value';
 is $m->stack->[0]{wildcard},   'hello/there', 'right value';
 is $m->path_for, '/wildcards/2/hello/there', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/wildcards/3/hello/there/foo')
+$m = Mojolicious::Routes::Match->new(GET => '/wildcards/3/hello/there/foo')
   ->match($r);
 is $m->stack->[0]{controller}, 'very',        'right value';
 is $m->stack->[0]{action},     'dangerous',   'right value';
 is $m->stack->[0]{wildcard},   'hello/there', 'right value';
 is $m->path_for, '/wildcards/3/hello/there/foo', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/wildcards/4/hello/there/foo')
+$m = Mojolicious::Routes::Match->new(GET => '/wildcards/4/hello/there/foo')
   ->match($r);
 is $m->stack->[0]{controller}, 'somewhat',    'right value';
 is $m->stack->[0]{action},     'dangerous',   'right value';
@@ -421,16 +410,14 @@ is $m->path_for, '/wildcards/4/hello/there/foo', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
 
 # Escaped
-$m =
-  Mojolicious::Routes::Match->new(GET => '/wildcards/1/http://www.google.com')
-  ->match($r);
+$m = Mojolicious::Routes::Match->new(
+  GET => '/wildcards/1/http://www.google.com')->match($r);
 is $m->stack->[0]{controller}, 'wild',                  'right value';
 is $m->stack->[0]{action},     'card',                  'right value';
 is $m->stack->[0]{wildcard},   'http://www.google.com', 'right value';
 is $m->path_for, '/wildcards/1/http://www.google.com', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
-$m =
-  Mojolicious::Routes::Match->new(
+$m = Mojolicious::Routes::Match->new(
   GET => '/wildcards/1/http%3A%2F%2Fwww.google.com')->match($r);
 is $m->stack->[0]{controller}, 'wild',                  'right value';
 is $m->stack->[0]{action},     'card',                  'right value';
@@ -608,8 +595,7 @@ is $m->path_for('current'), '/edge/auth/gift', 'right path';
 is @{$m->stack}, 2, 'right number of elements';
 
 # Special edge case with nested bridges (regex)
-$m =
-  Mojolicious::Routes::Match->new(GET => '/regex/alternatives/foo')
+$m = Mojolicious::Routes::Match->new(GET => '/regex/alternatives/foo')
   ->match($r);
 is $m->stack->[0]{controller},   'regex',        'right value';
 is $m->stack->[0]{action},       'alternatives', 'right value';
@@ -617,8 +603,7 @@ is $m->stack->[0]{alternatives}, 'foo',          'right value';
 is $m->stack->[0]{format},       undef,          'no value';
 is $m->stack->[1], undef, 'no value';
 is $m->path_for, '/regex/alternatives/foo', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/regex/alternatives/bar')
+$m = Mojolicious::Routes::Match->new(GET => '/regex/alternatives/bar')
   ->match($r);
 is $m->stack->[0]{controller},   'regex',        'right value';
 is $m->stack->[0]{action},       'alternatives', 'right value';
@@ -626,8 +611,7 @@ is $m->stack->[0]{alternatives}, 'bar',          'right value';
 is $m->stack->[0]{format},       undef,          'no value';
 is $m->stack->[1], undef, 'no value';
 is $m->path_for, '/regex/alternatives/bar', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/regex/alternatives/baz')
+$m = Mojolicious::Routes::Match->new(GET => '/regex/alternatives/baz')
   ->match($r);
 is $m->stack->[0]{controller},   'regex',        'right value';
 is $m->stack->[0]{action},       'alternatives', 'right value';
@@ -635,8 +619,7 @@ is $m->stack->[0]{alternatives}, 'baz',          'right value';
 is $m->stack->[0]{format},       undef,          'no value';
 is $m->stack->[1], undef, 'no value';
 is $m->path_for, '/regex/alternatives/baz', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/regex/alternatives/yada')
+$m = Mojolicious::Routes::Match->new(GET => '/regex/alternatives/yada')
   ->match($r);
 is $m->stack->[0], undef, 'no value';
 
@@ -647,8 +630,7 @@ is $m->stack->[0]{action},     'baz', 'right value';
 is $m->stack->[0]{format},     undef, 'no value';
 is $m->stack->[1], undef, 'no value';
 is $m->path_for, '/versioned/1.0/test', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/versioned/1.0/test.xml')
+$m = Mojolicious::Routes::Match->new(GET => '/versioned/1.0/test.xml')
   ->match($r);
 is $m->stack->[0]{controller}, 'bar', 'right value';
 is $m->stack->[0]{action},     'baz', 'right value';
@@ -661,8 +643,7 @@ is $m->stack->[0]{action},     'bar', 'right value';
 is $m->stack->[0]{format},     undef, 'no value';
 is $m->stack->[1], undef, 'no value';
 is $m->path_for, '/versioned/2.4/test', 'right path';
-$m =
-  Mojolicious::Routes::Match->new(GET => '/versioned/2.4/test.xml')
+$m = Mojolicious::Routes::Match->new(GET => '/versioned/2.4/test.xml')
   ->match($r);
 is $m->stack->[0]{controller}, 'foo', 'right value';
 is $m->stack->[0]{action},     'bar', 'right value';

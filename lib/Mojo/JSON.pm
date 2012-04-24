@@ -3,12 +3,13 @@ use Mojo::Base -base;
 
 use B;
 use Mojo::Util;
+use Scalar::Util 'blessed';
 
 has 'error';
 
 # Literal names
-my $FALSE = Mojo::JSON::_Bool->new(0);
-my $TRUE  = Mojo::JSON::_Bool->new(1);
+my $FALSE = bless \(my $false = 0), 'Mojo::JSON::_Bool';
+my $TRUE  = bless \(my $true  = 1), 'Mojo::JSON::_Bool';
 
 # Escaped special character map (with u2028 and u2029)
 my %ESCAPE = (
@@ -56,10 +57,7 @@ sub decode {
 
   # Detect and decode unicode
   my $encoding = 'UTF-8';
-  for my $name (keys %$UTF_PATTERNS) {
-    next unless $string =~ $UTF_PATTERNS->{$name};
-    $encoding = $name;
-  }
+  $string =~ $UTF_PATTERNS->{$_} and $encoding = $_ for keys %$UTF_PATTERNS;
   $string = Mojo::Util::decode $encoding, $string;
 
   # Object or array
@@ -193,13 +191,11 @@ sub _decode_string {
 
         # High surrogate
         ($ord & 0xFC00) == 0xD800
-          or pos($_) = $pos + pos($str),
-          _exception('Missing high-surrogate');
+          or pos($_) = $pos + pos($str), _exception('Missing high-surrogate');
 
         # Low surrogate
         $str =~ m/\G\\u([Dd][C-Fc-f]..)/gc
-          or pos($_) = $pos + pos($str),
-          _exception('Missing low-surrogate');
+          or pos($_) = $pos + pos($str), _exception('Missing low-surrogate');
 
         # Pair
         $ord = 0x10000 + ($ord - 0xD800) * 0x400 + (hex($1) - 0xDC00);
@@ -211,9 +207,7 @@ sub _decode_string {
   }
 
   # The rest
-  $buffer .= substr $str, pos($str), length($str);
-
-  return $buffer;
+  return $buffer . substr $str, pos($str), length($str);
 }
 
 # "Eternity with nerds.
@@ -257,8 +251,7 @@ sub _encode_object {
   my $object = shift;
 
   # Encode pairs
-  my @pairs =
-    map { _encode_string($_) . ':' . _encode_values($object->{$_}) }
+  my @pairs = map { _encode_string($_) . ':' . _encode_values($object->{$_}) }
     keys %$object;
 
   # Stringify
@@ -269,8 +262,7 @@ sub _encode_string {
   my $string = shift;
 
   # Escape string
-  $string
-    =~ s|([\x00-\x1F\x7F\x{2028}\x{2029}\\"/\b\f\n\r\t])|$REVERSE{$1}|gs;
+  $string =~ s|([\x00-\x1F\x7F\x{2028}\x{2029}\\"/\b\f\n\r\t])|$REVERSE{$1}|gs;
 
   # Stringify
   return "\"$string\"";
@@ -287,16 +279,18 @@ sub _encode_values {
 
     # Object
     return _encode_object($value) if $ref eq 'HASH';
+
+    # True or false
+    return $value ? 'true' : 'false' if $ref eq 'Mojo::JSON::_Bool';
+
+    # Blessed reference with TO_JSON method
+    if (blessed $value && (my $sub = $value->can('TO_JSON'))) {
+      return _encode_values($value->$sub);
+    }
   }
 
-  # "null"
+  # Null
   return 'null' unless defined $value;
-
-  # "false"
-  return 'false' if ref $value eq 'Mojo::JSON::_Bool' && !$value;
-
-  # "true"
-  return 'true' if ref $value eq 'Mojo::JSON::_Bool' && $value;
 
   # Number
   my $flags = B::svref_2object(\$value)->FLAGS;
@@ -326,13 +320,7 @@ sub _exception {
 
 # Emulate boolean type
 package Mojo::JSON::_Bool;
-use Mojo::Base -base;
-use overload
-  '0+'     => sub { $_[0]{value} },
-  '""'     => sub { $_[0]{value} },
-  fallback => 1;
-
-sub new { shift->SUPER::new(value => shift) }
+use overload '0+' => sub { ${$_[0]} }, '""' => sub { ${$_[0]} }, fallback => 1;
 
 1;
 __END__
@@ -352,11 +340,12 @@ Mojo::JSON - Minimalistic JSON
 =head1 DESCRIPTION
 
 L<Mojo::JSON> is a minimalistic and relaxed implementation of RFC 4627. While
-it is possibly the fastest pure-Perl JSON parser available, you should not
-use it for validation.
+it is possibly the fastest pure-Perl JSON parser available, you should not use
+it for validation.
 
-It supports normal Perl data types like C<Scalar>, C<Array> reference,
-C<Hash> reference and will try to stringify blessed references.
+It supports normal Perl data types like C<Scalar>, C<Array> reference, C<Hash>
+reference and will try to call the C<TO_JSON> method on blessed references, or
+stringify them if it doesn't exist.
 
   [1, -2, 3]     -> [1, -2, 3]
   {"foo": "bar"} -> {foo => 'bar'}

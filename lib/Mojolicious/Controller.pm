@@ -104,15 +104,12 @@ sub finish {
 sub flash {
   my $self = shift;
 
-  # Get
-  my $session = $self->stash->{'mojo.session'};
-  if ($_[0] && !defined $_[1] && !ref $_[0]) {
-    return unless ref $session eq 'HASH';
-    return unless my $flash = $session->{flash};
-    return $flash->{$_[0]};
-  }
+  # Check old flash
+  my $session = $self->session;
+  return $session->{flash} ? $session->{flash}{$_[0]} : undef
+    if @_ == 1 && !ref $_[0];
 
-  # Set
+  # Initialize new flash and merge values
   my $flash = $session->{new_flash} ||= {};
   %$flash = (%$flash, %{@_ > 1 ? {@_} : $_[0]});
 
@@ -227,8 +224,8 @@ sub render_content {
 
     # Reset with multiple values
     if (@_) {
-      $c->{$name} =
-        join('', map({ref $_ eq 'CODE' ? $_->() : $_} @_, $content));
+      $c->{$name}
+        = join('', map({ref $_ eq 'CODE' ? $_->() : $_} @_, $content));
     }
 
     # First come
@@ -255,8 +252,7 @@ sub render_exception {
   return if $stash->{'mojo.exception'};
 
   # Filtered stash snapshot
-  my %snapshot =
-    map { $_ => $stash->{$_} }
+  my %snapshot = map { $_ => $stash->{$_} }
     grep { !/^mojo\./ and defined $stash->{$_} } keys %$stash;
 
   # Render with fallbacks
@@ -499,8 +495,7 @@ sub url_for {
 
     # Fix trailing slash
     $path->trailing_slash(1)
-      if (!$target || $target eq 'current')
-      && $req->url->path->trailing_slash;
+      if (!$target || $target eq 'current') && $req->url->path->trailing_slash;
 
     # Fix scheme for WebSockets
     $base->scheme(($base->scheme || '') eq 'https' ? 'wss' : 'ws') if $ws;
@@ -644,8 +639,8 @@ Data storage persistent only for the next request, stored in the C<session>.
 
   my $cb = $c->on(finish => sub {...});
 
-Subscribe to events of C<tx>, which is usually a L<Mojo::Transaction::HTTP>
-or L<Mojo::Transaction::WebSocket> object.
+Subscribe to events of C<tx>, which is usually a L<Mojo::Transaction::HTTP> or
+L<Mojo::Transaction::WebSocket> object.
 
   # Emitted when the transaction has been finished
   $c->on(finish => sub {
@@ -731,8 +726,8 @@ C<extends> features.
   $c->render_data($bytes);
   $c->render_data($bytes, format => 'png');
 
-Render the given content as raw bytes, similar to C<render_text> but data
-will not be encoded.
+Render the given content as raw bytes, similar to C<render_text> but data will
+not be encoded.
 
 =head2 C<render_exception>
 
@@ -841,7 +836,8 @@ L<Mojo::Message::Response> object.
 Automatically select best possible representation for resource from C<Accept>
 request header, C<format> stash value or C<format> GET/POST parameter,
 defaults to rendering an empty C<204> response. Unspecific C<Accept> request
-headers that contain more than one MIME type are ignored.
+headers that contain more than one MIME type are currently ignored, since
+browsers often don't really know what they actually want.
 
   $c->respond_to(
     json => sub { $c->render_json({just => 'works'}) },
@@ -908,11 +904,10 @@ Cookies failing signature verification will be automatically discarded.
   $c        = $c->stash(foo => 'bar');
 
 Non persistent data storage and exchange, application wide default values can
-be set with L<Mojolicious/"defaults">. Many stash value have a special
-meaning and are reserved, the full list is currently C<action>, C<app>,
-C<cb>, C<controller>, C<data>, C<extends>, C<format>, C<handler>, C<json>,
-C<layout>, C<namespace>, C<partial>, C<path>, C<status>, C<template> and
-C<text>.
+be set with L<Mojolicious/"defaults">. Many stash value have a special meaning
+and are reserved, the full list is currently C<action>, C<app>, C<cb>,
+C<controller>, C<data>, C<extends>, C<format>, C<handler>, C<json>, C<layout>,
+C<namespace>, C<partial>, C<path>, C<status>, C<template> and C<text>.
 
   # Manipulate stash
   $c->stash->{foo} = 'bar';
@@ -1036,8 +1031,7 @@ You can call C<finish> at any time to end the stream.
 
 In addition to the attributes and methods above you can also call helpers on
 L<Mojolicious::Controller> objects. This includes all helpers from
-L<Mojolicious::Plugin::DefaultHelpers> and
-L<Mojolicious::Plugin::TagHelpers>.
+L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
 
   $c->layout('green');
   $c->title('Welcome!');

@@ -27,11 +27,11 @@ sub new {
   my $self = shift->SUPER::new(@_);
 
   # Detect home directory
-  $self->home->detect(ref $self);
+  my $home = $self->home->detect(ref $self);
 
   # Log directory
-  $self->log->path($self->home->rel_file('log/mojo.log'))
-    if -w $self->home->rel_file('log');
+  $self->log->path($home->rel_file('log/mojo.log'))
+    if -w $home->rel_file('log');
 
   return $self;
 }
@@ -47,15 +47,14 @@ sub _dict {
   my ($self, $name) = (shift, shift);
 
   # Hash
-  $self->{$name} ||= {};
-  return $self->{$name} unless @_;
+  my $dict = $self->{$name} ||= {};
+  return $dict unless @_;
 
   # Get
-  return $self->{$name}{$_[0]} unless @_ > 1 || ref $_[0];
+  return $dict->{$_[0]} unless @_ > 1 || ref $_[0];
 
   # Set
-  my $values = ref $_[0] ? $_[0] : {@_};
-  $self->{$name} = {%{$self->{$name}}, %$values};
+  %$dict = (%$dict, %{ref $_[0] ? $_[0] : {@_}});
 
   return $self;
 }
@@ -144,8 +143,7 @@ new ones.
   my $app = Mojo->new;
 
 Construct a new L<Mojo> application. Will automatically detect your home
-directory and set up logging to C<log/mojo.log> if there's a C<log>
-directory.
+directory and set up logging to C<log/mojo.log> if there's a C<log> directory.
 
 =head2 C<build_tx>
 
@@ -174,8 +172,8 @@ Application configuration.
 
 The handler is the main entry point to your application or framework and will
 be called for each new transaction, which will usually be a
-L<Mojo::Transaction::HTTP> or L<Mojo::Transaction::WebSocket> object. Meant
-to be overloaded in a subclass.
+L<Mojo::Transaction::HTTP> or L<Mojo::Transaction::WebSocket> object. Meant to
+be overloaded in a subclass.
 
   sub handler {
     my ($self, $tx) = @_;

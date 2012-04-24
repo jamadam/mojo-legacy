@@ -103,23 +103,17 @@ sub render {
   @{$stash}{keys %$args} = values %$args;
 
   # Extract important stash values
-  my $template = delete $stash->{template};
-  my $format   = $stash->{format} || $self->default_format;
-  my $data     = delete $stash->{data};
-  my $json     = delete $stash->{json};
-  my $text     = delete $stash->{text};
-  my $inline   = delete $stash->{inline};
-
-  # Pick handler
-  my $handler = $stash->{handler};
-  $handler = $self->default_handler if defined $inline && !defined $handler;
   my $options = {
-    template => $template,
-    format   => $format,
-    handler  => $handler,
     encoding => $self->encoding,
-    inline   => $inline
+    handler  => $stash->{handler},
+    template => delete $stash->{template}
   };
+  my $data   = $options->{data}   = delete $stash->{data};
+  my $format = $options->{format} = $stash->{format} || $self->default_format;
+  my $inline = $options->{inline} = delete $stash->{inline};
+  my $json   = $options->{json}   = delete $stash->{json};
+  my $text   = $options->{test}   = delete $stash->{text};
+  $options->{handler} = defined $options->{handler} ? $options->{handler} : $self->default_handler if defined $inline;
 
   # Text
   my $output;
@@ -187,14 +181,10 @@ EOF
 
 sub template_name {
   my ($self, $options) = @_;
-
   return unless my $template = $options->{template} || '';
   return unless my $format = $options->{format};
   my $handler = $options->{handler};
-  my $file    = "$template.$format";
-  $file = "$file.$handler" if defined $handler;
-
-  return $file;
+  return defined $handler ? "$template.$format.$handler" : "$template.$format";
 }
 
 sub template_path {
@@ -226,8 +216,8 @@ sub _detect_handler {
 
   # DATA templates
   unless ($self->{data}) {
-    my @templates =
-      map { sort keys %{Mojo::Command->get_all_data($_)} } @{$self->classes};
+    my @templates
+      = map { sort keys %{Mojo::Command->get_all_data($_)} } @{$self->classes};
     s/\.(\w+)$// and $self->{data}{$_} ||= $1 for @templates;
   }
   return $self->{data}{$file} if exists $self->{data}{$file};
@@ -249,8 +239,8 @@ sub _render_template {
   my ($self, $c, $output, $options) = @_;
 
   # Find handler and render
-  my $handler =
-       $options->{handler}
+  my $handler
+    = $options->{handler}
     || $self->_detect_handler($options)
     || $self->default_handler;
   $options->{handler} = $handler;
@@ -393,8 +383,8 @@ Get a DATA template by name, usually used by handlers.
   });
 
 Render output through one of the Mojo renderers. This renderer requires some
-configuration, at the very least you will need to have a default C<format>
-and a default C<handler> as well as a C<template> or C<text>/C<json>. See
+configuration, at the very least you will need to have a default C<format> and
+a default C<handler> as well as a C<template> or C<text>/C<json>. See
 L<Mojolicious::Controller/"render"> for a more user-friendly interface.
 
 =head2 C<template_name>

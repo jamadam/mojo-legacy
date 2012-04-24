@@ -6,19 +6,18 @@ use Mojo::Server;
 sub register {
   my ($self, $app, $conf) = @_;
 
-  # Extract host and path
-  my $prefix = (keys %$conf)[0];
-  my ($host, $path);
-  if ($prefix =~ m#^(\*\.)?([^/]+)(/.*)?$#) {
-    $host = quotemeta $2;
-    $host = "(?:.*\\.)?$host" if $1;
-    $path = defined $3 ? $3 : '/';
-    $host = qr/^$host$/i;
+  # Load application
+  my $path  = (keys %$conf)[0];
+  my $embed = Mojo::Server->new->load_app($conf->{$path});
+
+  # Extract host
+  my $host;
+  if ($path =~ m#^(\*\.)?([^/]+)(/.*)?$#) {
+    $host = $1 ? qr/^(?:.*\.)?\Q$2\E$/i : qr/^\Q$2\E$/i;
+    $path = $3;
   }
-  else { $path = $prefix }
 
   # Generate route
-  my $embed = Mojo::Server->new->load_app($conf->{$prefix});
   my $route = $app->routes->route($path)->detour(app => $embed);
   $route->over(host => $host) if $host;
 
@@ -61,8 +60,8 @@ learning to build new plugins.
 
 =head1 METHODS
 
-L<Mojolicious::Plugin::Mount> inherits all methods from
-L<Mojolicious::Plugin> and implements the following new ones.
+L<Mojolicious::Plugin::Mount> inherits all methods from L<Mojolicious::Plugin>
+and implements the following new ones.
 
 =head2 C<register>
 

@@ -145,18 +145,15 @@ sub interpret {
   # Stacktrace
   local $SIG{__DIE__} = sub {
     CORE::die($_[0]) if ref $_[0];
-    Mojo::Exception->throw(shift, [$self->template, $self->code],
-      $self->name);
+    Mojo::Exception->throw(shift, [$self->template, $self->code], $self->name);
   };
 
   # Interpret
   return unless my $compiled = $self->compiled;
   my $output = eval { $compiled->(@_) };
-  $output =
-    Mojo::Exception->new($@, [$self->template], $self->name)->verbose(1)
-    if $@;
-
-  return $output;
+  return $@
+    ? Mojo::Exception->new($@, [$self->template], $self->name)->verbose(1)
+    : $output;
 }
 
 # "I am so smart! I am so smart! S-M-R-T! I mean S-M-A-R-T..."
@@ -314,22 +311,23 @@ sub render_file {
   while ($file->sysread(my $buffer, CHUNK_SIZE, 0)) { $tmpl .= $buffer }
 
   # Decode and render
-  $tmpl = decode $self->encoding, $tmpl if $self->encoding;
+  if (my $encoding = $self->encoding) {
+    croak qq/Template "$path" has invalid encoding./
+      unless defined($tmpl = decode $encoding, $tmpl);
+  }
   return $self->render($tmpl, @_);
 }
 
 sub render_file_to_file {
   my ($self, $spath, $tpath) = (shift, shift, shift);
   my $output = $self->render_file($spath, @_);
-  return $output if ref $output;
-  return $self->_write_file($tpath, $output);
+  return ref $output ? $output : $self->_write_file($tpath, $output);
 }
 
 sub render_to_file {
   my ($self, $tmpl, $path) = (shift, shift, shift);
   my $output = $self->render($tmpl, @_);
-  return $output if ref $output;
-  return $self->_write_file($path, $output);
+  return ref $output ? $output : $self->_write_file($path, $output);
 }
 
 sub _trim {
@@ -464,8 +462,8 @@ Perl lines can also be indented freely.
 =head2 Arguments
 
 L<Mojo::Template> templates work just like Perl subs (actually they get
-compiled to a Perl sub internally). That means you can access arguments
-simply via C<@_>.
+compiled to a Perl sub internally). That means you can access arguments simply
+via C<@_>.
 
   % my ($foo, $bar) = @_;
   % my $x = shift;
@@ -505,8 +503,8 @@ stringify to error messages with context.
 
 =head2 Caching
 
-L<Mojo::Template> does not support caching by itself, but you can easily
-build a wrapper around it.
+L<Mojo::Template> does not support caching by itself, but you can easily build
+a wrapper around it.
 
   # Compile and store code somewhere
   my $mt = Mojo::Template->new;
@@ -615,8 +613,8 @@ Character indicating the start of a code line, defaults to C<%>.
   my $name = $mt->name;
   $mt      = $mt->name('foo.mt');
 
-Name of template currently being processed, defaults to C<template>. Note
-that this method is attribute and might change without warning!
+Name of template currently being processed, defaults to C<template>. Note that
+this method is attribute and might change without warning!
 
 =head2 C<namespace>
 

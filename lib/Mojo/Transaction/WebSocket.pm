@@ -66,8 +66,8 @@ sub build_frame {
     warn "-- Extended 64bit payload ($len)\n$payload\n" if DEBUG;
     vec($prefix, 0, 8) = $masked ? (127 | 0b10000000) : 127;
     $frame .= $prefix;
-    $frame .=
-      $Config{ivsize} > 4
+    $frame
+      .= $Config{ivsize} > 4
       ? pack('Q>', $len)
       : pack('NN', $len >> 32, $len & 0xFFFFFFFF);
   }
@@ -159,8 +159,8 @@ sub parse_frame {
     return unless length $clone > 10;
     $hlen = 10;
     my $ext = substr $clone, 2, 8;
-    $len =
-      $Config{ivsize} > 4
+    $len
+      = $Config{ivsize} > 4
       ? unpack('Q>', $ext)
       : unpack('N', substr($ext, 4, 4));
     warn "-- Extended 64bit payload ($len)\n" if DEBUG;
@@ -203,8 +203,8 @@ sub send {
 
   # Binary or raw text
   if (ref $frame eq 'HASH') {
-    $frame =
-      exists $frame->{text}
+    $frame
+      = exists $frame->{text}
       ? [1, 0, 0, 0, TEXT, $frame->{text}]
       : [1, 0, 0, 0, BINARY, $frame->{binary}];
   }

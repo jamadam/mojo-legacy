@@ -75,8 +75,8 @@ sub register {
           return if $e->all_text =~ /^\s*\$\s+/m;
           my $attrs = $e->attrs;
           my $class = $attrs->{class};
-          $attrs->{class} =
-            defined $class ? "$class prettyprint" : 'prettyprint';
+          $attrs->{class}
+            = defined $class ? "$class prettyprint" : 'prettyprint';
         }
       );
 
@@ -88,7 +88,7 @@ sub register {
           my $e = shift;
           my $anchor = my $text = $e->all_text;
           $anchor =~ s/\s+/_/g;
-          $anchor = url_escape $anchor, 'A-Za-z0-9_';
+          $anchor = url_escape $anchor, '^A-Za-z0-9_';
           $anchor =~ s/\%//g;
           push @parts, [] if $e->type eq 'h1' || !@parts;
           push @{$parts[-1]}, $text, $url->fragment($anchor)->to_abs;
@@ -167,9 +167,8 @@ Mojolicious::Plugin::PODRenderer - POD renderer plugin
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Plugin::PODRenderer> is a renderer for true Perl hackers,
-rawr! The code of this plugin is a good example for learning to build new
-plugins.
+L<Mojolicious::Plugin::PODRenderer> is a renderer for true Perl hackers, rawr!
+The code of this plugin is a good example for learning to build new plugins.
 
 =head1 OPTIONS
 

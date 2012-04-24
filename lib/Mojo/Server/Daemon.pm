@@ -205,13 +205,13 @@ sub _listen {
       # Events
       $stream->on(
         timeout => sub {
-          $self->_error($id, 'Inactivity timeout.')
+          $self->_error($id => 'Inactivity timeout.')
             if $self->{connections}{$id}{tx};
         }
       );
       $stream->on(close => sub { $self->_close($id) });
-      $stream->on(error => sub { $self->_error($id, pop) });
-      $stream->on(read  => sub { $self->_read($id, pop) });
+      $stream->on(error => sub { $self->_error($id => pop) });
+      $stream->on(read  => sub { $self->_read($id => pop) });
     }
   );
   $self->{listening} ||= [];
@@ -222,8 +222,8 @@ sub _listen {
     my $name = $options->{address} || Sys::Hostname::hostname();
     $p->publish(
       name => "Mojolicious ($name:$options->{port})",
-      type => '_http._tcp',
-      port => $options->{port}
+      port => $options->{port},
+      type => '_http._tcp'
     ) if $options->{port} && !$tls;
   }
 
@@ -341,9 +341,9 @@ L<Mojo::Server::Daemon> is a full featured non-blocking I/O HTTP 1.1 and
 WebSocket server with C<IPv6>, C<TLS>, C<Bonjour> and C<libev> support.
 
 Optional modules L<EV>, L<IO::Socket::IP>, L<IO::Socket::SSL> and
-L<Net::Rendezvous::Publish> are supported transparently and used if
-installed. Individual features can also be disabled with the
-C<MOJO_NO_BONJOUR>, C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
+L<Net::Rendezvous::Publish> are supported transparently and used if installed.
+Individual features can also be disabled with the C<MOJO_NO_BONJOUR>,
+C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for deployment recipes.
 
@@ -477,8 +477,8 @@ Start accepting connections.
 
 =head1 DEBUGGING
 
-You can set the C<MOJO_DAEMON_DEBUG> environment variable to get some
-advanced diagnostics information printed to C<STDERR>.
+You can set the C<MOJO_DAEMON_DEBUG> environment variable to get some advanced
+diagnostics information printed to C<STDERR>.
 
   MOJO_DAEMON_DEBUG=1
 
