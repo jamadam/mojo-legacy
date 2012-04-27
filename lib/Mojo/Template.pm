@@ -26,18 +26,13 @@ has tree      => sub { [] };
 
 # Helpers
 my $HELPERS = <<'EOF';
-use Mojo::ByteStream 'b';
 use Mojo::Util;
-no strict 'refs';
 no warnings 'redefine';
-sub capture;
-*capture = sub { shift->(@_) };
-sub escape;
-*escape = sub {
+sub _escape {
   return $_[0] if ref $_[0] eq 'Mojo::ByteStream';
   no warnings 'uninitialized';
   Mojo::Util::xml_escape "$_[0]";
-};
+}
 use Mojo::Base -strict;
 EOF
 $HELPERS =~ s/\n//g;
@@ -61,7 +56,7 @@ sub build {
       if ($type eq 'cpen') {
 
         # End block
-        $lines[-1] .= 'return b($_M) }';
+        $lines[-1] .= 'return Mojo::ByteStream->new($_M) }';
 
         # No following code
         my $next = $line->[$j + 3];
@@ -89,7 +84,7 @@ sub build {
           # Escaped
           my $a = $self->auto_escape;
           if (($type eq 'escp' && !$a) || ($type eq 'expr' && $a)) {
-            $lines[-1] .= "\$_M .= escape";
+            $lines[-1] .= "\$_M .= _escape";
             $lines[-1] .= " scalar $value" if length $value;
           }
 
@@ -428,7 +423,7 @@ the default in L<Mojolicious> C<.ep> templates for example.
 
 L<Mojo::ByteStream> objects are always excluded from automatic escaping.
 
-  <%= b('<div>excluded!</div>') %>
+  <%= Mojo::ByteStream->new('<div>excluded!</div>') %>
 
 =head2 Trimming
 
@@ -733,9 +728,8 @@ Render template file.
 =head2 C<render_file_to_file>
 
   my $exception = $mt->render_file_to_file($template_file, $output_file);
-  my $exception = $mt->render_file_to_file(
-    $template_file, $output_file, @args
-  );
+  my $exception
+    = $mt->render_file_to_file($template_file, $output_file, @args);
 
 Render template file to a specific file.
 
