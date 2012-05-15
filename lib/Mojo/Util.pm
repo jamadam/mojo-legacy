@@ -1,13 +1,13 @@
 package Mojo::Util;
 use Mojo::Base 'Exporter';
 
-use Digest::MD5 qw/md5 md5_hex/;
-BEGIN {eval {require Digest::SHA; import Digest::SHA qw/sha1 sha1_hex/}}
+use Digest::MD5 qw(md5 md5_hex);
+BEGIN {eval {require Digest::SHA; import Digest::SHA qw(sha1 sha1_hex)}}
 use Encode 'find_encoding';
 use File::Basename 'dirname';
 use File::Spec::Functions 'catfile';
-use MIME::Base64 qw/decode_base64 encode_base64/;
-use MIME::QuotedPrint qw/decode_qp encode_qp/;
+use MIME::Base64 qw(decode_base64 encode_base64);
+use MIME::QuotedPrint qw(decode_qp encode_qp);
 
 # Punycode bootstring parameters
 use constant {
@@ -28,23 +28,23 @@ my $DELIMITER = chr 0x2D;
 my %ENTITIES;
 {
   open my $entities, '<', catfile(dirname(__FILE__), 'entities.txt');
-  $_ =~ /^(\S+)\s+U\+(\S+)/ and $ENTITIES{$1} = chr hex($2) for <$entities>;
+  /^(\S+)\s+U\+(\S+)/ and $ENTITIES{$1} = chr hex($2) for <$entities>;
 }
 
 # Reverse entities for html_escape (without "apos")
 my %REVERSE = ("\x{0027}" => '#39;');
-$REVERSE{$ENTITIES{$_}} = defined $REVERSE{$ENTITIES{$_}} ? $REVERSE{$ENTITIES{$_}} : $_ for sort keys %ENTITIES;
+$REVERSE{$ENTITIES{$_}} = defined $REVERSE{$ENTITIES{$_}} ? $REVERSE{$ENTITIES{$_}} : $_ for sort grep {/;/} keys %ENTITIES;
 
 # Encode cache
 my %ENCODE;
 
 # "Bart, stop pestering Satan!"
 our @EXPORT_OK = (
-  qw/b64_decode b64_encode camelize decamelize decode encode get_line/,
-  qw/hmac_md5_sum hmac_sha1_sum html_escape html_unescape md5_bytes md5_sum/,
-  qw/punycode_decode punycode_encode qp_decode qp_encode quote/,
-  qw/secure_compare sha1_bytes sha1_sum trim unquote url_escape/,
-  qw/url_unescape xml_escape/
+  qw(b64_decode b64_encode camelize decamelize decode encode get_line),
+  qw(hmac_md5_sum hmac_sha1_sum html_escape html_unescape md5_bytes md5_sum),
+  qw(punycode_decode punycode_encode qp_decode qp_encode quote),
+  qw(secure_compare sha1_bytes sha1_sum trim unquote url_escape),
+  qw(url_unescape xml_escape)
 );
 
 sub b64_decode { decode_base64(shift) }
@@ -130,7 +130,7 @@ sub hmac_sha1_sum { _hmac(1, @_) }
 
 sub html_escape {
   my ($string, $pattern) = @_;
-  $pattern ||= '^\n\r\t !\#\$%\(-;=?-~';
+  $pattern ||= '^\n\r\t !#$%(-;=?-~';
   return $string unless $string =~ /[^$pattern]/;
   $string =~ s/([$pattern])/_encode($1)/ge;
   return $string;
@@ -141,7 +141,7 @@ sub html_escape {
 sub html_unescape {
   my $string = shift;
   $string
-    =~ s/&(?:\#((?:\d{1,7}|x[0-9A-Fa-f]{1,6}));|([\w\.]+;?))/_decode($1,$2)/ge;
+    =~ s/&(?:\#((?:\d{1,7}|x[0-9A-Fa-f]{1,6}));|(\w+;?))/_decode($1, $2)/ge;
   return $string;
 }
 
@@ -274,7 +274,7 @@ sub qp_encode { encode_qp(shift) }
 sub quote {
   my $string = shift;
   $string =~ s/(["\\])/\\$1/g;
-  return qq/"$string"/;
+  return qq{"$string"};
 }
 
 sub secure_compare {
@@ -314,7 +314,7 @@ sub unquote {
 
 sub url_escape {
   my ($string, $pattern) = @_;
-  $pattern ||= '^A-Za-z0-9\-\.\_\~';
+  $pattern ||= '^A-Za-z0-9\-._~';
   return $string unless $string =~ /[$pattern]/;
   $string =~ s/([$pattern])/sprintf('%%%02X',ord($1))/ge;
   return $string;
@@ -394,7 +394,6 @@ sub _hmac {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -402,7 +401,7 @@ Mojo::Util - Portable utility functions
 
 =head1 SYNOPSIS
 
-  use Mojo::Util qw/b64_encode url_escape url_unescape/;
+  use Mojo::Util qw(b64_encode url_escape url_unescape);
 
   my $string = 'test=23';
   my $escaped = url_escape $string;
@@ -494,10 +493,10 @@ Generate HMAC-SHA1 checksum for string.
 =head2 C<html_escape>
 
   my $escaped = html_escape $string;
-  my $escaped = html_escape $string, '^\n\r\t !\#\$%\(-;=?-~';
+  my $escaped = html_escape $string, '^\n\r\t !#$%(-;=?-~';
 
 Escape unsafe characters in string with HTML5 entities, the pattern used
-defaults to C<^\n\r\t !\#\$%\(-;=?-~>.
+defaults to C<^\n\r\t !#$%(-;=?-~>.
 
 =head2 C<html_unescape>
 
@@ -580,10 +579,10 @@ Unquote string.
 =head2 C<url_escape>
 
   my $escaped = url_escape $string;
-  my $escaped = url_escape $string, '^A-Za-z0-9\-\.\_\~';
+  my $escaped = url_escape $string, '^A-Za-z0-9\-._~';
 
 Percent-encode unsafe characters in string, the pattern used defaults to
-C<^A-Za-z0-9\-\.\_\~>.
+C<^A-Za-z0-9\-._~>.
 
 =head2 C<url_unescape>
 

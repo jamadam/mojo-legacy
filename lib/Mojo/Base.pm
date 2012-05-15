@@ -70,7 +70,7 @@ sub attr {
 
   # Create attributes
   for my $attr (@{ref $attrs eq 'ARRAY' ? $attrs : [$attrs]}) {
-    Carp::croak(qq/Attribute "$attr" invalid/)
+    Carp::croak(qq{Attribute "$attr" invalid})
       unless $attr =~ /^[a-zA-Z_]\w*$/;
 
     # Header (check arguments)
@@ -105,7 +105,6 @@ sub attr {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -118,7 +117,7 @@ Mojo::Base - Minimal base class for Mojo projects
 
   has 'mouse';
   has paws => 4;
-  has [qw/ears eyes/] => 2;
+  has [qw(ears eyes)] => 2;
 
   package Tiger;
   use Mojo::Base 'Cat';
@@ -175,11 +174,11 @@ flag or a base class.
 =head2 C<has>
 
   has 'name';
-  has [qw/name1 name2 name3/];
+  has [qw(name1 name2 name3)];
   has name => 'foo';
   has name => sub {...};
-  has [qw/name1 name2 name3/] => 'foo';
-  has [qw/name1 name2 name3/] => sub {...};
+  has [qw(name1 name2 name3)] => 'foo';
+  has [qw(name1 name2 name3)] => sub {...};
 
 Create attributes, just like the C<attr> method.
 
@@ -200,11 +199,11 @@ hash or a hash reference with attribute values.
 
   $object->attr('name');
   BaseSubClass->attr('name');
-  BaseSubClass->attr([qw/name1 name2 name3/]);
+  BaseSubClass->attr([qw(name1 name2 name3)]);
   BaseSubClass->attr(name => 'foo');
   BaseSubClass->attr(name => sub {...});
-  BaseSubClass->attr([qw/name1 name2 name3/] => 'foo');
-  BaseSubClass->attr([qw/name1 name2 name3/] => sub {...});
+  BaseSubClass->attr([qw(name1 name2 name3)] => 'foo');
+  BaseSubClass->attr([qw(name1 name2 name3)] => sub {...});
 
 Create attributes. An array reference can be used to create more than one
 attribute. Pass an optional second argument to set a default value, it should

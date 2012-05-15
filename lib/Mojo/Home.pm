@@ -8,7 +8,7 @@ use overload
 use Cwd 'abs_path';
 use File::Basename 'dirname';
 use File::Find 'find';
-use File::Spec::Functions qw/abs2rel catdir catfile splitdir/;
+use File::Spec::Functions qw(abs2rel catdir catfile splitdir);
 use FindBin;
 use List::Util 'first';
 use Mojo::Asset::File;
@@ -116,7 +116,6 @@ sub slurp_rel_file {
 sub to_string { catdir(@{shift->{parts} || []}) }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -152,7 +151,7 @@ following new ones.
 =head2 C<new>
 
   my $home = Mojo::Home->new;
-  my $home = Mojo::Home->new('/foo/bar');
+  my $home = Mojo::Home->new('/home/sri/myapp');
 
 Construct a new L<Mojo::Home> object.
 
@@ -175,7 +174,8 @@ Path to C<lib> directory of application.
   my $files = $home->list_files;
   my $files = $home->list_files('foo/bar');
 
-Portably list all files in directory and subdirectories recursively.
+Portably list all files recursively in directory relative to the home
+diectory.
 
   $home->rel_file($home->list_files('templates/layouts')->[1]);
 
@@ -187,7 +187,7 @@ Path to C<lib> directory in which L<Mojolicious> is installed.
 
 =head2 C<parse>
 
-  $home = $home->parse('/foo/bar');
+  $home = $home->parse('/home/sri/myapp');
 
 Parse home directory.
 
@@ -195,19 +195,20 @@ Parse home directory.
 
   my $path = $home->rel_dir('foo/bar');
 
-Portably generate an absolute path from a relative UNIX style path.
+Portably generate an absolute path for a directory relative to the home
+directory.
 
 =head2 C<rel_file>
 
   my $path = $home->rel_file('foo/bar.html');
 
-Portably generate an absolute path from a relative UNIX style path.
+Portably generate an absolute path for a file relative to the home directory.
 
 =head2 C<slurp_rel_file>
 
   my $string = $home->slurp_rel_file('foo/bar.html');
 
-Portably read all file data at once.
+Portably read all data at once from file relative to the home directory.
 
   my $content = $home->slurp_rel_file($home->list_files('public')->[1]);
 

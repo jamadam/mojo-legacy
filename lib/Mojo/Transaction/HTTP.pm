@@ -83,8 +83,8 @@ sub keep_alive {
   return 1 if $req_conn eq 'keep-alive' || $res_conn eq 'keep-alive';
 
   # No keep alive for 0.9 and 1.0
-  return if grep {$_ eq $req->version} qw/0.9 1.0/;
-  return if grep {$_ eq $res->version} qw/0.9 1.0/;
+  return if grep {$_ eq $req->version} qw(0.9 1.0);
+  return if grep {$_ eq $res->version} qw(0.9 1.0);
 
   return 1;
 }
@@ -260,7 +260,6 @@ sub _start_line {
 }
 
 1;
-__END__
 
 =head1 NAME
 

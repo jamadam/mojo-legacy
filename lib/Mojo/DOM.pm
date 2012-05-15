@@ -10,20 +10,20 @@ use Carp 'croak';
 use Mojo::Collection;
 use Mojo::DOM::CSS;
 use Mojo::DOM::HTML;
-use Scalar::Util qw/blessed weaken/;
+use Scalar::Util qw(blessed weaken);
 
 sub AUTOLOAD {
   my $self = shift;
 
   # Method
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w\:]+)\:\:(\w+)$/;
-  croak qq/Undefined subroutine &${package}::$method called/
+  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)\:\:(\w+)$/;
+  croak qq[Undefined subroutine &${package}::$method called]
     unless blessed $self && $self->isa(__PACKAGE__);
 
   # Search children
   my $children = $self->children($method);
   return @$children > 1 ? $children : $children->[0] if @$children;
-  croak qq/Can't locate object method "$method" via package "$package"/;
+  croak qq{Can't locate object method "$method" via package "$package"};
 }
 
 sub DESTROY { }
@@ -67,8 +67,7 @@ sub attrs {
   return $attrs->{$_[0]} unless @_ > 1 || ref $_[0];
 
   # Set
-  my $values = ref $_[0] ? $_[0] : {@_};
-  $attrs->{$_} = $values->{$_} for keys %$values;
+  %$attrs = (%$attrs, %{ref $_[0] ? $_[0] : {@_}});
 
   return $self;
 }
@@ -393,8 +392,7 @@ sub _text {
     elsif ($type eq 'cdata' || $type eq 'raw') { $content = $e->[1] }
 
     # Add leading whitespace if punctuation allows it
-    $content = " $content"
-      if $text =~ /\S\z/ && $content =~ /^[^\.\!\?\,\;\:\s]+/;
+    $content = " $content" if $text =~ /\S\z/ && $content =~ /^[^.!?,;:\s]+/;
 
     # Trim whitespace blocks
     $text .= $content if $content =~ /\S+/ || !$trim;
@@ -419,7 +417,6 @@ sub _trim {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -476,12 +473,12 @@ into XML mode and everything becomes case sensitive.
   say $dom->at('P')->text;
   say $dom->P->{ID};
 
-XML detection can be also disabled with the C<xml> method.
+XML detection can also be disabled with the C<xml> method.
 
-  # XML sematics
+  # Force XML semantics
   $dom->xml(1);
 
-  # HTML5 semantics
+  # Force HTML5 semantics
   $dom->xml(0);
 
 =head1 METHODS
@@ -534,6 +531,9 @@ Append to element content.
 Find a single element with CSS3 selectors. All selectors from
 L<Mojo::DOM::CSS> are supported.
 
+  # Find first element with "svg" namespace definition
+  my $namespace = $dom->at('[xmlns\:svg]')->{'xmlns:svg'};
+
 =head2 C<attrs>
 
   my $attrs = $dom->attrs;
@@ -558,11 +558,17 @@ Alias for L<Mojo::DOM::HTML/"charset">.
 Return a L<Mojo::Collection> object containing the children of this element,
 similar to C<find>.
 
+  # Show type of random child element
+  say $dom->children->shuffle->first->type;
+
 =head2 C<content_xml>
 
   my $xml = $dom->content_xml;
 
 Render content of this element to XML.
+
+  # "<b>test</b>"
+  $dom->parse('<div><b>test</b></div>')->div->content_xml;
 
 =head2 C<find>
 
@@ -582,6 +588,12 @@ selectors from L<Mojo::DOM::CSS> are supported.
   my $namespace = $dom->namespace;
 
 Find element namespace.
+
+   # Find namespace for an element with namespace prefix
+   my $namespace = $dom->at('svg > svg\:circle')->namespace;
+
+   # Find namespace for an element that may or may not have a namespace prefix
+   my $namespace = $dom->at('svg > circle')->namespace;
 
 =head2 C<parent>
 
@@ -686,12 +698,15 @@ is enabled by default.
 
   my $xml = $dom->to_xml;
 
-Render DOM to XML.
+Render this element and its content to XML.
+
+  # "<div><b>test</b></div>"
+  $dom->parse('<div><b>test</b></div>')->div->to_xml;
 
 =head2 C<tree>
 
   my $tree = $dom->tree;
-  $dom     = $dom->tree(['root', ['text', 'lalala']]);
+  $dom     = $dom->tree(['root', [qw(text lalala)]]);
 
 Alias for L<Mojo::DOM::HTML/"tree">.
 
@@ -702,6 +717,7 @@ Alias for L<Mojo::DOM::HTML/"tree">.
 
 Element type.
 
+  # List types of child elements
   $dom->children->each(sub { say $_->type });
 
 =head2 C<xml>
@@ -717,7 +733,7 @@ In addition to the methods above, many child elements are also automatically
 available as object methods, which return a L<Mojo::DOM> or
 L<Mojo::Collection> object, depending on number of children.
 
-  say $dom->div->text;
+  say $dom->p->text;
   say $dom->div->[23]->text;
   $dom->div->each(sub { say $_->text });
 

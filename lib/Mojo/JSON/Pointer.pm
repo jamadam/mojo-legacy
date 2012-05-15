@@ -1,7 +1,7 @@
 package Mojo::JSON::Pointer;
 use Mojo::Base -base;
 
-use Mojo::Util qw/decode url_unescape/;
+use Mojo::Util qw(decode url_unescape);
 use Scalar::Util 'looks_like_number';
 
 sub contains { shift->_pointer(1, @_) }
@@ -33,7 +33,6 @@ sub _pointer {
 }
 
 1;
-__END__
 
 =head1 NAME
 

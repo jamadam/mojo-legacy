@@ -1,6 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 360;
+use Test::More tests => 392;
 
 # "They're not very heavy, but you don't hear me not complaining."
 use Mojolicious::Routes;
@@ -20,20 +20,20 @@ $r->route('/0')->to(null => 1);
 # /alternatives/0
 # /alternatives/test
 # /alternatives/23
-$r->route('/alternatives/:foo', foo => [qw/0 test 23/])->to(foo => 11);
+$r->route('/alternatives/:foo', foo => [qw(0 test 23)])->to(foo => 11);
 
 # /alternatives2/0
 # /alternatives2/test
 # /alternatives2/23
-$r->route('/alternatives2/:foo', foo => [qw/0 test 23/]);
+$r->route('/alternatives2/:foo', foo => [qw(0 test 23)]);
 
 # /alternatives3/foo
 # /alternatives3/foobar
-$r->route('/alternatives3/:foo', foo => [qw/foo foobar/]);
+$r->route('/alternatives3/:foo', foo => [qw(foo foobar)]);
 
 # /alternatives4/foo
 # /alternatives4/foo.bar
-$r->route('/alternatives4/:foo', foo => [qw/foo foo.bar/]);
+$r->route('/alternatives4/:foo', foo => [qw(foo foo.bar)]);
 
 # /*/test
 my $test = $r->route('/:controller/test')->to(action => 'test');
@@ -92,7 +92,7 @@ $r->route('/format2', format => qr/txt/)
 
 # /format3.txt
 # /format3.text
-$r->route('/format3', format => [qw/txt text/])
+$r->route('/format3', format => [qw(txt text)])
   ->to(controller => 'we', action => 'cheers');
 
 # /format4
@@ -109,7 +109,7 @@ $r->route('/format6', format => 0)
 
 # /format7.foo
 # /format7.foobar
-$r->route('/format7', format => [qw/foo foobar/])->to('perl#rocks');
+$r->route('/format7', format => [qw(foo foobar)])->to('perl#rocks');
 
 # /articles/1/edit
 # /articles/1/delete
@@ -129,7 +129,7 @@ $r->route('/method/post')->via('post')
   ->to(controller => 'method', action => 'post');
 
 # POST|GET /method/post_get
-$r->route('/method/post_get')->via(qw/POST get/)
+$r->route('/method/post_get')->via(qw(POST get))
   ->to(controller => 'method', action => 'post_get');
 
 # /simple/form
@@ -172,6 +172,23 @@ $multi->route('/bar.baz')->to('works#too', format => 'xml');
 my $inactive = $r->route(format => 0);
 $inactive->route('/nodetect')->to('foo#none');
 $inactive->route('/nodetect2', format => ['txt', 'html'])->to('bar#hyper');
+
+# /target/first
+# /target/second
+# /target/second.xml
+# /source/third
+# /source/third.xml
+my $source = $r->route('/source')->to('source#');
+my $first = $source->route(format => 0)->route('/first')->to('#first');
+$source->route('/second')->to('#second');
+my $third  = $source->route('/third')->to('#third');
+my $target = $r->remove->route('/target')->to('target#');
+my $second = $r->find('second');
+is $second->render('', {}), '/source/second', 'right result';
+$second->remove;
+is $second->render('', {}), '/second', 'right result';
+$target->add_child($first)->add_child($second);
+is $second->render('', {}), '/target/second', 'right result';
 
 # Make sure stash stays clean
 my $m = Mojolicious::Routes::Match->new(GET => '/clean')->match($r);
@@ -711,4 +728,44 @@ is $m->path_for, '/nodetect2.html', 'right path';
 $m = Mojolicious::Routes::Match->new(GET => '/nodetect2')->match($r);
 is $m->stack->[0], undef, 'no value';
 $m = Mojolicious::Routes::Match->new(GET => '/nodetect2.xml')->match($r);
+is $m->stack->[0], undef, 'no value';
+
+# Removed routes
+$m = Mojolicious::Routes::Match->new(GET => '/target/first')->match($r);
+is $m->stack->[0]{controller}, 'target', 'right value';
+is $m->stack->[0]{action},     'first',  'right value';
+is $m->stack->[0]{format},     undef,    'no value';
+is $m->stack->[1], undef, 'no value';
+is $m->path_for, '/target/first', 'right path';
+$m = Mojolicious::Routes::Match->new(GET => '/target/first.xml')->match($r);
+is $m->stack->[0], undef, 'no value';
+$m = Mojolicious::Routes::Match->new(GET => '/source/first')->match($r);
+is $m->stack->[0], undef, 'no value';
+$m = Mojolicious::Routes::Match->new(GET => '/target/second')->match($r);
+is $m->stack->[0]{controller}, 'target', 'right value';
+is $m->stack->[0]{action},     'second', 'right value';
+is $m->stack->[0]{format},     undef,    'no value';
+is $m->stack->[1], undef, 'no value';
+is $m->path_for, '/target/second', 'right path';
+$m = Mojolicious::Routes::Match->new(GET => '/target/second.xml')->match($r);
+is $m->stack->[0]{controller}, 'target', 'right value';
+is $m->stack->[0]{action},     'second', 'right value';
+is $m->stack->[0]{format},     'xml',    'right value';
+is $m->stack->[1], undef, 'no value';
+is $m->path_for, '/target/second', 'right path';
+$m = Mojolicious::Routes::Match->new(GET => '/source/second')->match($r);
+is $m->stack->[0], undef, 'no value';
+$m = Mojolicious::Routes::Match->new(GET => '/source/third')->match($r);
+is $m->stack->[0]{controller}, 'source', 'right value';
+is $m->stack->[0]{action},     'third',  'right value';
+is $m->stack->[0]{format},     undef,    'no value';
+is $m->stack->[1], undef, 'no value';
+is $m->path_for, '/source/third', 'right path';
+$m = Mojolicious::Routes::Match->new(GET => '/source/third.xml')->match($r);
+is $m->stack->[0]{controller}, 'source', 'right value';
+is $m->stack->[0]{action},     'third',  'right value';
+is $m->stack->[0]{format},     'xml',    'right value';
+is $m->stack->[1], undef, 'no value';
+is $m->path_for, '/source/third', 'right path';
+$m = Mojolicious::Routes::Match->new(GET => '/target/third')->match($r);
 is $m->stack->[0], undef, 'no value';

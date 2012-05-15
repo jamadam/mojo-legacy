@@ -5,19 +5,17 @@ use Carp 'croak';
 use IO::Handle;
 use Mojo::ByteStream;
 use Mojo::Exception;
-use Mojo::Util qw/decode encode/;
-
-use constant CHUNK_SIZE => $ENV{MOJO_CHUNK_SIZE} || 131072;
+use Mojo::Util qw(decode encode);
 
 # "If for any reason you're not completely satisfied, I hate you."
-has [qw/auto_escape compiled/];
-has [qw/append code prepend template/] => '';
+has [qw(auto_escape compiled)];
+has [qw(append code prepend template)] => '';
 has capture_end   => 'end';
 has capture_start => 'begin';
 has comment_mark  => '#';
 has encoding      => 'UTF-8';
-has [qw/escape_mark expression_mark trim_mark/] => '=';
-has [qw/line_start replace_mark/] => '%';
+has [qw(escape_mark expression_mark trim_mark)] => '=';
+has [qw(line_start replace_mark)] => '%';
 has name      => 'template';
 has namespace => 'Mojo::Template::SandBox';
 has tag_start => '<%';
@@ -76,7 +74,7 @@ sub build {
       if ($type eq 'code' || $multi) { $lines[-1] .= "$value" }
 
       # Expression
-      if (grep {$_ eq $type} qw/expr escp/) {
+      if (grep {$_ eq $type} qw(expr escp)) {
 
         # Start
         unless ($multi) {
@@ -130,8 +128,7 @@ sub compile {
     ->trace->verbose(1)
     if $@;
 
-  $self->compiled($compiled);
-  return;
+  $self->compiled($compiled) and return;
 }
 
 sub interpret {
@@ -173,31 +170,29 @@ sub parse {
   # Precompile
   my $token_re = qr/
     (
-      \Q$tag$replace\E                 # Replace
+      \Q$tag$replace\E                       # Replace
     |
-      \Q$tag$expr$escp\E\s*\Q$cpen\E   # Escaped expression (end)
+      \Q$tag$expr$escp\E\s*\Q$cpen\E(?!\w)   # Escaped expression (end)
     |
-      \Q$tag$expr$escp\E               # Escaped expression
+      \Q$tag$expr$escp\E                     # Escaped expression
     |
-      \Q$tag$expr\E\s*\Q$cpen\E        # Expression (end)
+      \Q$tag$expr\E\s*\Q$cpen\E(?!\w)        # Expression (end)
     |
-      \Q$tag$expr\E                    # Expression
+      \Q$tag$expr\E                          # Expression
     |
-      \Q$tag$cmnt\E\s*\Q$cpen\E        # Comment (end)
+      \Q$tag$cmnt\E                          # Comment
     |
-      \Q$tag$cmnt\E                    # Comment
+      \Q$tag\E\s*\Q$cpen\E(?!\w)             # Code (end)
     |
-      \Q$tag\E\s*\Q$cpen\E             # Code (end)
+      \Q$tag\E                               # Code
     |
-      \Q$tag\E                         # Code
+      (?<!\w)\Q$cpst\E\s*\Q$trim$end\E       # Trim end (start)
     |
-      \Q$cpst\E\s*\Q$trim$end\E        # Trim end (start)
+      \Q$trim$end\E                          # Trim end
     |
-      \Q$trim$end\E                    # Trim end
+      (?<!\w)\Q$cpst\E\s*\Q$end\E            # End (start)
     |
-      \Q$cpst\E\s*\Q$end\E             # End (start)
-    |
-      \Q$end\E                         # End
+      \Q$end\E                               # End
     )
   /x;
   my $cpen_re = qr/^(\Q$tag\E)(?:\Q$expr\E)?(?:\Q$escp\E)?\s*\Q$cpen\E/;
@@ -301,13 +296,13 @@ sub render_file {
 
   # Slurp file
   $self->name($path) unless defined $self->{name};
-  croak qq/Can't open template "$path": $!/ unless open my $file, '<', $path;
+  croak qq{Can't open template "$path": $!} unless open my $file, '<', $path;
   my $tmpl = '';
-  while ($file->sysread(my $buffer, CHUNK_SIZE, 0)) { $tmpl .= $buffer }
+  while ($file->sysread(my $buffer, 131072, 0)) { $tmpl .= $buffer }
 
   # Decode and render
   if (my $encoding = $self->encoding) {
-    croak qq/Template "$path" has invalid encoding./
+    croak qq{Template "$path" has invalid encoding.}
       unless defined($tmpl = decode $encoding, $tmpl);
   }
   return $self->render($tmpl, @_);
@@ -353,16 +348,15 @@ sub _write_file {
   my ($self, $path, $output) = @_;
 
   # Encode and write to file
-  croak qq/Can't open file "$path": $!/ unless open my $file, '>', $path;
+  croak qq{Can't open file "$path": $!} unless open my $file, '>', $path;
   $output = encode $self->encoding, $output if $self->encoding;
-  croak qq/Can't write to file "$path": $!/
+  croak qq{Can't write to file "$path": $!}
     unless defined $file->syswrite($output);
 
   return;
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -413,7 +407,7 @@ heredocs and stuff like that.
   %# Comment line, treated as "<%# line =%>"
   %% Replaced with "%", useful for generating templates
 
-=head2 Automatic escaping
+=head2 Escaping
 
 Escaping behavior can be reversed with the C<auto_escape> attribute, this is
 the default in L<Mojolicious> C<.ep> templates for example.
@@ -424,6 +418,17 @@ the default in L<Mojolicious> C<.ep> templates for example.
 L<Mojo::ByteStream> objects are always excluded from automatic escaping.
 
   <%= Mojo::ByteStream->new('<div>excluded!</div>') %>
+
+Newlines can be escaped with a backslash.
+
+  This is <%= 1 + 1 %> a\
+  single line
+
+And a backslash in front of a newline can be escaped with another backslash.
+
+  This will <%= 1 + 1 %> result\\
+  in multiple\\
+  lines
 
 =head2 Trimming
 
@@ -464,25 +469,6 @@ via C<@_>.
   % my $x = shift;
   test 123 <%= $foo %>
 
-=head2 More escaping
-
-You can use escaped tags and lines to generate templates.
-
-  %% my $number = <%= 20 + 3 %>;
-  The number is <%%= $number %>
-
-A newline can be escaped with a backslash.
-
-  This is <%= 23 * 3 %> a\
-  single line
-
-And a backslash in front of a newline can be escaped with another backslash.
-
-  % use Data::Dumper;
-  This will\\
-  result <%=  Dumper {foo => 'bar'} %>\\
-  in multiple lines
-
 =head2 Exceptions
 
 Templates get compiled to Perl code internally, this can make debugging a bit
@@ -495,23 +481,6 @@ stringify to error messages with context.
   4: % my $i = 2; xx
   5: %= $i * 2
   6: </body>
-
-=head2 Caching
-
-L<Mojo::Template> does not support caching by itself, but you can easily build
-a wrapper around it.
-
-  # Compile and store code somewhere
-  my $mt = Mojo::Template->new;
-  $mt->parse($template);
-  $mt->build;
-  my $code = $mt->code;
-
-  # Load code and template (template for debug trace only)
-  $mt->template($template);
-  $mt->code($code);
-  $mt->compile;
-  my $output = $mt->interpret(@args);
 
 =head1 ATTRIBUTES
 

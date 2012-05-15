@@ -2,29 +2,21 @@ package Mojolicious::Plugin::EPRenderer;
 use Mojo::Base 'Mojolicious::Plugin';
 
 use Mojo::Template;
-use Mojo::Util qw/encode md5_sum/;
+use Mojo::Util qw(encode md5_sum);
 
 # "What do you want?
 #  I'm here to kick your ass!
 #  Wishful thinking. We have long since evolved beyond the need for asses."
 sub register {
   my ($self, $app, $conf) = @_;
-  $conf ||= {};
-
-  # Config
-  my $name     = $conf->{name}     || 'ep';
-  my $template = $conf->{template} || {};
-
-  # Custom sandbox
-  $template->{namespace} = defined $template->{namespace} ? $template->{namespace} : 'Mojo::Template::SandBox::'
-    . md5_sum(($ENV{MOJO_EXE} || ref $app) . $$);
 
   # Auto escape by default to prevent XSS attacks
+  my $template = $conf->{template} || {};
   $template->{auto_escape} = defined $template->{auto_escape} ? $template->{auto_escape} : 1;
 
   # Add "ep" handler
   $app->renderer->add_handler(
-    $name => sub {
+    $conf->{name} || 'ep' => sub {
       my ($r, $c, $output, $options) = @_;
 
       # Generate name
@@ -39,8 +31,8 @@ sub register {
         my $mt = Mojo::Template->new($template);
 
         # Be a bit more relaxed for helpers
-        my $prepend = q/my $self = shift; use Scalar::Util 'weaken';/
-          . q/weaken $self; no strict 'refs'; no warnings 'redefine';/;
+        my $prepend = q[my $self = shift; use Scalar::Util 'weaken';]
+          . q[weaken $self; no strict 'refs'; no warnings 'redefine';];
 
         # Helpers
         $prepend .= 'my $_H = $self->app->renderer->helpers;';
@@ -77,7 +69,6 @@ sub register {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -133,7 +124,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  $plugin->register($app, $conf);
 
 Register renderer in L<Mojolicious> application.
 

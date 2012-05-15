@@ -2,7 +2,7 @@ package Mojolicious::Commands;
 use Mojo::Base 'Mojo::Command';
 
 use Getopt::Long
-  qw/GetOptions :config no_auto_abbrev no_ignore_case pass_through/;
+  qw(GetOptions :config no_auto_abbrev no_ignore_case pass_through);
 use Mojo::Loader;
 
 # "One day a man has everything, the next day he blows up a $400 billion
@@ -26,7 +26,7 @@ Tip: CGI and PSGI environments can be automatically detected very often and
 
 These commands are currently available:
 EOF
-has namespaces => sub { [qw/Mojolicious::Command Mojo::Command/] };
+has namespaces => sub { [qw(Mojolicious::Command Mojo::Command)] };
 
 sub detect {
   my ($self, $guess) = @_;
@@ -71,7 +71,7 @@ sub run {
     $module = _command("${_}::$name") and last for @{$self->namespaces};
 
     # Command missing
-    die qq/Command "$name" missing, maybe you need to install it?\n/
+    die qq{Command "$name" missing, maybe you need to install it?\n}
       unless $module;
 
     # Run
@@ -125,7 +125,7 @@ sub start {
 sub start_app {
   my $self = shift;
   $ENV{MOJO_APP} = shift;
-  $self->start(@_);
+  $self->new->app->start(@_);
 }
 
 sub _command {
@@ -135,11 +135,10 @@ sub _command {
 }
 
 1;
-__END__
 
 =head1 NAME
 
-Mojolicious::Commands - Commands
+Mojolicious::Commands - Command line interface
 
 =head1 SYNOPSIS
 
@@ -301,8 +300,11 @@ Short usage message shown before listing available commands.
   my $namespaces = $commands->namespaces;
   $commands      = $commands->namespaces(['Mojolicious::Commands']);
 
-Namespaces to search for available commands, defaults to
-C<Mojolicious::Command> and C<Mojo::Command>.
+Namespaces to load commands from, defaults to C<Mojolicious::Command> and
+C<Mojo::Command>.
+
+  # Add another namespace to load commands from
+  push @{$commands->namespaces}, 'MyApp::Command';
 
 =head1 METHODS
 

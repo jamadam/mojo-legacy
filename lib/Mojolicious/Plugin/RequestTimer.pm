@@ -1,7 +1,7 @@
 package Mojolicious::Plugin::RequestTimer;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use Time::HiRes qw/gettimeofday tv_interval/;
+use Time::HiRes qw(gettimeofday tv_interval);
 
 # "I don't trust that doctor.
 #  I bet I've lost more patients than he's even treated."
@@ -46,7 +46,6 @@ sub register {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -73,7 +72,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  $plugin->register($app);
 
 Register plugin hooks in L<Mojolicious> application.
 

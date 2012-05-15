@@ -5,9 +5,12 @@ use Mojo::Base 'Mojo::Transaction';
 #  I can't think of a way to finish that sentence."
 use Config;
 use Mojo::Transaction::HTTP;
-use Mojo::Util qw/b64_encode decode encode sha1_bytes/;
+use Mojo::Util qw(b64_encode decode encode sha1_bytes);
 
 use constant DEBUG => $ENV{MOJO_WEBSOCKET_DEBUG} || 0;
+
+# 64bit Perl
+use constant MODERN => $Config{ivsize} > 4;
 
 # Unique value from the spec
 use constant GUID => '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -61,15 +64,12 @@ sub build_frame {
     $frame .= pack 'n', $len;
   }
 
-  # Extended payload (64bit)
+  # Extended payload (64bit with 32bit fallback)
   else {
     warn "-- Extended 64bit payload ($len)\n$payload\n" if DEBUG;
     vec($prefix, 0, 8) = $masked ? (127 | 0b10000000) : 127;
     $frame .= $prefix;
-    $frame
-      .= $Config{ivsize} > 4
-      ? pack('Q>', $len)
-      : pack('NN', $len >> 32, $len & 0xFFFFFFFF);
+    $frame .= MODERN ? pack('Q>', $len) : pack('NN', 0, $len & 0xFFFFFFFF);
   }
 
   # Mask payload
@@ -125,7 +125,7 @@ sub parse_frame {
 
   # Head
   my $clone = $$buffer;
-  return unless length $clone > 2;
+  return unless length $clone >= 2;
   my $head = substr $clone, 0, 2;
 
   # FIN
@@ -154,15 +154,12 @@ sub parse_frame {
     warn "-- Extended 16bit payload ($len)\n" if DEBUG;
   }
 
-  # Extended payload (64bit)
+  # Extended payload (64bit with 32bit fallback)
   elsif ($len == 127) {
     return unless length $clone > 10;
     $hlen = 10;
     my $ext = substr $clone, 2, 8;
-    $len
-      = $Config{ivsize} > 4
-      ? unpack('Q>', $ext)
-      : unpack('N', substr($ext, 4, 4));
+    $len = MODERN ? unpack('Q>', $ext) : unpack('N', substr($ext, 4, 4));
     warn "-- Extended 64bit payload ($len)\n" if DEBUG;
   }
 
@@ -232,7 +229,7 @@ sub server_handshake {
   $res_headers->connection('Upgrade');
   my $req_headers = $self->req->headers;
   my $protocol = $req_headers->sec_websocket_protocol || '';
-  $protocol =~ /^\s*([^\,]+)/;
+  $protocol =~ /^\s*([^,]+)/;
   $res_headers->sec_websocket_protocol($1) if $1;
   $res_headers->sec_websocket_accept(
     $self->_challenge($req_headers->sec_websocket_key));
@@ -307,7 +304,6 @@ sub _xor_mask {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -322,7 +318,8 @@ Mojo::Transaction::WebSocket - WebSocket transaction container
 =head1 DESCRIPTION
 
 L<Mojo::Transaction::WebSocket> is a container for WebSocket transactions as
-described in RFC 6455.
+described in RFC 6455. Note that 64bit frames require a Perl with 64bit
+integer support, or they are limited to 32bit.
 
 =head1 EVENTS
 

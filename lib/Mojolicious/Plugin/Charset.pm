@@ -8,14 +8,13 @@ sub register {
   my ($self, $app, $conf) = @_;
 
   # Change default charset on all layers
-  return unless my $c = ($conf || {})->{charset};
+  return unless my $c = $conf->{charset};
   $app->types->type(html => "text/html;charset=$c");
   $app->renderer->encoding($c);
   $app->hook(before_dispatch => sub { shift->req->default_charset($c) });
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -53,7 +52,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  $plugin->register($app, $conf);
 
 Register plugin hooks in L<Mojolicious> application.
 

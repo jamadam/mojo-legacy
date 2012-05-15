@@ -8,11 +8,11 @@ use Mojo::Util 'decamelize';
 # "Who are you, my warranty?!"
 sub load {
   my ($self, $file, $conf, $app) = @_;
-  $app->log->debug(qq/Reading config file "$file"./);
+  $app->log->debug(qq{Reading config file "$file".});
 
   # Slurp UTF-8 file
   open my $handle, "<:encoding(UTF-8)", $file
-    or die qq/Couldn't open config file "$file": $!/;
+    or die qq{Couldn't open config file "$file": $!};
   my $content = do { local $/; <$handle> };
 
   # Process
@@ -23,10 +23,10 @@ sub parse {
   my ($self, $content, $file, $conf, $app) = @_;
 
   # Run Perl code
-  no warnings;
-  die qq/Couldn't parse config file "$file": $@/
-    unless my $config = eval "sub app { \$app }; $content";
-  die qq/Config file "$file" did not return a hash reference.\n/
+  my $config = eval 'package Mojolicious::Plugin::Config::Sandbox;'
+    . "no warnings; sub app { \$app }; use Mojo::Base -strict; $content";
+  die qq{Couldn't load configuration from file "$file": $@} if !$config && $@;
+  die qq{Config file "$file" did not return a hash reference.\n}
     unless ref $config eq 'HASH';
 
   return $config;
@@ -34,7 +34,6 @@ sub parse {
 
 sub register {
   my ($self, $app, $conf) = @_;
-  $conf ||= {};
 
   # Config file
   my $file = $conf->{file} || $ENV{MOJO_CONFIG};
@@ -56,7 +55,7 @@ sub register {
 
   # Mode specific config file
   my $mode;
-  if ($file =~ /^(.*)\.([^\.]+)$/) { $mode = join '.', $1, $app->mode, $2 }
+  if ($file =~ /^(.*)\.([^.]+)$/) { $mode = join '.', $1, $app->mode, $2 }
 
   # Absolute path
   $file = $app->home->rel_file($file) unless file_name_is_absolute $file;
@@ -69,9 +68,9 @@ sub register {
 
   # Check for default
   elsif ($conf->{default}) {
-    $app->log->debug(qq/Config file "$file" missing, using default config./);
+    $app->log->debug(qq{Config file "$file" missing, using default config.});
   }
-  else { die qq/Config file "$file" missing, maybe you need to create it?\n/ }
+  else { die qq{Config file "$file" missing, maybe you need to create it?\n} }
 
   # Merge everything
   $config = {%$config, %{$self->load($mode, $conf, $app)}}
@@ -85,7 +84,6 @@ sub register {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -177,7 +175,7 @@ Parse configuration file.
 
 =head2 C<register>
 
-  $plugin->register;
+  my $config = $plugin->register($app, $conf);
 
 Register plugin in L<Mojolicious> application.
 

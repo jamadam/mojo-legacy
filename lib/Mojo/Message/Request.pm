@@ -3,7 +3,7 @@ use Mojo::Base 'Mojo::Message';
 
 use Mojo::Cookie::Request;
 use Mojo::Parameters;
-use Mojo::Util qw/b64_encode b64_decode get_line/;
+use Mojo::Util qw(b64_encode b64_decode get_line);
 use Mojo::URL;
 
 has env => sub { {} };
@@ -12,10 +12,10 @@ has url => sub { Mojo::URL->new };
 
 my $START_LINE_RE = qr|
   ^\s*
-  ([a-zA-Z]+)                                                   # Method
+  ([a-zA-Z]+)                                  # Method
   \s+
-  ([0-9a-zA-Z\-\.\_\~\:/\?\#\[\]\@\!\$\&\'\(\)\*\+\,\;\=\%]+)   # Path
-  (?:\s+HTTP/(\d+\.\d+))?                                       # Version
+  ([0-9a-zA-Z\-._~:/?#[\]\@!\$&'()*+,;=\%]+)   # Path
+  (?:\s+HTTP/(\d+\.\d+))?                      # Version
   $
 |x;
 
@@ -304,7 +304,6 @@ sub _parse_start_line {
 }
 
 1;
-__END__
 
 =head1 NAME
 

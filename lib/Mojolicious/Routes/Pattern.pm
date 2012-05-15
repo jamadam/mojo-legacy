@@ -1,13 +1,13 @@
 package Mojolicious::Routes::Pattern;
 use Mojo::Base -base;
 
-has [qw/defaults reqs/] => sub { {} };
-has [qw/format pattern regex/];
+has [qw(defaults reqs)] => sub { {} };
+has [qw(format pattern regex)];
 has quote_end     => ')';
 has quote_start   => '(';
 has relaxed_start => '#';
 has symbol_start  => ':';
-has [qw/symbols tree/] => sub { [] };
+has [qw(symbols tree)] => sub { [] };
 has wildcard_start => '*';
 
 # "This is the worst kind of discrimination. The kind against me!"
@@ -57,7 +57,7 @@ sub render {
     }
 
     # Relaxed, symbol or wildcard
-    elsif (grep {$_ eq $op} qw/relaxed symbol wildcard/) {
+    elsif (grep {$_ eq $op} qw(relaxed symbol wildcard)) {
       my $name = $token->[1];
       $rendered = defined $values->{$name} ? $values->{$name} : '';
       my $default = $self->defaults->{$name};
@@ -130,7 +130,7 @@ sub _compile {
     }
 
     # Symbol
-    elsif (grep {$_ eq $op} qw/relaxed symbol wildcard/) {
+    elsif (grep {$_ eq $op} qw(relaxed symbol wildcard)) {
       my $name = $token->[1];
       unshift @{$self->symbols}, $name;
 
@@ -201,7 +201,7 @@ sub _tokenize {
   while (length(my $char = substr $pattern, 0, 1, '')) {
 
     # Inside a placeholder
-    my $placeholder = grep {$_ eq $state} qw/relaxed symbol wildcard/;
+    my $placeholder = grep {$_ eq $state} qw(relaxed symbol wildcard);
 
     # DEPRECATED in Leaf Fluttering In Wind!
     if ($quoted && $char eq '.' && $state eq 'symbol') {
@@ -259,7 +259,6 @@ sub _tokenize {
 }
 
 1;
-__END__
 
 =head1 NAME
 

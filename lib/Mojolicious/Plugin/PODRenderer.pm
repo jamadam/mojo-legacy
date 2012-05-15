@@ -18,20 +18,17 @@ my $PERLDOC = $Mojolicious::Controller::H->slurp_rel_file('perldoc.html.ep');
 #  pleasant one."
 sub register {
   my ($self, $app, $conf) = @_;
-  $conf ||= {};
-
-  # Config
-  my $name       = $conf->{name}       || 'pod';
-  my $preprocess = $conf->{preprocess} || 'ep';
 
   # Add "pod" handler
+  my $preprocess = $conf->{preprocess} || 'ep';
   $app->renderer->add_handler(
-    $name => sub {
+    $conf->{name} || 'pod' => sub {
       my ($r, $c, $output, $options) = @_;
 
-      # Preprocess with ep and then render
-      $$output = _pod_to_html($$output)
-        if $r->handlers->{$preprocess}->($r, $c, $output, $options);
+      # Preprocess and render
+      return unless $r->handlers->{$preprocess}->($r, $c, $output, $options);
+      $$output = _pod_to_html($$output);
+      return 1;
     }
   );
 
@@ -39,7 +36,7 @@ sub register {
   $app->helper(pod_to_html => sub { shift; b(_pod_to_html(@_)) });
 
   # Perldoc
-  $app->routes->any(
+  return $app->routes->any(
     '/perldoc/*module' => {module => 'Mojolicious/Guides'} => sub {
       my $self = shift;
 
@@ -115,8 +112,7 @@ sub register {
 }
 
 sub _pod_to_html {
-  my $pod = shift;
-  return unless defined $pod;
+  return unless defined(my $pod = shift);
 
   # Block
   $pod = $pod->() if ref $pod eq 'CODE';
@@ -129,10 +125,8 @@ sub _pod_to_html {
   $parser->html_footer('');
 
   # Parse
-  my $output;
-  $parser->output_string(\$output);
-  eval { $parser->parse_string_document("$pod") };
-  return $@ if $@;
+  $parser->output_string(\(my $output));
+  return $@ unless eval { $parser->parse_string_document("$pod"); 1 };
 
   # Filter
   $output =~ s|<a name='___top' class='dummyTopAnchor'\s*?></a>\n||g;
@@ -143,8 +137,6 @@ sub _pod_to_html {
 
 1;
 
-__END__
-
 =head1 NAME
 
 Mojolicious::Plugin::PODRenderer - POD renderer plugin
@@ -152,16 +144,16 @@ Mojolicious::Plugin::PODRenderer - POD renderer plugin
 =head1 SYNOPSIS
 
   # Mojolicious
-  $self->plugin('PODRenderer');
-  $self->plugin(PODRenderer => {name => 'foo'});
-  $self->plugin(PODRenderer => {preprocess => 'epl'});
+  my $route = $self->plugin('PODRenderer');
+  my $route = $self->plugin(PODRenderer => {name => 'foo'});
+  my $route = $self->plugin(PODRenderer => {preprocess => 'epl'});
   $self->render('some_template', handler => 'pod');
   %= pod_to_html "=head1 TEST\n\nC<123>"
 
   # Mojolicious::Lite
-  plugin 'PODRenderer';
-  plugin PODRenderer => {name => 'foo'};
-  plugin PODRenderer => {preprocess => 'epl'};
+  my $route = plugin 'PODRenderer';
+  my $route = plugin PODRenderer => {name => 'foo'};
+  my $route = plugin PODRenderer => {preprocess => 'epl'};
   $self->render('some_template', handler => 'pod');
   %= pod_to_html "=head1 TEST\n\nC<123>"
 
@@ -213,7 +205,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  my $route = $plugin->register($app, $conf);
 
 Register renderer in L<Mojolicious> application.
 

@@ -4,7 +4,7 @@ use Mojo::Base -base;
 # "Once again, the conservative, sandwich-heavy portfolio pays off for the
 #  hungry investor."
 has types => sub {
-  return {
+  {
     atom => 'application/atom+xml',
     bin  => 'application/octet-stream',
     css  => 'text/css',
@@ -57,7 +57,6 @@ sub type {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -101,7 +100,7 @@ don't really know what they actually want.
 
   my $type = $types->type('png');
   $types   = $types->type(png => 'image/png');
-  $types   = $types->type(json => ['application/json', 'text/x-json']);
+  $types   = $types->type(json => [qw(application/json text/x-json)]);
 
 Get or set MIME types for file extension, alternatives are only used for
 detection.

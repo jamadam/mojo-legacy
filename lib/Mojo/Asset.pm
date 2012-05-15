@@ -18,7 +18,6 @@ sub size    { croak 'Method "size" not implemented by subclass' }
 sub slurp   { croak 'Method "slurp" not implemented by subclass' }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -83,7 +82,7 @@ False.
 
 =head2 C<move_to>
 
-  $asset = $asset->move_to('/foo/bar/baz.txt');
+  $asset = $asset->move_to('/home/sri/foo.txt');
 
 Move asset data into a specific file, meant to be overloaded in a subclass.
 

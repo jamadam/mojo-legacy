@@ -18,7 +18,7 @@ has ca              => sub { $ENV{MOJO_CA_FILE} };
 has cert            => sub { $ENV{MOJO_CERT_FILE} };
 has connect_timeout => sub { $ENV{MOJO_CONNECT_TIMEOUT} || 10 };
 has cookie_jar      => sub { Mojo::CookieJar->new };
-has [qw/http_proxy https_proxy local_address no_proxy/];
+has [qw(http_proxy https_proxy local_address no_proxy)];
 has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 20 };
 has ioloop             => sub { Mojo::IOLoop->new };
 has key                => sub { $ENV{MOJO_KEY_FILE} };
@@ -31,7 +31,7 @@ has transactor => sub { Mojo::UserAgent::Transactor->new };
 # Common HTTP methods
 {
   no strict 'refs';
-  for my $name (qw/DELETE GET HEAD OPTIONS PATCH POST PUT/) {
+  for my $name (qw(DELETE GET HEAD OPTIONS PATCH POST PUT)) {
     *{__PACKAGE__ . '::' . lc($name)} = sub {
       my $self = shift;
       my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
@@ -132,32 +132,32 @@ sub _cache {
   my ($self, $name, $id) = @_;
 
   # Enqueue
-  my $cache = $self->{cache} ||= [];
+  my $old = $self->{cache} ||= [];
   if ($id) {
     my $max = $self->max_connections;
-    $self->_remove(shift(@$cache)->[1]) while @$cache > $max;
-    push @$cache, [$name, $id] if $max;
+    $self->_remove(shift(@$old)->[1]) while @$old > $max;
+    push @$old, [$name, $id] if $max;
     return;
   }
 
   # Dequeue
+  my $found;
   my $loop = $self->_loop;
-  my ($result, @cache);
-  for my $cached (@$cache) {
+  my $new = $self->{cache} = [];
+  for my $cached (@$old) {
 
     # Search for id/name and remove corrupted connections
-    if (!$result && ($cached->[1] eq $name || $cached->[0] eq $name)) {
+    if (!$found && ($cached->[1] eq $name || $cached->[0] eq $name)) {
       my $stream = $loop->stream($cached->[1]);
-      if ($stream && !$stream->is_readable) { $result = $cached->[1] }
+      if ($stream && !$stream->is_readable) { $found = $cached->[1] }
       else                                  { $loop->remove($cached->[1]) }
     }
 
     # Requeue
-    else { push @cache, $cached }
+    else { push @$new, $cached }
   }
-  $self->{cache} = \@cache;
 
-  return $result;
+  return $found;
 }
 
 sub _cleanup {
@@ -254,8 +254,7 @@ sub _connected {
   $loop->stream($id)->timeout($self->inactivity_timeout);
 
   # Store connection information in transaction
-  my $tx = $self->{connections}{$id}{tx};
-  $tx->connection($id);
+  my $tx     = $self->{connections}{$id}{tx}->connection($id);
   my $handle = $loop->stream($id)->handle;
   $tx->local_address($handle->sockhost)->local_port($handle->sockport);
   $tx->remote_address($handle->peerhost)->remote_port($handle->peerport);
@@ -522,7 +521,6 @@ sub _write {
 }
 
 1;
-__END__
 
 =encoding utf8
 
@@ -689,6 +687,9 @@ environment variable or C<10>.
 Cookie jar to use for this user agents requests, defaults to a
 L<Mojo::CookieJar> object.
 
+  # Disable cookie jar
+  $ua->cookie_jar(0);
+
 =head2 C<http_proxy>
 
   my $proxy = $ua->http_proxy;
@@ -763,7 +764,7 @@ Value for C<User-Agent> request header, defaults to C<Mojolicious (Perl)>.
 =head2 C<no_proxy>
 
   my $no_proxy = $ua->no_proxy;
-  $ua          = $ua->no_proxy(['localhost', 'intranet.mojolicio.us']);
+  $ua          = $ua->no_proxy([qw(localhost intranet.mojolicio.us)]);
 
 Domains that don't require a proxy server to be used.
 

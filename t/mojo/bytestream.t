@@ -5,7 +5,7 @@ use utf8;
 # "Homer, we're going to ask you a few simple yes or no questions.
 #  Do you understand?
 #  Yes. *lie dectector blows up*"
-use Test::More tests => 145;
+use Test::More tests => 146;
 
 # Need to be loaded first to trigger edge case
 use MIME::Base64;
@@ -81,6 +81,10 @@ is $stream->url_escape, 'business%3B23', 'right url escaped result';
 # url_escape (custom pattern)
 $stream = b('&business;23')->url_escape('s&');
 is "$stream", '%26bu%73ine%73%73;23', 'right url escaped result';
+
+# url_escape (nothing to escape)
+$stream = b('foobar123-._~')->url_escape;
+is "$stream", 'foobar123-._~', 'right url escaped result';
 
 # url_unescape
 $stream = b('business%3B23');
@@ -195,11 +199,13 @@ is b('Hi there')->hmac_sha1_sum(1234567890),
 
 # html_escape
 $stream = b("foo bar'<baz>");
-is $stream->html_escape, 'foo bar&#39;&LTbaz&GT', 'right html escaped result';
+is $stream->html_escape, 'foo bar&#39;&LT;baz&GT;',
+  'right html escaped result';
 
 # html_escape (nothing to escape)
-$stream = b('foobar');
-is $stream->html_escape, 'foobar', 'right html escaped result';
+$stream = b("foobar123\n\r\t !#\$\%()*+,-./:;=?[\\]^-{|}@~");
+is $stream->html_escape, "foobar123\n\r\t !#\$\%()*+,-./:;=?[\\]^-{|}@~",
+  'right html escaped result';
 
 # html_unescape
 $stream = b('&#x3c;foo&#x3E;bar&lt;baz&gt;&#x26;&#34;');
@@ -225,7 +231,8 @@ is $stream->html_unescape, "&Ltf&&0oo\x{00a0}ba;<r",
 
 # utf8 html_escape
 $stream = b("fo\nobar<baz>&\"\x{152}")->html_escape;
-is "$stream", "fo\nobar&LTbaz&GT&AMP&QUOT&OElig;", 'right html escaped result';
+is "$stream", "fo\nobar&LT;baz&GT;&AMP;&QUOT;&OElig;",
+  'right html escaped result';
 
 # utf8 html_unescape
 $stream
@@ -239,10 +246,10 @@ is "$stream", '/home/sri/perl/site_perl/5.10.0/Mojo.pm',
 
 # html_escape (custom pattern)
 $stream = b("fo\no b<a>r")->html_escape('o<');
-is "$stream", "f&#111;\n&#111; b&LTa>r", 'right html escaped result';
+is "$stream", "f&#111;\n&#111; b&LT;a>r", 'right html escaped result';
 
 # xml_escape
-$stream = b(qq/la<f>\nbar"baz"'yada\n'&lt;la/)->xml_escape;
+$stream = b(qq{la<f>\nbar"baz"'yada\n'&lt;la})->xml_escape;
 is "$stream", "la&lt;f&gt;\nbar&quot;baz&quot;&#39;yada\n&#39;&amp;lt;la",
   'right xml escaped result';
 

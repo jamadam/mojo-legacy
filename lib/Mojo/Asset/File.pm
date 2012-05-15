@@ -9,7 +9,7 @@ use File::Spec;
 use IO::File;
 use Mojo::Util 'md5_sum';
 
-has [qw/cleanup path/];
+has [qw(cleanup path)];
 has handle => sub {
   my $self = shift;
 
@@ -17,7 +17,7 @@ has handle => sub {
   my $handle = IO::File->new;
   my $path   = $self->path;
   if (defined $path && -f $path) {
-    $handle->open("< $path") or croak qq/Can't open file "$path": $!/;
+    $handle->open("< $path") or croak qq{Can't open file "$path": $!};
     return $handle;
   }
 
@@ -25,7 +25,7 @@ has handle => sub {
   my $base = File::Spec->catfile($self->tmpdir, 'mojo.tmp');
   my $name = defined $path ? $path : $base;
   until ($handle->open($name, O_CREAT | O_EXCL | O_RDWR)) {
-    croak qq/Can't open file "$name": $!/ if defined $path || $! != $!{EEXIST};
+    croak qq{Can't open file "$name": $!} if defined $path || $! != $!{EEXIST};
     $name = "$base." . md5_sum(time . $$ . rand 9999999);
   }
   $self->path($name);
@@ -125,7 +125,7 @@ sub move_to {
 
   # Move file and prevent clean up
   my $from = $self->path;
-  move($from, $to) or croak qq/Can't move file "$from" to "$to": $!/;
+  move($from, $to) or croak qq{Can't move file "$from" to "$to": $!};
   $self->path($to)->cleanup(0);
 
   return $self;
@@ -145,7 +145,6 @@ sub slurp {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -162,7 +161,7 @@ Mojo::Asset::File - File storage for HTTP 1.1 content
   say $file->slurp;
 
   # Existing file
-  my $file = Mojo::Asset::File->new(path => '/foo/bar/baz.txt');
+  my $file = Mojo::Asset::File->new(path => '/home/sri/foo.txt');
   $file->move_to('/yada.txt');
   say $file->slurp;
 
@@ -192,7 +191,7 @@ File handle, created on demand.
 =head2 C<path>
 
   my $path = $file->path;
-  $file    = $file->path('/foo/bar/baz.txt');
+  $file    = $file->path('/home/sri/foo.txt');
 
 File path used to create C<handle>, can also be automatically generated if
 necessary.
@@ -236,7 +235,7 @@ True.
 
 =head2 C<move_to>
 
-  $file = $file->move_to('/foo/bar/baz.txt');
+  $file = $file->move_to('/home/sri/bar.txt');
 
 Move asset data into a specific file and disable C<cleanup>.
 

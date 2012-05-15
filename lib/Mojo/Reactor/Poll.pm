@@ -1,10 +1,10 @@
 package Mojo::Reactor::Poll;
 use Mojo::Base 'Mojo::Reactor';
 
-use IO::Poll qw/POLLERR POLLHUP POLLIN POLLOUT/;
+use IO::Poll qw(POLLERR POLLHUP POLLIN POLLOUT);
 use List::Util 'min';
 use Mojo::Util 'md5_sum';
-use Time::HiRes qw/time usleep/;
+use Time::HiRes qw(time usleep);
 
 # "I don't know.
 #  Can I really betray my country?
@@ -123,7 +123,6 @@ sub _timer {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -180,9 +179,8 @@ Check if reactor is running.
 
   $reactor->one_tick;
 
-Run reactor until at least one event has been handled or no events are being
-watched anymore. Note that this method can recurse back into the reactor, so
-you need to be careful.
+Run reactor until an event occurs or no events are being watched anymore. Note
+that this method can recurse back into the reactor, so you need to be careful.
 
 =head2 C<recurring>
 

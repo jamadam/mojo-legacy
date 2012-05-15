@@ -78,7 +78,6 @@ sub sort {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -88,7 +87,7 @@ Mojo::Collection - Collection
 
   # Manipulate collections
   use Mojo::Collection;
-  my $collection = Mojo::Collection->new(qw/just works/);
+  my $collection = Mojo::Collection->new(qw(just works));
   unshift @$collection, 'it';
   $collection->map(sub { ucfirst })->each(sub {
     my ($word, $count) = @_;
@@ -97,11 +96,21 @@ Mojo::Collection - Collection
 
   # Use the alternative constructor
   use Mojo::Collection 'c';
-  c(qw/a b c/)->join('/')->url_escape->say;
+  c(qw(a b c))->join('/')->url_escape->say;
 
 =head1 DESCRIPTION
 
 L<Mojo::Collection> is a container for collections.
+
+=head1 FUNCTIONS
+
+L<Mojo::Collection> implements the following functions.
+
+=head2 C<c>
+
+  my $collection = c(1, 2, 3);
+
+Construct a new L<Mojo::Collection> object.
 
 =head1 METHODS
 

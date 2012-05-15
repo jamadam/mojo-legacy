@@ -9,10 +9,8 @@ use Mojo::JSON;
 use Mojo::JSON::Pointer;
 use Mojo::Parameters;
 use Mojo::Upload;
-use Mojo::Util qw/decode url_unescape/;
+use Mojo::Util qw(decode url_unescape);
 use Scalar::Util 'weaken';
-
-use constant CHUNK_SIZE => $ENV{MOJO_CHUNK_SIZE} || 131072;
 
 has content => sub { Mojo::Content::Single->new };
 has default_charset  => 'UTF-8';
@@ -210,7 +208,7 @@ sub get_start_line_chunk {
   my ($self, $offset) = @_;
   $self->emit(progress => 'start_line', $offset);
   return substr $self->{start_line_buffer} = defined $self->{start_line_buffer} ? $self->{start_line_buffer} : $self->_build_start_line,
-    $offset, CHUNK_SIZE;
+    $offset, $ENV{MOJO_CHUNK_SIZE} || 131072;
 }
 
 sub has_leftovers { shift->content->has_leftovers }
@@ -366,7 +364,7 @@ sub _parse {
   }
 
   # Content
-  if (grep {$_ eq ($self->{state} || '')} qw/body content finished/) {
+  if (grep {$_ eq ($self->{state} || '')} qw(body content finished)) {
 
     # Until body
     my $content = $self->content;
@@ -457,7 +455,6 @@ sub _parse_formdata {
 sub _parse_start_line { }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -503,7 +500,7 @@ Emitted when message building or parsing makes progress.
   # Building
   $message->on(progress => sub {
     my ($message, $state, $offset) = @_;
-    say qq/Building "$state" at offset $offset/;
+    say qq{Building "$state" at offset $offset};
   });
 
   # Parsing

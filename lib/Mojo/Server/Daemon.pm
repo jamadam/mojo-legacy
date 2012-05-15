@@ -15,7 +15,7 @@ use constant BONJOUR => $ENV{MOJO_NO_BONJOUR}
 
 use constant DEBUG => $ENV{MOJO_DAEMON_DEBUG} || 0;
 
-has [qw/backlog group silent user/];
+has [qw(backlog group silent user)];
 has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 15 };
 has ioloop => sub { Mojo::IOLoop->singleton };
 has listen => sub { [split /,/, $ENV{MOJO_LISTEN} || 'http://*:3000'] };
@@ -61,8 +61,7 @@ sub _build_tx {
   my ($self, $id, $c) = @_;
 
   # Build transaction
-  my $tx = $self->build_tx;
-  $tx->connection($id);
+  my $tx = $self->build_tx->connection($id);
 
   # Identify
   $tx->res->headers->server('Mojolicious (Perl)');
@@ -96,14 +95,6 @@ sub _build_tx {
   $tx->kept_alive(1) if ++$c->{requests} > 1;
 
   return $tx;
-}
-
-sub _close { shift->_remove(pop) }
-
-sub _error {
-  my ($self, $id, $err) = @_;
-  $self->app->log->error($err);
-  $self->_remove($id);
 }
 
 sub _finish {
@@ -151,43 +142,27 @@ sub _finish {
 sub _group {
   my $self = shift;
   return unless my $group = $self->group;
-  croak qq/Group "$group" does not exist/
+  croak qq{Group "$group" does not exist}
     unless defined(my $gid = (getgrnam($group))[2]);
-  POSIX::setgid($gid) or croak qq/Can't switch to group "$group": $!/;
+  POSIX::setgid($gid) or croak qq{Can't switch to group "$group": $!};
 }
 
 sub _listen {
   my ($self, $listen) = @_;
 
-  # Check listen value
-  my $url   = Mojo::URL->new($listen);
-  my $query = $url->query;
-
-  # DEPRECATED in Leaf Fluttering In Wind!
-  my ($address, $port, $cert, $key, $ca);
-  if ($listen =~ qr|//([^\[\]]]+)\:(\d+)\:(.*?)\:(.*?)(?:\:(.+)?)?$|) {
-    warn "Custom HTTPS listen values are DEPRECATED in favor of URLs!\n";
-    ($address, $port, $cert, $key, $ca) = ($1, $2, $3, $4, $5);
-  }
-
-  else {
-    $address = $url->host;
-    $port    = $url->port;
-    $cert    = $query->param('cert');
-    $key     = $query->param('key');
-    $ca      = $query->param('ca');
-  }
-
   # Options
-  my $options = {port => $port};
-  my $tls;
-  $tls = $options->{tls} = 1 if $url->scheme eq 'https';
-  $options->{address}  = $address if $address ne '*';
-  $options->{tls_cert} = $cert    if $cert;
-  $options->{tls_key}  = $key     if $key;
-  $options->{tls_ca}   = $ca      if $ca;
-  my $backlog = $self->backlog;
-  $options->{backlog} = $backlog if $backlog;
+  my $url     = Mojo::URL->new($listen);
+  my $query   = $url->query;
+  my $options = {
+    address  => $url->host,
+    backlog  => $self->backlog,
+    port     => $url->port,
+    tls_ca   => scalar $query->param('ca'),
+    tls_cert => scalar $query->param('cert'),
+    tls_key  => scalar $query->param('key')
+  };
+  delete $options->{address} if $options->{address} eq '*';
+  my $tls = $options->{tls} = $url->scheme eq 'https' ? 1 : undef;
 
   # Listen
   weaken $self;
@@ -196,26 +171,26 @@ sub _listen {
       my ($loop, $stream, $id) = @_;
 
       # Add new connection
-      $self->{connections}{$id} = {tls => $tls};
+      my $c = $self->{connections}{$id} = {tls => $tls};
       warn "-- Accept (@{[$stream->handle->peerhost]})\n" if DEBUG;
 
       # Inactivity timeout
       $stream->timeout($self->inactivity_timeout);
 
       # Events
+      $stream->on(close => sub { $self->_remove($id) });
       $stream->on(
-        timeout => sub {
-          $self->_error($id => 'Inactivity timeout.')
-            if $self->{connections}{$id}{tx};
+        error => sub {
+          $self->app->log->error(pop);
+          $self->_remove($id);
         }
       );
-      $stream->on(close => sub { $self->_close($id) });
-      $stream->on(error => sub { $self->_error($id => pop) });
-      $stream->on(read  => sub { $self->_read($id => pop) });
+      $stream->on(read => sub { $self->_read($id => pop) });
+      $stream->on(timeout =>
+          sub { $self->app->log->debug('Inactivity timeout.') if $c->{tx} });
     }
   );
-  $self->{listening} ||= [];
-  push @{$self->{listening}}, $id;
+  push @{$self->{listening} ||= []}, $id;
 
   # Bonjour
   if (BONJOUR && (my $p = Net::Rendezvous::Publish->new)) {
@@ -229,7 +204,7 @@ sub _listen {
 
   # Friendly message
   return if $self->silent;
-  $self->app->log->info(qq/Listening at "$listen"./);
+  $self->app->log->info(qq{Listening at "$listen".});
   $listen =~ s|//\*|//127.0.0.1|i;
   say("Server available at $listen.");
 }
@@ -267,9 +242,9 @@ sub _remove {
 sub _user {
   my $self = shift;
   return unless my $user = $self->user;
-  croak qq/User "$user" does not exist/
+  croak qq{User "$user" does not exist}
     unless defined(my $uid = (getpwnam($self->user))[2]);
-  POSIX::setuid($uid) or croak qq/Can't switch to user "$user": $!/;
+  POSIX::setuid($uid) or croak qq{Can't switch to user "$user": $!};
 }
 
 sub _write {
@@ -306,7 +281,6 @@ sub _write {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -397,7 +371,7 @@ List of one or more locations to listen on, defaults to the value of the
 C<MOJO_LISTEN> environment variable or C<http://*:3000>.
 
   # Listen on two ports with HTTP and HTTPS at the same time
-  $daemon->listen(['http://*:3000', 'https://*:4000']);
+  $daemon->listen([qw(http://*:3000 https://*:4000)]);
 
   # Use a custom certificate and key
   $daemon->listen(['https://*:3000?cert=/x/server.crt&key=/y/server.key']);

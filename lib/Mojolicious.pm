@@ -11,9 +11,10 @@ use Mojolicious::Routes;
 use Mojolicious::Sessions;
 use Mojolicious::Static;
 use Mojolicious::Types;
-use Scalar::Util qw/blessed weaken/;
+use Scalar::Util qw(blessed weaken);
 
 # "Robots don't have any emotions, and sometimes that makes me very sad."
+has commands => sub { Mojolicious::Commands->new };
 has controller_class => 'Mojolicious::Controller';
 has mode => sub { ($ENV{MOJO_MODE} || 'development') };
 has plugins  => sub { Mojolicious::Plugins->new };
@@ -33,7 +34,7 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Leaf Fluttering In Wind';
-our $VERSION  = '2.91';
+our $VERSION  = '2.95';
 
 # "These old doomsday devices are dangerously unstable.
 #  I'll rest easier not knowing where they are."
@@ -41,12 +42,12 @@ sub AUTOLOAD {
   my $self = shift;
 
   # Method
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w\:]+)\:\:(\w+)$/;
-  croak qq/Undefined subroutine &${package}::$method called/
+  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)\:\:(\w+)$/;
+  croak qq[Undefined subroutine &${package}::$method called]
     unless blessed $self && $self->isa(__PACKAGE__);
 
   # Check for helper
-  croak qq/Can't locate object method "$method" via package "$package"/
+  croak qq{Can't locate object method "$method" via package "$package"}
     unless my $helper = $self->renderer->helpers->{$method};
 
   # Call helper with fresh controller
@@ -69,11 +70,11 @@ sub new {
   my $r = $self->routes->namespace(ref $self);
 
   # Hide controller attributes/methods and "handler"
-  $r->hide(qw/AUTOLOAD DESTROY app cookie finish flash handler on param/);
-  $r->hide(qw/redirect_to render render_content render_data/);
-  $r->hide(qw/render_exception render_json render_not_found render_partial/);
-  $r->hide(qw/render_static render_text rendered req res respond_to send/);
-  $r->hide(qw/session signed_cookie stash tx ua url_for write write_chunk/);
+  $r->hide(qw(AUTOLOAD DESTROY app cookie finish flash handler on param));
+  $r->hide(qw(redirect_to render render_content render_data));
+  $r->hide(qw(render_exception render_json render_not_found render_partial));
+  $r->hide(qw(render_static render_text rendered req res respond_to send));
+  $r->hide(qw(session signed_cookie stash tx ua url_for write write_chunk));
 
   # Prepare log
   my $mode = $self->mode;
@@ -81,8 +82,8 @@ sub new {
     if -w $home->rel_file('log');
 
   # Load default plugins
-  $self->plugin($_) for qw/HeaderCondition DefaultHelpers TagHelpers/;
-  $self->plugin($_) for qw/EPLRenderer EPRenderer RequestTimer PoweredBy/;
+  $self->plugin($_) for qw(HeaderCondition DefaultHelpers TagHelpers);
+  $self->plugin($_) for qw(EPLRenderer EPRenderer RequestTimer PoweredBy);
 
   # Exception handling
   $self->hook(
@@ -178,7 +179,7 @@ sub handler {
 sub helper {
   my ($self, $name) = (shift, shift);
   my $r = $self->renderer;
-  $self->log->debug(qq/Helper "$name" already exists, replacing./)
+  $self->log->debug(qq{Helper "$name" already exists, replacing.})
     if exists $r->helpers->{$name};
   $r->add_helper($name, @_);
 }
@@ -204,16 +205,15 @@ sub start {
   $ENV{MOJO_EXE} ||= (caller)[1];
 
   # We are the application
-  $ENV{MOJO_APP} = ref $class ? $class : $class->new;
+  my $self = $ENV{MOJO_APP} = ref $class ? $class : $class->new;
 
   # Start!
-  Mojolicious::Commands->start(@_);
+  $self->commands->start(@_);
 }
 
 sub startup { }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -249,6 +249,17 @@ Take a look at our excellent documentation in L<Mojolicious::Guides>!
 
 L<Mojolicious> inherits all attributes from L<Mojo> and implements the
 following new ones.
+
+=head2 C<commands>
+
+  my $commands = $app->commands;
+  $app         = $app->commands(Mojolicious::Commands->new);
+
+Command line interface for your application, defaults to a
+L<Mojolicious::Commands> object.
+
+  # Add another namespace to load commands from
+  push @{$app->commands->namespaces}, 'MyApp::Command';
 
 =head2 C<controller_class>
 
@@ -287,9 +298,11 @@ level from C<debug> to C<info> if it has a value other than C<development>.
   my $plugins = $app->plugins;
   $app        = $app->plugins(Mojolicious::Plugins->new);
 
-The plugin loader, defaults to a L<Mojolicious::Plugins> object. You can
-usually leave this alone, see L<Mojolicious::Plugin> if you want to write a
-plugin or the C<plugin> method below if you want to load a plugin.
+The plugin manager, defaults to a L<Mojolicious::Plugins> object. See the
+C<plugin> method below if you want to load a plugin.
+
+  # Add another namespace to load plugins from
+  push @{$app->plugins->namespaces}, 'MyApp::Plugin';
 
 =head2 C<renderer>
 
@@ -302,7 +315,7 @@ L<Mojolicious::Plugin::EPRenderer> and L<Mojolicious::Plugin::EPLRenderer>
 contain more information.
 
   # Add another "templates" directory
-  push @{$app->renderer->paths}, '/foo/bar/templates';
+  push @{$app->renderer->paths}, '/home/sri/templates';
 
   # Add another class with templates in DATA section
   push @{$app->renderer->classes}, 'Mojolicious::Plugin::Fun';
@@ -351,7 +364,7 @@ For serving static files from your C<public> directories, defaults to a
 L<Mojolicious::Static> object.
 
   # Add another "public" directory
-  push @{$app->static->paths}, '/foo/bar/public';
+  push @{$app->static->paths}, '/home/sri/public';
 
   # Add another class with static files in DATA section
   push @{$app->static->classes}, 'Mojolicious::Plugin::Fun';
@@ -654,8 +667,8 @@ L<http://github.com/kraih/mojo>
 
 =head1 BUNDLED FILES
 
-L<Mojolicious> ships with a few popular static files bundled in the C<public>
-directory.
+The L<Mojolicious> distribution includes a few files with different licenses
+that have been bundled for internal use.
 
 =head2 Mojolicious Artwork
 
@@ -666,7 +679,7 @@ L<http://creativecommons.org/licenses/by-sa/3.0>.
 
 =head2 jQuery
 
-  Copyright 2011, John Resig.
+  Copyright (C) 2011, John Resig.
 
 Licensed under the MIT License, L<http://creativecommons.org/licenses/MIT>.
 
@@ -837,6 +850,8 @@ Maksym Komar
 Maxim Vuets
 
 Michael Harris
+
+Mike Magowan
 
 Mirko Westermeier
 

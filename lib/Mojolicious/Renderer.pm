@@ -13,24 +13,23 @@ has classes => sub { ['main'] };
 has default_format => 'html';
 has 'default_handler';
 has encoding => 'UTF-8';
-has [qw/handlers helpers/] => sub { {} };
+has [qw(handlers helpers)] => sub { {} };
 has paths => sub { [] };
 
 # "This is not how Xmas is supposed to be.
 #  In my day Xmas was about bringing people together,
 #  not blowing them apart."
 sub new {
-  my $self = shift->SUPER::new(@_);
 
-  # Data
-  $self->add_handler(
+  # Add "data" handler
+  my $self = shift->SUPER::new(@_)->add_handler(
     data => sub {
       my ($r, $c, $output, $options) = @_;
       $$output = $options->{data};
     }
   );
 
-  # JSON
+  # Add "json" handler
   $self->add_handler(
     json => sub {
       my ($r, $c, $output, $options) = @_;
@@ -38,15 +37,13 @@ sub new {
     }
   );
 
-  # Text
-  $self->add_handler(
+  # Add "text" handler
+  return $self->add_handler(
     text => sub {
       my ($r, $c, $output, $options) = @_;
       $$output = $options->{text};
     }
   );
-
-  return $self;
 }
 
 sub add_handler {
@@ -167,18 +164,6 @@ sub render {
   return $output, $c->app->types->type($format) || 'text/plain';
 }
 
-# DEPRECATED in Leaf Fluttering In Wind!
-sub root {
-  warn <<EOF;
-Mojolicious::Renderer->root is DEPRECATED in favor of
-Mojolicious::Renderer->paths!
-EOF
-  my $self = shift;
-  return $self->paths->[0] unless @_;
-  $self->paths->[0] = shift;
-  return $self;
-}
-
 sub template_name {
   my ($self, $options) = @_;
   return unless my $template = $options->{template} || '';
@@ -249,12 +234,11 @@ sub _render_template {
   }
 
   # No handler
-  else { $c->app->log->error(qq/No handler for "$handler" available./) }
+  else { $c->app->log->error(qq{No handler for "$handler" available.}) }
   return;
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -287,7 +271,7 @@ Renderer cache, defaults to a L<Mojo::Cache> object.
   my $classes = $renderer->classes;
   $renderer   = $renderer->classes(['main']);
 
-Classes to use for finding templates in C<DATA> section, first one has the
+Classes to use for finding templates in C<DATA> sections, first one has the
 highest precedence, defaults to C<main>.
 
   # Add another class with templates in DATA section
@@ -333,12 +317,12 @@ Registered helpers.
 =head2 C<paths>
 
   my $paths = $renderer->paths;
-  $renderer = $renderer->paths(['/foo/bar/templates']);
+  $renderer = $renderer->paths(['/home/sri/templates']);
 
 Directories to look for templates in, first one has the highest precedence.
 
   # Add another "templates" directory
-  push @{$renderer->paths}, '/foo/bar/templates';
+  push @{$renderer->paths}, '/home/sri/templates';
 
 =head1 METHODS
 

@@ -8,10 +8,11 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 195;
+use Test::More tests => 201;
 
 # "Let's see how crazy I am now, Nixon. The correct answer is very."
 use Mojo::ByteStream 'b';
+use Mojo::CookieJar;
 use Mojolicious::Lite;
 use Test::Mojo;
 
@@ -185,7 +186,7 @@ get '/no_format' => {text => 'No format detection.'};
 
 # GET /some_formats.txt
 # GET /some_formats.html
-get '/some_formats' => [format => [qw/txt json/]] =>
+get '/some_formats' => [format => [qw(txt json)]] =>
   {text => 'Some format detection.'};
 
 # GET /no_real_format.xml
@@ -253,9 +254,18 @@ ok $t->tx->res->cookie('mojolicious')->httponly,
 $t->reset_session;
 my $session = b("☃☃☃☃☃")->encode->b64_encode('');
 my $hmac    = $session->clone->hmac_md5_sum($t->app->secret);
-my $broken  = "\$Version=1; mojolicious=$session--$hmac; \$Path=/";
-$t->get_ok('/bridge2stash' => {Cookie => $broken})->status_is(200)
+$t->get_ok('/bridge2stash' => {Cookie => "mojolicious=$session--$hmac"})
+  ->status_is(200)->content_is("stash too!!!!!!!\n");
+
+# GET /bridge2stash (without cookie jar)
+$t->ua->cookie_jar(0);
+$t->get_ok('/bridge2stash' => {'X-Flash' => 1})->status_is(200)
   ->content_is("stash too!!!!!!!\n");
+
+# GET /bridge2stash (again without cookie jar)
+$t->get_ok('/bridge2stash' => {'X-Flash' => 1})->status_is(200)
+  ->content_is("stash too!!!!!!!\n");
+$t->ua->cookie_jar(Mojo::CookieJar->new);
 
 # GET /bridge2stash (fresh start)
 $t->reset_session;

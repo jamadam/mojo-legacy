@@ -2,7 +2,7 @@ package Mojo::Reactor;
 use Mojo::Base 'Mojo::EventEmitter';
 
 use Carp 'croak';
-use IO::Poll qw/POLLERR POLLHUP POLLIN/;
+use IO::Poll qw(POLLERR POLLHUP POLLIN);
 use Mojo::Loader;
 
 sub detect {
@@ -35,7 +35,6 @@ sub timer      { croak 'Method "timer" not implemented by subclass' }
 sub watch      { croak 'Method "watch" not implemented by subclass' }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -128,9 +127,9 @@ Check if reactor is running. Meant to be overloaded in a subclass.
 
   $reactor->one_tick;
 
-Run reactor until at least one event has been handled or no events are being
-watched anymore. Note that this method can recurse back into the reactor, so
-you need to be careful. Meant to be overloaded in a subclass.
+Run reactor until an event occurs or no events are being watched anymore. Note
+that this method can recurse back into the reactor, so you need to be careful.
+Meant to be overloaded in a subclass.
 
   # Don't block longer than 0.5 seconds
   my $id = $reactor->timer(0.5 => sub {});

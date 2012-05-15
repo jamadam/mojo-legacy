@@ -1,7 +1,7 @@
 package Mojolicious::Command::eval;
 use Mojo::Base 'Mojo::Command';
 
-use Getopt::Long qw/GetOptions :config no_auto_abbrev no_ignore_case/;
+use Getopt::Long qw(GetOptions :config no_auto_abbrev no_ignore_case);
 
 has description => "Run code against application.\n";
 has usage       => <<"EOF";
@@ -37,7 +37,6 @@ sub run {
 }
 
 1;
-__END__
 
 =head1 NAME
 

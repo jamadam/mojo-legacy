@@ -2,7 +2,7 @@ package Mojo::Loader;
 use Mojo::Base -base;
 
 use File::Basename 'fileparse';
-use File::Spec::Functions qw/catdir catfile splitdir/;
+use File::Spec::Functions qw(catdir catfile splitdir);
 use Mojo::Command;
 use Mojo::Exception;
 
@@ -11,7 +11,7 @@ sub load {
   my ($self, $module) = @_;
 
   # Check module name
-  return 1 if !$module || $module !~ /^\w(?:[\w\:\']*\w)?$/;
+  return 1 if !$module || $module !~ /^\w(?:[\w:']*\w)?$/;
 
   # Already loaded
   return if $module->can('new');
@@ -56,7 +56,6 @@ sub search {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -72,7 +71,7 @@ Mojo::Loader - Loader
 
     # And load them safely
     my $e = $loader->load($module);
-    warn qq/Loading "$module" failed: $e/ if ref $e;
+    warn qq{Loading "$module" failed: $e} if ref $e;
   }
 
 =head1 DESCRIPTION

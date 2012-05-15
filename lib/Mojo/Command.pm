@@ -4,11 +4,11 @@ use Mojo::Base -base;
 use Carp 'croak';
 use Cwd 'getcwd';
 use File::Path 'mkpath';
-use File::Spec::Functions qw/catdir catfile splitdir/;
+use File::Spec::Functions qw(catdir catfile splitdir);
 use IO::Handle;
 use Mojo::Server;
 use Mojo::Template;
-use Mojo::Util qw/b64_decode decamelize/;
+use Mojo::Util qw(b64_decode decamelize);
 
 has app => sub { Mojo::Server->new->app };
 has description => 'No description.';
@@ -20,7 +20,7 @@ my %CACHE;
 
 sub chmod_file {
   my ($self, $path, $mod) = @_;
-  chmod $mod, $path or croak qq/Can't chmod path "$path": $!/;
+  chmod $mod, $path or croak qq{Can't chmod path "$path": $!};
   $mod = sprintf '%lo', $mod;
   say "  [chmod] $path $mod" unless $self->quiet;
   return $self;
@@ -50,7 +50,7 @@ sub create_dir {
   }
 
   # Create
-  mkpath $path or croak qq/Can't make directory "$path": $!/;
+  mkpath $path or croak qq{Can't make directory "$path": $!};
   say "  [mkdir] $path" unless $self->quiet;
   return $self;
 }
@@ -136,8 +136,8 @@ sub write_file {
   $self->create_dir($dir);
 
   # Write unbuffered
-  croak qq/Can't open file "$path": $!/ unless open my $file, '>', $path;
-  croak qq/Can't write to file "$path": $!/
+  croak qq{Can't open file "$path": $!} unless open my $file, '>', $path;
+  croak qq{Can't write to file "$path": $!}
     unless defined $file->syswrite($data);
   say "  [write] $path" unless $self->quiet;
 
@@ -150,7 +150,6 @@ sub write_rel_file {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -238,15 +237,15 @@ following new ones.
 
 =head2 C<chmod_file>
 
-  $command = $command->chmod_file('/foo/bar.txt', 0644);
+  $command = $command->chmod_file('/home/sri/foo.txt', 0644);
 
 Portably change mode of a file.
 
 =head2 C<chmod_rel_file>
 
-  $command = $command->chmod_rel_file('foo/bar.txt', 0644);
+  $command = $command->chmod_rel_file('foo/foo.txt', 0644);
 
-Portably change mode of a relative file.
+Portably change mode of a file relative to the current working directory.
 
 =head2 C<class_to_file>
 
@@ -269,7 +268,7 @@ Convert class name to path.
 
 =head2 C<create_dir>
 
-  $command = $command->create_dir('/foo/bar/baz');
+  $command = $command->create_dir('/home/sri/foo/bar');
 
 Portably create a directory.
 
@@ -277,7 +276,7 @@ Portably create a directory.
 
   $command = $command->create_rel_dir('foo/bar/baz');
 
-Portably create a relative directory.
+Portably create a directory relative to the current working directory.
 
 =head2 C<get_all_data>
 
@@ -303,13 +302,15 @@ Print usage information for command.
 
   my $path = $command->rel_dir('foo/bar');
 
-Portably generate an absolute path from a relative UNIX style path.
+Portably generate an absolute path for a directory relative to the current
+working directory.
 
 =head2 C<rel_file>
 
   my $path = $command->rel_file('foo/bar.txt');
 
-Portably generate an absolute path from a relative UNIX style path.
+Portably generate an absolute path for a file relative to the current working
+directory.
 
 =head2 C<render_data>
 
@@ -319,7 +320,7 @@ Render a template from the C<DATA> section of the command class.
 
 =head2 C<render_to_file>
 
-  $command = $command->render_to_file('foo_bar', '/foo/bar.txt');
+  $command = $command->render_to_file('foo_bar', '/home/sri/foo.txt');
 
 Render a template from the C<DATA> section of the command class to a file.
 
@@ -328,7 +329,7 @@ Render a template from the C<DATA> section of the command class to a file.
   $command = $command->render_to_rel_file('foo_bar', 'foo/bar.txt');
 
 Portably render a template from the C<DATA> section of the command class to a
-relative file.
+file relative to the current working directory.
 
 =head2 C<run>
 
@@ -339,7 +340,7 @@ Run command. Meant to be overloaded in a subclass.
 
 =head2 C<write_file>
 
-  $command = $command->write_file('/foo/bar.txt', 'Hello World!');
+  $command = $command->write_file('/home/sri/foo.txt', 'Hello World!');
 
 Portably write text to a file.
 
@@ -347,7 +348,7 @@ Portably write text to a file.
 
   $command = $command->write_rel_file('foo/bar.txt', 'Hello World!');
 
-Portably write text to a relative file.
+Portably write text to a file relative to the current working directory.
 
 =head1 SEE ALSO
 

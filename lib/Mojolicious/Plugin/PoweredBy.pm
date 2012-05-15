@@ -15,7 +15,6 @@ sub register {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -55,7 +54,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  $plugin->register($app, $conf);
 
 Register plugin hooks in L<Mojolicious> application.
 

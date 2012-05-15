@@ -9,7 +9,7 @@ BEGIN {
   $ENV{MOJO_REACTOR}    = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 133;
+use Test::More tests => 139;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
@@ -90,9 +90,12 @@ app->routes->namespace('MyTestApp');
 my $external = "$FindBin::Bin/external/myapp.pl";
 plugin Mount => {'/x/1' => $external};
 plugin(Mount => ('/x/♥' => $external))->to(message => 'works 2!');
+plugin Mount => {'/y/1'            => "$FindBin::Bin/external/myapp2.pl"};
 plugin Mount => {'mojolicious.org' => $external};
-plugin Mount => {'MOJOLICIO.US/'   => $external};
-plugin Mount => {'*.kraih.com'     => $external};
+plugin(Mount => ('/y/♥' => "$FindBin::Bin/external/myapp2.pl"))
+  ->to(message => 'works 3!');
+plugin Mount => {'MOJOLICIO.US/' => $external};
+plugin Mount => {'*.kraih.com'   => $external};
 plugin(Mount => ('*.foo-bar.de/♥/123' => $external))
   ->to(message => 'works 3!');
 
@@ -187,9 +190,9 @@ $t->get_ok('/just/works/too')->status_is(200)->content_is("It just works!\n");
 
 # GET /x/1/ (full external application)
 $t->get_ok('/x/1/')->status_is(200)->content_is(<<'EOF');
-works!Insecure!Insecure!
+works ♥!Insecure!Insecure!
 
-too!works!!!
+too!works!!!Mojolicious::Plugin::Config::Sandbox
 <form action="/x/1/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -211,9 +214,9 @@ $t->get_ok('/x/1/url/☃')->status_is(200)
 
 # GET /x/♥/ (full external application)
 $t->get_ok('/x/♥/')->status_is(200)->content_is(<<'EOF');
-works!Insecure!Insecure!
+works ♥!Insecure!Insecure!
 
-too!works!!!
+too!works!!!Mojolicious::Plugin::Config::Sandbox
 <form action="/x/%E2%99%A5/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -233,15 +236,21 @@ $t->get_ok('/x/♥/stream')->status_is(200)->content_is('hello!');
 $t->get_ok('/x/♥/url/☃')->status_is(200)
   ->content_is('/x/%E2%99%A5/url/%E2%98%83 -> /x/%E2%99%A5/%E2%98%83/stream!');
 
+# GET /y/1 (full secondary external application)
+$t->get_ok('/y/1')->status_is(200)->content_is("works 4!\nInsecure too!");
+
+# GET /y/♥ (full secondary external application)
+$t->get_ok('/y/♥')->status_is(200)->content_is("works 3!\nInsecure too!");
+
 # GET /host (main application)
 $t->get_ok('/host')->status_is(200)->content_is('main application!');
 
 # GET / (full external application with domain)
 $t->get_ok('/' => {Host => 'mojolicious.org'})->status_is(200)
   ->content_is(<<'EOF');
-works!Insecure!Insecure!
+works ♥!Insecure!Insecure!
 
-too!works!!!
+too!works!!!Mojolicious::Plugin::Config::Sandbox
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -254,9 +263,9 @@ $t->get_ok('/host' => {Host => 'mojolicious.org'})->status_is(200)
 # GET / (full external application with domain)
 $t->get_ok('/' => {Host => 'mojolicio.us'})->status_is(200)
   ->content_is(<<'EOF');
-works!Insecure!Insecure!
+works ♥!Insecure!Insecure!
 
-too!works!!!
+too!works!!!Mojolicious::Plugin::Config::Sandbox
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -268,9 +277,9 @@ $t->get_ok('/host' => {Host => 'mojolicio.us'})->status_is(200)
 
 # GET / (full external application with domain)
 $t->get_ok('/' => {Host => 'kraih.com'})->status_is(200)->content_is(<<'EOF');
-works!Insecure!Insecure!
+works ♥!Insecure!Insecure!
 
-too!works!!!
+too!works!!!Mojolicious::Plugin::Config::Sandbox
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -291,9 +300,9 @@ $t->get_ok('/host' => {Host => 'foo.bar.kraih.com'})->status_is(200)
 # GET /♥/123/ (full external application with a bit of everything)
 $t->get_ok('/♥/123/' => {Host => 'foo-bar.de'})->status_is(200)
   ->content_is(<<'EOF');
-works!Insecure!Insecure!
+works ♥!Insecure!Insecure!
 
-too!works!!!
+too!works!!!Mojolicious::Plugin::Config::Sandbox
 <form action="/%E2%99%A5/123/%E2%98%83">
   <input type="submit" value="☃" />
 </form>

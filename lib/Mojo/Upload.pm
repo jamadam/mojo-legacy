@@ -6,7 +6,7 @@ use Mojo::Asset::File;
 use Mojo::Headers;
 
 has asset => sub { Mojo::Asset::File->new };
-has [qw/filename name/];
+has [qw(filename name)];
 has headers => sub { Mojo::Headers->new };
 
 # "B-6
@@ -18,7 +18,6 @@ sub size    { shift->asset->size }
 sub slurp   { shift->asset->slurp }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -30,7 +29,7 @@ Mojo::Upload - Upload container
 
   my $upload = Mojo::Upload->new;
   say $upload->filename;
-  $upload->move_to('/foo/bar/baz.txt');
+  $upload->move_to('/home/sri/foo.txt');
 
 =head1 DESCRIPTION
 
@@ -75,7 +74,7 @@ following new ones.
 
 =head2 C<move_to>
 
-  $upload->move_to('/foo/bar/baz.txt');
+  $upload->move_to('/home/sri/foo.txt');
 
 Alias for L<Mojo::Asset::File/"move_to">.
 

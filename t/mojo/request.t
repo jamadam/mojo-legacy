@@ -2,7 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 982;
+use Test::More tests => 988;
 
 # "When will I learn?
 #  The answer to life's problems aren't at the bottom of a bottle,
@@ -608,9 +608,9 @@ ok !$req->content->asset->is_file, 'stored in memory';
 is $req->content->asset->size, 26, 'right size';
 is $req->content->asset->slurp, 'foo=bar& tset=23+;&foo=bar', 'right content';
 is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
-is_deeply $req->body_params->to_hash->{foo}, [qw/bar bar/], 'right values';
+is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
-is_deeply $req->params->to_hash->{foo}, [qw/bar bar 13/], 'right values';
+is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
 
 # Parse HTTP 1.1 "x-application-urlencoded" (too big for memory)
 $req = Mojo::Message::Request->new;
@@ -631,9 +631,9 @@ ok $req->content->asset->is_file, 'stored in file';
 is $req->content->asset->size, 26, 'right size';
 is $req->content->asset->slurp, 'foo=bar& tset=23+;&foo=bar', 'right content';
 is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
-is_deeply $req->body_params->to_hash->{foo}, [qw/bar bar/], 'right values';
+is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
-is_deeply $req->params->to_hash->{foo}, [qw/bar bar 13/], 'right values';
+is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
 
 # Parse HTTP 1.1 "application/x-www-form-urlencoded"
 $req = Mojo::Message::Request->new;
@@ -652,15 +652,15 @@ is $req->headers->content_type, 'application/x-www-form-urlencoded',
 is $req->content->asset->size, 26, 'right size';
 is $req->content->asset->slurp, 'foo=bar&+tset=23+;&foo=bar', 'right content';
 is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
-is_deeply $req->body_params->to_hash->{foo}, [qw/bar bar/], 'right values';
+is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
-is_deeply $req->params->to_hash->{foo}, [qw/bar bar 13/], 'right values';
-is_deeply [$req->param('foo')], [qw/bar bar 13/], 'right values';
+is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
+is_deeply [$req->param('foo')], [qw(bar bar 13)], 'right values';
 is $req->param(' tset'), '23 ', 'right value';
 $req->param('set', 'single');
 is $req->param('set'), 'single', 'setting single param works';
 $req->param('multi', 1, 2, 3);
-is_deeply [$req->param('multi')], [qw/1 2 3/],
+is_deeply [$req->param('multi')], [qw(1 2 3)],
   'setting multiple value param works';
 is $req->param('test23'), undef, 'no value';
 
@@ -1737,11 +1737,11 @@ $req->parse("plain\x0d\x0a");
 is $counter, 4, 'right count';
 ok !$req->content->is_parsing_body, 'is not parsing body';
 ok !$req->is_finished, 'request is not finished';
-$req->parse('Cookie: $Version=1; foo=bar; $Path=/foobar; bar=baz; $Path=/t');
+$req->parse('Cookie: foo=bar; bar=baz');
 is $counter, 5, 'right count';
 ok !$req->content->is_parsing_body, 'is not parsing body';
 ok !$req->is_finished, 'request is not finished';
-$req->parse("est/23\x0d\x0a");
+$req->parse("\x0d\x0a");
 is $counter, 6, 'right count';
 ok !$req->content->is_parsing_body, 'is not parsing body';
 ok !$req->is_finished, 'request is not finished';
@@ -2012,3 +2012,14 @@ ok $req->at_least_version('1.0'), 'at least version 1.0';
 ok !$req->at_least_version('1.2'), 'not version 1.2';
 is $req->url, '/perldoc?Mojo%3A%3AMessage%3A%3ARequest', 'right URL';
 is $req->url->query->params->[0], 'Mojo::Message::Request', 'right value';
+
+# Parse lots of special characters in URL
+$req = Mojo::Message::Request->new;
+$req->parse('GET /#09azAZ-._~:/?[]@!$&\'()*+,;=% ');
+$req->parse("HTTP/1.1\x0d\x0a\x0d\x0a");
+ok $req->is_finished, 'request is finished';
+is $req->method,      'GET', 'right method';
+is $req->version,     '1.1', 'right version';
+ok $req->at_least_version('1.0'), 'at least version 1.0';
+ok !$req->at_least_version('1.2'), 'not version 1.2';
+is $req->url, '/#09azAZ-._~:/?%5B%5D@!$&\'()*+,;=%', 'right URL';

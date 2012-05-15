@@ -7,10 +7,10 @@ use Mojo::Util;
 
 # Turn most functions from Mojo::Util into methods
 my @UTILS = (
-  qw/b64_decode b64_encode camelize decamelize hmac_md5_sum hmac_sha1_sum/,
-  qw/html_escape html_unescape md5_bytes md5_sum punycode_decode/,
-  qw/punycode_encode qp_decode qp_encode quote sha1_bytes sha1_sum trim/,
-  qw/unquote url_escape url_unescape xml_escape/
+  qw(b64_decode b64_encode camelize decamelize hmac_md5_sum hmac_sha1_sum),
+  qw(html_escape html_unescape md5_bytes md5_sum punycode_decode),
+  qw(punycode_encode qp_decode qp_encode quote sha1_bytes sha1_sum trim),
+  qw(unquote url_escape url_unescape xml_escape)
 );
 {
   no strict 'refs';
@@ -89,7 +89,6 @@ sub split {
 sub to_string { ${shift()} }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -115,6 +114,16 @@ Mojo::ByteStream - ByteStream
 
 L<Mojo::ByteStream> provides a more friendly API for the bytestream
 manipulation functions in L<Mojo::Util>.
+
+=head1 FUNCTIONS
+
+L<Mojo::ByteStream> implements the following functions.
+
+=head2 C<b>
+
+  my $stream = b('test123');
+
+Construct a new L<Mojo::ByteStream> object.
 
 =head1 METHODS
 
@@ -194,7 +203,7 @@ Alias for L<Mojo::Util/"hmac_sha1_sum">.
 =head2 C<html_escape>
 
   $stream = $stream->html_escape;
-  $stream = $stream->html_escape('^\n\r\t !\#\$%\(-;=?-~');
+  $stream = $stream->html_escape('^\n\r\t !#$%(-;=?-~');
 
 Alias for L<Mojo::Util/"html_escape">.
 
@@ -312,7 +321,7 @@ Alias for L<Mojo::Util/"unquote">.
 =head2 C<url_escape>
 
   $stream = $stream->url_escape;
-  $stream = $stream->url_escape('^A-Za-z0-9\-\.\_\~');
+  $stream = $stream->url_escape('^A-Za-z0-9\-._~');
 
 Alias for L<Mojo::Util/"url_escape">.
 

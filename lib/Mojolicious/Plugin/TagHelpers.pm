@@ -270,7 +270,7 @@ sub _tag {
   # Attributes
   my %attrs = @_;
   for my $key (sort keys %attrs) {
-    $tag .= qq/ $key="/ . xml_escape(defined $attrs{$key} ? $attrs{$key} : '') . '"';
+    $tag .= qq{ $key="} . xml_escape(defined $attrs{$key} ? $attrs{$key} : '') . '"';
   }
 
   # End tag
@@ -286,7 +286,6 @@ sub _tag {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -479,8 +478,8 @@ picked up and shown as default.
 
 =head2 C<select_field>
 
-  %= select_field language => [qw/de en/]
-  %= select_field language => [qw/de en/], id => 'lang'
+  %= select_field language => [qw(de en)]
+  %= select_field language => [qw(de en)], id => 'lang'
   %= select_field country => [[Germany => 'de'], 'en']
   %= select_field country => [{Europe => [[Germany => 'de'], 'en']}]
   %= select_field country => [[Germany => 'de', class => 'europe'], 'en']
@@ -603,7 +602,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  $plugin->register($app);
 
 Register helpers in L<Mojolicious> application.
 

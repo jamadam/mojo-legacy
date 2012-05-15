@@ -2,7 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 394;
+use Test::More tests => 398;
 
 # "I don't want you driving around in a car you built yourself.
 #  You can sit there complaining, or you can knit me some seat belts."
@@ -16,7 +16,7 @@ is "$url", 'http://kraih.com', 'right format';
 
 # Advanced
 $url = Mojo::URL->new(
-  'http://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#23');
+  'http://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#/!%?@3');
 ok $url->is_abs,   'is absolute';
 is $url->scheme,   'http', 'right scheme';
 is $url->userinfo, 'sri:foobar', 'right userinfo';
@@ -24,13 +24,21 @@ is $url->host,     'kraih.com', 'right host';
 is $url->port,     '8080', 'right port';
 is $url->path,     '/test/index.html', 'right path';
 is $url->query,    'monkey=biz&foo=1', 'right query';
-is $url->fragment, '23', 'right fragment';
+is $url->fragment, '/!%?@3', 'right fragment';
 is "$url",
-  'http://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#23',
+  'http://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#/!%?@3',
   'right format';
 $url->path('/index.xml');
-is "$url", 'http://sri:foobar@kraih.com:8080/index.xml?monkey=biz&foo=1#23',
+is "$url",
+  'http://sri:foobar@kraih.com:8080/index.xml?monkey=biz&foo=1#/!%?@3',
   'right format';
+
+# Advanced fragment roundtrip
+$url = Mojo::URL->new('http://localhost#AZaz09-._~!$&\'()*+,;=%:@/?');
+is $url->scheme,   'http',                        'right scheme';
+is $url->host,     'localhost',                   'right host';
+is $url->fragment, 'AZaz09-._~!$&\'()*+,;=%:@/?', 'right fragment';
+is "$url", 'http://localhost#AZaz09-._~!$&\'()*+,;=%:@/?', 'right format';
 
 # Parameters
 $url = Mojo::URL->new(

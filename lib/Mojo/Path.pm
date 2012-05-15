@@ -5,10 +5,10 @@ use overload
   '""'     => sub { shift->to_string },
   fallback => 1;
 
-use Mojo::Util qw/encode url_escape url_unescape/;
+use Mojo::Util qw(encode url_escape url_unescape);
 use Mojo::URL;
 
-has [qw/leading_slash trailing_slash/];
+has [qw(leading_slash trailing_slash)];
 has parts => sub { [] };
 
 sub new { shift->SUPER::new->parse(@_) }
@@ -63,9 +63,8 @@ sub contains {
 
 sub parse {
   my ($self, $path) = @_;
-  $path = defined $path ? $path : '';
 
-  $path = url_unescape $path;
+  $path = url_unescape defined $path ? $path : '';
   utf8::decode $path;
   $path =~ s|^/|| ? $self->leading_slash(1)  : $self->leading_slash(undef);
   $path =~ s|/$|| ? $self->trailing_slash(1) : $self->trailing_slash(undef);
@@ -87,7 +86,7 @@ sub to_string {
   my $self = shift;
 
   # Escape
-  my $chars = "^$Mojo::URL::UNRESERVED$Mojo::URL::SUBDELIM\:\@";
+  my $chars = "^$Mojo::URL::UNRESERVED$Mojo::URL::SUBDELIM:@";
   my @parts = map { url_escape(encode('UTF-8', $_), $chars) } @{$self->parts};
 
   # Format
@@ -99,7 +98,6 @@ sub to_string {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -131,7 +129,7 @@ Path has a leading slash.
 =head2 C<parts>
 
   my $parts = $path->parts;
-  $path     = $path->parts([qw/foo bar baz/]);
+  $path     = $path->parts([qw(foo bar baz)]);
 
 The path parts.
 

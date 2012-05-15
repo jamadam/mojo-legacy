@@ -1,6 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 182;
+use Test::More tests => 190;
 
 # "What good is money if it can't inspire terror in your fellow man?"
 use Mojo::Cookie::Request;
@@ -146,18 +146,18 @@ $cookie = Mojo::Cookie::Response->new;
 $cookie->name('foo');
 $cookie->value('ba r');
 $cookie->path('/test');
-is $cookie->to_string, 'foo=ba r; Path=/test', 'right format';
+is $cookie->to_string, 'foo=ba r; path=/test', 'right format';
 
 # Response cookie without value as string
 $cookie = Mojo::Cookie::Response->new;
 $cookie->name('foo');
 $cookie->path('/test');
-is $cookie->to_string, 'foo=; Path=/test', 'right format';
+is $cookie->to_string, 'foo=; path=/test', 'right format';
 $cookie = Mojo::Cookie::Response->new;
 $cookie->name('foo');
 $cookie->value('');
 $cookie->path('/test');
-is $cookie->to_string, 'foo=; Path=/test', 'right format';
+is $cookie->to_string, 'foo=; path=/test', 'right format';
 
 # Full response cookie as string
 $cookie = Mojo::Cookie::Response->new;
@@ -169,14 +169,15 @@ $cookie->max_age(60);
 $cookie->expires(1218092879);
 $cookie->secure(1);
 $cookie->httponly(1);
-is $cookie->to_string, 'foo=ba r; Domain=kraih.com; Path=/test; Max-Age=60;'
-  . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure; HttpOnly', 'right format';
+is $cookie->to_string,
+  'foo=ba r; expires=Thu, 07 Aug 2008 07:07:59 GMT; domain=kraih.com;'
+  . ' path=/test; secure; Max-Age=60; HttpOnly', 'right format';
 
 # Parse response cookie (RFC 6265)
 $cookies
   = Mojo::Cookie::Response->parse(
       'foo=ba r; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure;');
+    . ' Expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure;');
 is $cookies->[0]->name,    'foo',       'right name';
 is $cookies->[0]->value,   'ba r',      'right value';
 is $cookies->[0]->domain,  'kraih.com', 'right domain';
@@ -187,11 +188,26 @@ is $cookies->[0]->expires, 'Thu, 07 Aug 2008 07:07:59 GMT',
 is $cookies->[0]->secure, '1', 'right secure flag';
 is $cookies->[1], undef, 'no more cookies';
 
+# Parse response cookie with invalid flag (RFC 6265)
+$cookies
+  = Mojo::Cookie::Response->parse(
+      'foo=ba r; Domain=kraih.com; Path=/test; Max-Age=60;'
+    . ' Expires=Thu, 07 Aug 2008 07:07:59 GMT; InSecure;');
+is $cookies->[0]->name,    'foo',       'right name';
+is $cookies->[0]->value,   'ba r',      'right value';
+is $cookies->[0]->domain,  'kraih.com', 'right domain';
+is $cookies->[0]->path,    '/test',     'right path';
+is $cookies->[0]->max_age, 60,          'right max age value';
+is $cookies->[0]->expires, 'Thu, 07 Aug 2008 07:07:59 GMT',
+  'right expires value';
+is $cookies->[0]->secure, undef, 'no secure flag';
+is $cookies->[1], undef, 'no more cookies';
+
 # Parse quoted response cookie (RFC 6265)
 $cookies
   = Mojo::Cookie::Response->parse(
       'foo="b a\" r\"\\\\"; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
+    . ' Expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
 is $cookies->[0]->name,    'foo',       'right name';
 is $cookies->[0]->value,   'b a" r"\\', 'right value';
 is $cookies->[0]->domain,  'kraih.com', 'right domain';
@@ -205,8 +221,8 @@ is $cookies->[1], undef, 'no more cookies';
 # Parse quoted response cookie (RFC 6265, alternative)
 $cookies
   = Mojo::Cookie::Response->parse(
-      'foo="b a\" ;r\"\\\\"; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
+      'foo="b a\" ;r\"\\\\"; domain=kraih.com; path=/test; Max-Age=60;'
+    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; secure');
 is $cookies->[0]->name,    'foo',        'right name';
 is $cookies->[0]->value,   'b a" ;r"\\', 'right value';
 is $cookies->[0]->domain,  'kraih.com',  'right domain';
@@ -221,7 +237,7 @@ is $cookies->[1], undef, 'no more cookies';
 $cookies
   = Mojo::Cookie::Response->parse(
       'foo="b ,a\";= r\"\\\\"; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
+    . ' Expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
 is $cookies->[0]->name,    'foo',          'right name';
 is $cookies->[0]->value,   'b ,a";= r"\\', 'right value';
 is $cookies->[0]->domain,  'kraih.com',    'right domain';
@@ -246,7 +262,7 @@ is $cookies->[1], undef, 'no more cookies';
 $cookies
   = Mojo::Cookie::Response->parse(
       'foo="b ,a\" r\"\\\\"; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
+    . ' Expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
 is $cookies->[0]->name,    'foo',        'right name';
 is $cookies->[0]->value,   'b ,a" r"\\', 'right value';
 is $cookies->[0]->domain,  'kraih.com',  'right domain';
@@ -271,7 +287,7 @@ is $cookies->[1], undef, 'no more cookies';
 $cookies
   = Mojo::Cookie::Response->parse(
       'foo="b ;a\" r\"\\\\"; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT;  Secure');
+    . ' Expires=Thu, 07 Aug 2008 07:07:59 GMT;  Secure');
 is $cookies->[0]->name,    'foo',        'right name';
 is $cookies->[0]->value,   'b ;a" r"\\', 'right value';
 is $cookies->[0]->domain,  'kraih.com',  'right domain';
@@ -296,7 +312,7 @@ is $cookies->[1], undef, 'no more cookies';
 $cookies
   = Mojo::Cookie::Response->parse(
       'foo="\"b a\" r\""; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
+    . ' Expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
 is $cookies->[0]->name,    'foo',       'right name';
 is $cookies->[0]->value,   '"b a" r"',  'right value';
 is $cookies->[0]->domain,  'kraih.com', 'right domain';
@@ -330,13 +346,14 @@ is $cookies->[0]->max_age, 60,          'right max age value';
 is $cookies->[0]->expires, 'Thu, 07 Aug 2008 07:07:59 GMT',
   'right expires value';
 is $cookies->[0]->secure, '1', 'right secure flag';
-is $cookies->[0]->to_string, 'foo=; Domain=kraih.com; Path=/test; Max-Age=60;'
-  . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure', 'right result';
+is $cookies->[0]->to_string,
+  'foo=; expires=Thu, 07 Aug 2008 07:07:59 GMT; domain=kraih.com;'
+  . ' path=/test; secure; Max-Age=60', 'right result';
 is $cookies->[1], undef, 'no more cookies';
 $cookies
   = Mojo::Cookie::Response->parse(
-      'foo=; Version=1; Domain=kraih.com; Path=/test; Max-Age=60;'
-    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure');
+      'foo=; Version=1; domain=kraih.com; path=/test; Max-Age=60;'
+    . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; secure');
 is $cookies->[0]->name,    'foo',       'right name';
 is $cookies->[0]->value,   '',          'no value';
 is $cookies->[0]->domain,  'kraih.com', 'right domain';
@@ -345,11 +362,12 @@ is $cookies->[0]->max_age, 60,          'right max age value';
 is $cookies->[0]->expires, 'Thu, 07 Aug 2008 07:07:59 GMT',
   'right expires value';
 is $cookies->[0]->secure, '1', 'right secure flag';
-is $cookies->[0]->to_string, 'foo=; Domain=kraih.com; Path=/test; Max-Age=60;'
-  . ' expires=Thu, 07 Aug 2008 07:07:59 GMT; Secure', 'right result';
+is $cookies->[0]->to_string,
+  'foo=; expires=Thu, 07 Aug 2008 07:07:59 GMT; domain=kraih.com;'
+  . ' path=/test; secure; Max-Age=60', 'right result';
 is $cookies->[1], undef, 'no more cookies';
 
-# Response cookie with Max-Age 0 and expires 0
+# Response cookie with Max-Age 0 and Expires 0
 $cookie = Mojo::Cookie::Response->new;
 $cookie->name('foo');
 $cookie->value('bar');
@@ -357,14 +375,14 @@ $cookie->path('/');
 $cookie->max_age(0);
 $cookie->expires(0);
 is $cookie->to_string,
-  'foo=bar; Path=/; Max-Age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT',
+  'foo=bar; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; Max-Age=0',
   'right format';
 
-# Parse response cookie with Max-Age 0 and expires 0 (RFC 6265)
+# Parse response cookie with Max-Age 0 and Expires 0 (RFC 6265)
 $cookies
   = Mojo::Cookie::Response->parse(
       'foo=bar; Domain=kraih.com; Path=/; Max-Age=0;'
-    . ' expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure');
+    . ' Expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure');
 is $cookies->[0]->name,    'foo',       'right name';
 is $cookies->[0]->value,   'bar',       'right value';
 is $cookies->[0]->domain,  'kraih.com', 'right domain';

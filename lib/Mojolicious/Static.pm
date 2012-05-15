@@ -49,18 +49,6 @@ sub dispatch {
   return $c->rendered;
 }
 
-# DEPRECATED in Leaf Fluttering In Wind!
-sub root {
-  warn <<EOF;
-Mojolicious::Static->root is DEPRECATED in favor of
-Mojolicious::Static->paths!
-EOF
-  my $self = shift;
-  return $self->paths->[0] unless @_;
-  $self->paths->[0] = shift;
-  return $self;
-}
-
 sub serve {
   my ($self, $c, $rel) = @_;
 
@@ -76,7 +64,7 @@ sub serve {
     last if ($asset, $size, $modified) = @$data;
 
     # Forbidded
-    $c->app->log->debug(qq/File "$rel" is forbidden./);
+    $c->app->log->debug(qq{File "$rel" is forbidden.});
     $res->code(403) and return;
   }
 
@@ -115,7 +103,7 @@ sub serve {
   my $start = 0;
   my $end = $size - 1 >= 0 ? $size - 1 : 0;
   if (my $range = $req_headers->range) {
-    if ($range =~ m/^bytes=(\d+)\-(\d+)?/ && $1 <= $end) {
+    if ($range =~ m/^bytes=(\d+)-(\d+)?/ && $1 <= $end) {
       $start = $1;
       $end = $2 if defined $2 && $2 <= $end;
       $res->code(206);
@@ -165,7 +153,6 @@ sub _get_file {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -191,8 +178,8 @@ L<Mojolicious::Static> implements the following attributes.
   my $classes = $static->classes;
   $static     = $static->classes(['main']);
 
-Classes to use for finding files in C<DATA> section, first one has the highest
-precedence, defaults to C<main>.
+Classes to use for finding files in C<DATA> sections, first one has the
+highest precedence, defaults to C<main>.
 
   # Add another class with static files in DATA section
   push @{$static->classes}, 'Mojolicious::Plugin::Fun';
@@ -200,12 +187,12 @@ precedence, defaults to C<main>.
 =head2 C<paths>
 
   my $paths = $static->paths;
-  $static   = $static->paths(['/foo/bar/public']);
+  $static   = $static->paths(['/home/sri/public']);
 
 Directories to serve static files from, first one has the highest precedence.
 
   # Add another "public" directory
-  push @{$static->paths}, '/foo/bar/public';
+  push @{$static->paths}, '/home/sri/public';
 
 =head1 METHODS
 
@@ -216,7 +203,7 @@ the following ones.
 
   my $success = $static->dispatch(Mojolicious::Controller->new);
 
-Dispatch a L<Mojolicious::Controller> object.
+Serve static file for L<Mojolicious::Controller> object.
 
 =head2 C<serve>
 

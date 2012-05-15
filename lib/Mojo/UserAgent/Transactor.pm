@@ -10,7 +10,7 @@ use Mojo::Parameters;
 use Mojo::Transaction::HTTP;
 use Mojo::Transaction::WebSocket;
 use Mojo::URL;
-use Mojo::Util qw/encode url_escape/;
+use Mojo::Util qw(encode url_escape);
 
 sub endpoint {
   my ($self, $tx) = @_;
@@ -129,7 +129,7 @@ sub redirect {
   # Commonly used codes
   my $res = $old->res;
   my $code = $res->code || 0;
-  return unless grep {$_ eq $code} (301, 302, 303, 307);
+  return unless grep {$_ eq $code} (301, 302, 303, 307, 308);
 
   # Fix broken location without authority and/or scheme
   return unless my $location = $res->headers->location;
@@ -142,12 +142,12 @@ sub redirect {
   # Clone request if necessary
   my $new    = Mojo::Transaction::HTTP->new;
   my $method = $req->method;
-  if (grep {$_ eq $code} (301, 307)) {
+  if (grep {$_ eq $code} (301, 307, 308)) {
     return unless $req = $req->clone;
     $new->req($req);
     $req->headers->remove('Host')->remove('Cookie')->remove('Referer');
   }
-  else { $method = 'GET' unless grep {$_ eq $method} qw/GET HEAD/ }
+  else { $method = 'GET' unless grep {$_ eq $method} qw(GET HEAD) }
   $new->req->method($method)->url($location);
   return $new->previous($old);
 }
@@ -225,8 +225,8 @@ sub _multipart {
     # Content-Disposition
     $name = encode $encoding, $name if $encoding;
     $name = url_escape $name, "^$Mojo::URL::UNRESERVED";
-    my $disposition = qq/form-data; name="$name"/;
-    $disposition .= qq/; filename="$filename"/ if $filename;
+    my $disposition = qq{form-data; name="$name"};
+    $disposition .= qq{; filename="$filename"} if $filename;
     $headers->content_disposition($disposition);
   }
 
@@ -247,7 +247,6 @@ sub _proxy {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -280,7 +279,7 @@ Actual endpoint for transaction.
 
   my $tx = $t->form('kraih.com' => {a => 'b'});
   my $tx = $t->form('http://kraih.com' => {a => 'b'});
-  my $tx = $t->form('http://kraih.com' => {a => ['b', 'c', 'd']});
+  my $tx = $t->form('http://kraih.com' => {a => [qw(b c d)]});
   my $tx = $t->form('http://kraih.com' => {mytext => {file => '/foo.txt'}});
   my $tx = $t->form('http://kraih.com' => {mytext => {content => 'lalala'}});
   my $tx = $t->form('http://kraih.com' => {
@@ -331,8 +330,8 @@ possible.
 
   my $tx = $t->redirect($old);
 
-Build L<Mojo::Transaction::HTTP> followup request for C<301>, C<302>, C<303>
-or C<307> redirect response if possible.
+Build L<Mojo::Transaction::HTTP> followup request for C<301>, C<302>, C<303>,
+C<307> or C<308> redirect response if possible.
 
 =head2 C<tx>
 

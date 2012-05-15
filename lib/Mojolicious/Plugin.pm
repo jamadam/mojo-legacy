@@ -1,12 +1,13 @@
 package Mojolicious::Plugin;
 use Mojo::Base -base;
 
+use Carp 'croak';
+
 # "This is Fry's decision.
 #  And he made it wrong, so it's time for us to interfere in his life."
-sub register { }
+sub register { croak 'Method "register" not implemented by subclass' }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -29,8 +30,8 @@ the following new ones.
 
   $plugin->register;
 
-This method will be called by L<Mojolicious::Plugins> at startup time, your
-plugin should use this to hook into the application.
+This method will be called by L<Mojolicious::Plugins> at startup time. Meant
+to be overloaded in a subclass.
 
 =head1 SEE ALSO
 

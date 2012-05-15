@@ -2,9 +2,9 @@ package Mojolicious::Sessions;
 use Mojo::Base -base;
 
 use Mojo::JSON;
-use Mojo::Util qw/b64_decode b64_encode/;
+use Mojo::Util qw(b64_decode b64_encode);
 
-has [qw/cookie_domain secure/];
+has [qw(cookie_domain secure)];
 has cookie_name        => 'mojolicious';
 has cookie_path        => '/';
 has default_expiration => 3600;
@@ -17,7 +17,7 @@ sub load {
   return unless my $value = $c->signed_cookie($self->cookie_name);
 
   # Deserialize
-  $value =~ s/\-/\=/g;
+  $value =~ s/-/=/g;
   return unless my $session = Mojo::JSON->new->decode(b64_decode $value);
 
   # Expiration
@@ -57,7 +57,7 @@ sub store {
 
   # Serialize
   my $value = b64_encode(Mojo::JSON->new->encode($session), '');
-  $value =~ s/\=/\-/g;
+  $value =~ s/=/-/g;
 
   # Session cookie
   my $options = {
@@ -71,7 +71,6 @@ sub store {
 }
 
 1;
-__END__
 
 =head1 NAME
 

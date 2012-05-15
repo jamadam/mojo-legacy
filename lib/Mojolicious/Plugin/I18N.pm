@@ -3,22 +3,24 @@ use Mojo::Base 'Mojolicious::Plugin';
 
 use I18N::LangTags;
 use I18N::LangTags::Detect;
+use Mojo::Loader;
 
 # "Can we have Bender burgers again?
 #  No, the cat shelter’s onto me."
 sub register {
   my ($self, $app, $conf) = @_;
-  $conf ||= {};
 
   # Initialize
   my $namespace = $conf->{namespace} || ((ref $app) . "::I18N");
   my $default   = $conf->{default}   || 'en';
-  eval "package $namespace; use base 'Locale::Maketext'; 1;";
-  eval "require ${namespace}::${default};";
-  unless (eval "\%${namespace}::${default}::Lexicon") {
-    eval "package ${namespace}::$default; use base '$namespace';"
-      . 'our %Lexicon = (_AUTO => 1); 1;';
-    die qq/Couldn't initialize I18N class "$namespace": $@/ if $@;
+  die qq{Couldn't initialize I18N class "$namespace": $@}
+    unless eval "package $namespace; use base 'Locale::Maketext'; 1";
+  my $dc = "${namespace}::$default";
+  if (my $e = Mojo::Loader->load($dc)) {
+    die qq{Couldn't load default lexicon class "$dc": $e} if ref $e;
+    die qq{Couldn't initialize default lexicon class "$dc": $@}
+      unless eval
+        "package $dc; use base '$namespace'; our \%Lexicon = (_AUTO => 1);";
   }
 
   # Add hook
@@ -75,7 +77,6 @@ sub localize {
 }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -166,7 +167,7 @@ and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register;
+  $plugin->register($app, $conf);
 
 Register plugin hooks and helpers in L<Mojolicious> application.
 

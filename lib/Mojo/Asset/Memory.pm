@@ -48,8 +48,8 @@ sub get_chunk {
 
 sub move_to {
   my ($self, $path) = @_;
-  croak qq/Can't open file "$path": $!/ unless open my $file, '>', $path;
-  croak qq/Can't write to file "$path": $!/
+  croak qq{Can't open file "$path": $!} unless open my $file, '>', $path;
+  croak qq{Can't write to file "$path": $!}
     unless defined $file->syswrite($self->{content});
   return $self;
 }
@@ -59,7 +59,6 @@ sub size { length shift->{content} }
 sub slurp { shift->{content} }
 
 1;
-__END__
 
 =head1 NAME
 
@@ -149,7 +148,7 @@ Get chunk of data starting from a specific position.
 
 =head2 C<move_to>
 
-  $mem = $mem->move_to('/foo/bar/baz.txt');
+  $mem = $mem->move_to('/home/sri/foo.txt');
 
 Move asset data into a specific file.
 
