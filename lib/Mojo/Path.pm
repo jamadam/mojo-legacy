@@ -61,20 +61,33 @@ sub contains {
   return @$parts ? undef : 1;
 }
 
+sub merge {
+  my ($self, $path) = @_;
+
+  # Replace
+  return $self->parse($path) if $path =~ m!^/!;
+
+  # Merge
+  pop @{$self->parts} unless $self->trailing_slash;
+  $path = $self->new($path);
+  push @{$self->parts}, @{$path->parts};
+  return $self->trailing_slash($path->trailing_slash);
+}
+
 sub parse {
   my ($self, $path) = @_;
 
   $path = url_unescape defined $path ? $path : '';
   utf8::decode $path;
-  $path =~ s|^/|| ? $self->leading_slash(1)  : $self->leading_slash(undef);
-  $path =~ s|/$|| ? $self->trailing_slash(1) : $self->trailing_slash(undef);
+  $path =~ s!^/!! ? $self->leading_slash(1)  : $self->leading_slash(undef);
+  $path =~ s!/$!! ? $self->trailing_slash(1) : $self->trailing_slash(undef);
 
   return $self->parts([split '/', $path, -1]);
 }
 
 sub to_abs_string {
   my $self = shift;
-  return $self->leading_slash ? $self->to_string : ('/' . $self->to_string);
+  return $self->leading_slash ? "$self" : "/$self";
 }
 
 # "How is education supposed to make me feel smarter?
@@ -185,6 +198,23 @@ Check if path contains given prefix.
   Mojo::Path->new('/foo/bar')->contains('/f');
   Mojo::Path->new('/foo/bar')->contains('/bar');
   Mojo::Path->new('/foo/bar')->contains('/whatever');
+
+=head2 C<merge>
+
+  $path = $path->merge('/foo/bar');
+  $path = $path->merge('foo/bar');
+  $path = $path->merge(Mojo::Path->new('foo/bar'));
+
+Merge paths.
+
+  # "/baz/yada"
+  Mojo::Path->new('/foo/bar')->merge('/baz/yada');
+
+  # "/foo/baz/yada"
+  Mojo::Path->new('/foo/bar')->merge('baz/yada');
+
+  # "/foo/bar/baz/yada"
+  Mojo::Path->new('/foo/bar/')->merge('baz/yada');
 
 =head2 C<parse>
 

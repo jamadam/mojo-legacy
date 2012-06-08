@@ -1,8 +1,8 @@
 use Mojo::Base -strict;
 
-# Disable Bonjour, IPv6 and libev
+# Disable IPv6 and libev
 BEGIN {
-  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
+  $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
@@ -61,13 +61,13 @@ $t->get_ok('/advanced')->status_is(200)
   ->content_is("&lt;escape me&gt;\n123423");
 
 # GET /docs
-$t->get_ok('/docs')->status_is(200)->content_like(qr#<h3>snowman</h3>#);
+$t->get_ok('/docs')->status_is(200)->content_like(qr!<h3>snowman</h3>!);
 
 # GET /docs2
-$t->get_ok('/docs2')->status_is(200)->content_like(qr#<h2>snowman</h2>#);
+$t->get_ok('/docs2')->status_is(200)->content_like(qr!<h2>snowman</h2>!);
 
 # GET /docs3
-$t->get_ok('/docs3')->status_is(200)->content_like(qr#<h3></h3>#);
+$t->get_ok('/docs3')->status_is(200)->content_like(qr!<h3></h3>!);
 
 # GET /perldoc (disabled)
 $t->get_ok('/perldoc')->status_is(404);

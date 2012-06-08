@@ -1,8 +1,8 @@
 use Mojo::Base -strict;
 
-# Disable Bonjour, IPv6, TLS and libev
+# Disable IPv6, TLS and libev
 BEGIN {
-  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = $ENV{MOJO_NO_TLS} = 1;
+  $ENV{MOJO_NO_IPV6} = $ENV{MOJO_NO_TLS} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
@@ -254,8 +254,8 @@ is scalar @{Mojo::IOLoop->stream($tx->connection)->subscribers('write')}, 0,
   'unsubscribed successfully';
 is scalar @{Mojo::IOLoop->stream($tx->connection)->subscribers('read')}, 1,
   'unsubscribed successfully';
-like $req, qr#^GET / .*whatever$#s,      'right request';
-like $res, qr#^HTTP/.*200 OK.*works!$#s, 'right response';
+like $req, qr!^GET / .*whatever$!s,      'right request';
+like $res, qr|^HTTP/.*200 OK.*works!$|s, 'right response';
 $ua->unsubscribe(start => $start);
 ok !$ua->has_subscribers('start'), 'unsubscribed successfully';
 

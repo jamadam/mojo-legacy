@@ -1,8 +1,8 @@
 use Mojo::Base -strict;
 
-# Disable Bonjour, IPv6 and libev
+# Disable IPv6 and libev
 BEGIN {
-  $ENV{MOJO_NO_BONJOUR} = $ENV{MOJO_NO_IPV6} = 1;
+  $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
@@ -59,7 +59,7 @@ $t->post_form_ok('/upload',
 
 # POST /upload (path)
 $t->post_form_ok('/upload', {file => {file => $file->path}, test => 'foo'})
-  ->status_is(200)->content_like(qr#lalalafoofile,test$#);
+  ->status_is(200)->content_like(qr!lalalafoofile,test$!);
 
 # POST /upload (memory)
 $t->post_form_ok('/upload', {file => {content => 'alalal'}, test => 'tset'})

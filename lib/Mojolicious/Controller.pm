@@ -42,7 +42,7 @@ sub AUTOLOAD {
 
   # Method
   my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)\:\:(\w+)$/;
-  Carp::croak(qq[Undefined subroutine &${package}::$method called])
+  Carp::croak("Undefined subroutine &${package}::$method called")
     unless Scalar::Util::blessed($self) && $self->isa(__PACKAGE__);
 
   # Call helper
@@ -468,7 +468,7 @@ sub url_for {
 
   # Absolute URL
   return $target if (Scalar::Util::blessed($target) || '') eq 'Mojo::URL';
-  return Mojo::URL->new($target) if $target =~ m#^\w+\://#;
+  return Mojo::URL->new($target) if $target =~ m!^\w+\://!;
 
   # Base
   my $url  = Mojo::URL->new;
@@ -477,11 +477,11 @@ sub url_for {
 
   # Relative URL
   my $path = $url->path;
-  if ($target =~ m#^/#) {
+  if ($target =~ m!^/!) {
     if (my $prefix = $self->stash->{path}) {
       my $real = Mojo::Util::url_unescape($req->url->path->to_abs_string);
       $real = defined Mojo::Util::decode('UTF-8', $real) ? Mojo::Util::decode('UTF-8', $real) : $real;
-      $real =~ s|/?$prefix$|$target|;
+      $real =~ s!/?$prefix$!$target!;
       $target = $real;
     }
     $url->parse($target);
@@ -902,8 +902,8 @@ Cookies failing signature verification will be automatically discarded.
   $c        = $c->stash(foo => 'bar');
 
 Non persistent data storage and exchange, application wide default values can
-be set with L<Mojolicious/"defaults">. Many stash value have a special meaning
-and are reserved, the full list is currently C<action>, C<app>, C<cb>,
+be set with L<Mojolicious/"defaults">. Many stash values have a special
+meaning and are reserved, the full list is currently C<action>, C<app>, C<cb>,
 C<controller>, C<data>, C<extends>, C<format>, C<handler>, C<json>, C<layout>,
 C<namespace>, C<partial>, C<path>, C<status>, C<template> and C<text>.
 
@@ -916,8 +916,7 @@ C<namespace>, C<partial>, C<path>, C<status>, C<template> and C<text>.
 
   my $ua = $c->ua;
 
-Alias for C<$c-E<gt>app-E<gt>ua>. Usually refers to a L<Mojo::UserAgent>
-object.
+Alias for L<Mojo/"ua">.
 
   # Blocking
   my $tx = $c->ua->get('http://mojolicio.us');

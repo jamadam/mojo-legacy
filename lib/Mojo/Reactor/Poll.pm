@@ -53,10 +53,10 @@ sub one_tick {
 
     # Timers
     while (my ($id, $t) = each %{$self->{timers} || {}}) {
-      next unless $t->{time} <= time;
+      next unless $t->{time} <= (my $time = time);
 
       # Recurring timer
-      if (exists $t->{recurring}) { $t->{time} = time + $t->{recurring} }
+      if (exists $t->{recurring}) { $t->{time} = $time + $t->{recurring} }
 
       # Normal timer
       else { $self->remove($id) }
@@ -151,7 +151,9 @@ Mojo::Reactor::Poll - Low level event reactor with poll support
 
 =head1 DESCRIPTION
 
-L<Mojo::Reactor::Poll> is a low level event reactor based on L<IO::Poll>.
+L<Mojo::Reactor::Poll> is a low level event reactor based on L<IO::Poll>. Note
+that this reactor was designed for maximum portability, and therefore does not
+use a monotonic clock to handle time jumps.
 
 =head1 EVENTS
 

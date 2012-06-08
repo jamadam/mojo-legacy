@@ -70,12 +70,12 @@ sub body_params {
 
   # "x-application-urlencoded" and "application/x-www-form-urlencoded"
   my $type = $self->headers->content_type || '';
-  if ($type =~ m#(?:x-application|application/x-www-form)-urlencoded#i) {
+  if ($type =~ m!(?:x-application|application/x-www-form)-urlencoded!i) {
     $p->parse($self->content->asset->slurp);
   }
 
   # "multipart/formdata"
-  elsif ($type =~ m#multipart/form-data#i) {
+  elsif ($type =~ m!multipart/form-data!i) {
     my $formdata = $self->_parse_formdata;
 
     # Formdata
@@ -219,7 +219,7 @@ sub is_dynamic    { shift->content->is_dynamic }
 
 sub is_finished { (shift->{state} || '') eq 'finished' }
 
-sub is_limit_exceeded { my $a = ((shift->error)[1] || ''); $a == 413 or $a == 431 }
+sub is_limit_exceeded { my $a = ((shift->error)[1] || 0); $a == 413 or $a == 431 }
 
 sub is_multipart { shift->content->is_multipart }
 
@@ -739,9 +739,9 @@ Alias for L<Mojo::Content/"is_multipart">.
 
 =head2 C<json>
 
-  my $object = $message->json;
-  my $array  = $message->json;
-  my $value  = $message->json('/foo/bar');
+  my $hash  = $message->json;
+  my $array = $message->json;
+  my $value = $message->json('/foo/bar');
 
 Decode JSON message body directly using L<Mojo::JSON> if possible, returns
 C<undef> otherwise. An optional JSON Pointer can be used to extract a specific

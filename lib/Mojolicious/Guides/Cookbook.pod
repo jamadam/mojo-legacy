@@ -215,11 +215,23 @@ where you can't just change the server configuration or behind a reverse proxy
 that passes along additional information with C<X-*> headers. In such cases
 you can use a C<before_dispatch> hook to rewrite incoming requests.
 
+  # Change scheme if "X-Forwarded-Protocol" header is set to "https"
   app->hook(before_dispatch => sub {
     my $self = shift;
     $self->req->url->base->scheme('https')
       if $self->req->headers->header('X-Forwarded-Protocol') eq 'https';
   });
+
+Since reverse proxies generally don't pass along information about path
+prefixes your application might be deployed under, rewriting the base path of
+incoming requests is also quite common.
+
+  # Move first part from path to base path in production mode
+  app->hook(before_dispatch => sub {
+    my $self = shift;
+    push @{$self->req->url->base->path->parts},
+      shift @{$self->req->url->path->parts};
+  }) if app->mode eq 'production';
 
 =head2 Application embedding
 
@@ -1008,18 +1020,6 @@ choice.
 =head1 HACKS
 
 Fun hacks you might not use very often but that might come in handy some day.
-
-=head2 Faster tests
-
-Don't you hate waiting for C<make test> to finally finish? In newer Perl
-versions you can set the C<HARNESS_OPTIONS> environment variable to take
-advantage of multiple cpu cores and run tests parallel.
-
-  $ HARNESS_OPTIONS=j9 make test
-  ...
-
-The C<j9> allows 9 tests to run at the same time, which makes for example the
-L<Mojolicious> test suite finish 3 times as fast on a dual core laptop!
 
 =head2 Adding commands to Mojolicious
 

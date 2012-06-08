@@ -2,9 +2,9 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 188;
+use Test::More tests => 212;
 
-# "This is the greatest case of false advertising I’ve seen since I sued the
+# "This is the greatest case of false advertising I've seen since I sued the
 #  movie 'The Never Ending Story.'"
 use Mojo::Path;
 
@@ -20,6 +20,9 @@ is $path->parts->[0], 'path', 'right part';
 is $path->parts->[1], undef,  'no part';
 ok !$path->leading_slash, 'no leading slash';
 ok $path->trailing_slash, 'has trailing slash';
+$path = Mojo::Path->new;
+is $path->to_string,     '',  'right result';
+is $path->to_abs_string, '/', 'right result';
 
 # Advanced
 $path = Mojo::Path->new('/AZaz09-._~!$&\'()*+,;=:@');
@@ -53,6 +56,11 @@ is $path->parts->[1], '0',    'right part';
 is $path->parts->[2], undef,  'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
+$path = Mojo::Path->new('0');
+is $path->parts->[0], '0',   'right part';
+is $path->parts->[1], undef, 'no part';
+is $path->to_string,     '0',  'right result';
+is $path->to_abs_string, '/0', 'right result';
 
 # Canonicalizing
 $path = Mojo::Path->new(
@@ -169,6 +177,38 @@ ok !$path->contains('/0/♥'),    'does not contain path';
 ok !$path->contains('/0/0.html'), 'does not contain path';
 ok !$path->contains('/0.html'),   'does not contain path';
 ok !$path->contains('/♥.html'), 'does not contain path';
+
+# Merge
+$path = Mojo::Path->new('/foo');
+$path->merge('bar/baz');
+is "$path", '/bar/baz', 'right path';
+ok $path->leading_slash, 'has leading slash';
+ok !$path->trailing_slash, 'no trailing slash';
+$path = Mojo::Path->new('/foo/');
+$path->merge('bar/baz');
+is "$path", '/foo/bar/baz', 'right path';
+ok $path->leading_slash, 'has leading slash';
+ok !$path->trailing_slash, 'no trailing slash';
+$path = Mojo::Path->new('/foo/');
+$path->merge('bar/baz/');
+is "$path", '/foo/bar/baz/', 'right path';
+ok $path->leading_slash,  'has leading slash';
+ok $path->trailing_slash, 'has trailing slash';
+$path = Mojo::Path->new('/foo/');
+$path->merge('/bar/baz');
+is "$path", '/bar/baz', 'right path';
+ok $path->leading_slash, 'has leading slash';
+ok !$path->trailing_slash, 'no trailing slash';
+$path = Mojo::Path->new('/foo/bar');
+$path->merge('/bar/baz/');
+is "$path", '/bar/baz/', 'right path';
+ok $path->leading_slash,  'has leading slash';
+ok $path->trailing_slash, 'has trailing slash';
+$path = Mojo::Path->new('foo/bar');
+$path->merge('baz/yada');
+is "$path", 'foo/baz/yada', 'right path';
+ok !$path->leading_slash,  'no leading slash';
+ok !$path->trailing_slash, 'no trailing slash';
 
 # Empty path elements
 $path = Mojo::Path->new('//');

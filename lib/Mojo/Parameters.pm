@@ -19,7 +19,7 @@ has pair_separator => '&';
 sub new {
   my $self = shift->SUPER::new;
 
-  # Hash/Array
+  # Pairs
   if (@_ > 1) { $self->append(@_) }
 
   # String
@@ -29,15 +29,19 @@ sub new {
 }
 
 sub append {
-  my ($self, @params) = @_;
+  my ($self, @pairs) = @_;
 
-  # Filter array values
-  for (my $i = 1; $i < @params; $i += 2) {
-    next if ref $params[$i] ne 'ARRAY';
-    push @params, map { ($params[$i - 1], $_) } @{$params[$i]};
-    splice @params, $i - 1, 2;
+  my $params = $self->params;
+  for (my $i = 0; $i < @pairs; $i += 2) {
+    my $key   = defined $pairs[$i] ? $pairs[$i] : '';
+    my $value = defined $pairs[$i + 1] ? $pairs[$i + 1] : '';
+
+    # Single value
+    if (ref $value ne 'ARRAY') { push @$params, $key => $value }
+
+    # Multiple values
+    else { push @$params, $key => (defined $_ ? "$_" : '') for @$value }
   }
-  push @{$self->params}, map { defined $_ ? "$_" : '' } @params;
 
   return $self;
 }
@@ -245,18 +249,28 @@ following new ones.
 
   my $p = Mojo::Parameters->new;
   my $p = Mojo::Parameters->new('foo=b%3Bar&baz=23');
-  my $p = Mojo::Parameters->new(foo => 'b;ar', baz => 23);
+  my $p = Mojo::Parameters->new(foo => 'b;ar');
+  my $p = Mojo::Parameters->new(foo => ['ba;r', 'b;az']);
+  my $p = Mojo::Parameters->new(foo => ['ba;r', 'b;az'], bar => 23);
 
 Construct a new L<Mojo::Parameters> object.
 
 =head2 C<append>
 
   $p = $p->append(foo => 'ba;r');
+  $p = $p->append(foo => ['ba;r', 'b;az']);
+  $p = $p->append(foo => ['ba;r', 'b;az'], bar => 23);
 
 Append parameters.
 
   # "foo=bar&foo=baz"
   Mojo::Parameters->new('foo=bar')->append(foo => 'baz');
+
+  # "foo=bar&foo=baz&foo=yada"
+  Mojo::Parameters->new('foo=bar')->append(foo => ['baz', 'yada']);
+
+  # "foo=bar&foo=baz&foo=yada&bar=23"
+  Mojo::Parameters->new('foo=bar')->append(foo => ['baz', 'yada'], bar => 23);
 
 =head2 C<clone>
 
@@ -266,7 +280,7 @@ Clone parameters.
 
 =head2 C<merge>
 
-  $p = $p->merge($p2, $p3);
+  $p = $p->merge(Mojo::Parameters->new(foo => 'b;ar', baz => 23));
 
 Merge parameters.
 

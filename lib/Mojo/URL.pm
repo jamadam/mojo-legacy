@@ -95,7 +95,7 @@ sub parse {
   return $self unless $url;
 
   # Official regex
-  $url =~ m|(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?|;
+  $url =~ m!(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?!;
   $self->scheme($1);
   $self->authority($2);
   $self->path->parse($3);
@@ -109,24 +109,11 @@ sub path {
   my ($self, $path) = @_;
 
   # Old path
-  return $self->{path} ||= Mojo::Path->new unless $path;
+  $self->{path} ||= Mojo::Path->new;
+  return $self->{path} unless $path;
 
   # New path
-  if (!ref $path) {
-
-    # Absolute path
-    if ($path =~ m#^/#) { $path = Mojo::Path->new($path) }
-
-    # Relative path
-    else {
-      my $new = Mojo::Path->new($path);
-      $path = $self->{path} || Mojo::Path->new;
-      pop @{$path->parts} unless $path->trailing_slash;
-      push @{$path->parts}, @{$new->parts};
-      $path->leading_slash(1)->trailing_slash($new->trailing_slash);
-    }
-  }
-  $self->{path} = $path;
+  $self->{path} = ref $path ? $path : $self->{path}->merge($path);
 
   return $self;
 }
@@ -189,15 +176,7 @@ sub to_abs {
   }
 
   # Merge paths
-  else {
-    my $new = $base_path->clone->leading_slash(1);
-
-    # Characters after the right-most '/' need to go
-    pop @{$new->parts} if @{$path->parts} && !$new->trailing_slash;
-    push @{$new->parts}, @{$path->parts};
-    $new->trailing_slash($path->trailing_slash) if @{$new->parts};
-    $abs->path($new->canonicalize);
-  }
+  else { $abs->path($base_path->clone->merge($path)->canonicalize) }
 
   return $abs;
 }
@@ -241,8 +220,13 @@ sub to_string {
   my $authority = $self->authority;
   $url .= $url ? $authority : $authority ? "//$authority" : '';
 
-  # Path
-  $url .= $self->path;
+  # Relative path
+  my $path = $self->path;
+  if (!$url) { $url .= "$path" }
+
+  # Absolute path
+  elsif ($path->leading_slash) { $url .= "$path" }
+  else                         { $url .= @{$path->parts} ? "/$path" : '' }
 
   # Query
   my $query = join '', $self->query;
@@ -399,11 +383,14 @@ Parse URL.
 Path part of this URL, relative paths will be appended to the existing path,
 defaults to a L<Mojo::Path> object.
 
-  # "http://mojolicio.us/Mojo/DOM"
-  Mojo::URL->new('http://mojolicio.us/perldoc')->path('/Mojo/DOM');
+  # "http://mojolicio.us/DOM/HTML"
+  Mojo::URL->new('http://mojolicio.us/perldoc/Mojo')->path('/DOM/HTML');
 
-  # "http://mojolicio.us/perldoc/Mojo/DOM"
-  Mojo::URL->new('http://mojolicio.us/perldoc')->path('Mojo/DOM');
+  # "http://mojolicio.us/perldoc/DOM/HTML"
+  Mojo::URL->new('http://mojolicio.us/perldoc/Mojo')->path('DOM/HTML');
+
+  # "http://mojolicio.us/perldoc/Mojo/DOM/HTML"
+  Mojo::URL->new('http://mojolicio.us/perldoc/Mojo/')->path('DOM/HTML');
 
 =head2 C<query>
 

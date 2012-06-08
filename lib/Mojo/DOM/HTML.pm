@@ -22,7 +22,7 @@ my $ATTR_RE = qr/
   )?
   \s*
 /x;
-my $END_RE   = qr#^\s*/\s*(.+)\s*#;
+my $END_RE   = qr!^\s*/\s*(.+)\s*!;
 my $TOKEN_RE = qr/
   ([^<]*)                                           # Text
   (?:
@@ -115,7 +115,7 @@ sub parse {
     if ($tag =~ $END_RE) { $self->_end($cs ? $1 : lc($1), \$current) }
 
     # Start
-    elsif ($tag =~ qr#([^\s/]+)([\s\S]*)#) {
+    elsif ($tag =~ m!([^\s/]+)([\s\S]*)!) {
       my ($start, $attr) = ($cs ? $1 : lc($1), $2);
 
       # Attributes
@@ -137,11 +137,11 @@ sub parse {
 
       # Empty element
       $self->_end($start, \$current)
-        if (!$self->xml && $VOID{$start}) || $attr =~ m#/\s*$#;
+        if (!$self->xml && $VOID{$start}) || $attr =~ m!/\s*$!;
 
       # Relaxed "script" or "style"
       if (grep {$_ eq $start} qw(script style)) {
-        if ($html =~ m#\G(.*?)<\s*/\s*$start\s*>#gcsi) {
+        if ($html =~ m!\G(.*?)<\s*/\s*$start\s*>!gcsi) {
           $self->_raw($1, \$current);
           $self->_end($start, \$current);
         }
@@ -341,22 +341,12 @@ sub _start {
     elsif ($start eq 'optgroup') { $self->_end('optgroup', $current) }
 
     # "<option>"
-    elsif (grep {$_ eq $start} qw(option optgroup)) {
-      $self->_end('option', $current);
-      $self->_end('optgroup', $current) if $start eq 'optgroup';
+    elsif ($start eq 'option') { $self->_end('option', $current) }
+
+    # "<colgroup>", "<thead>", "tbody" and "tfoot"
+    elsif (grep {$_ eq $start} qw(colgroup thead tbody tfoot)) {
+      $self->_close($current);
     }
-
-    # "<colgroup>"
-    elsif ($start eq 'colgroup') { $self->_close($current) }
-
-    # "<thead>"
-    elsif ($start eq 'thead') { $self->_close($current) }
-
-    # "<tbody>"
-    elsif ($start eq 'tbody') { $self->_close($current) }
-
-    # "<tfoot>"
-    elsif ($start eq 'tfoot') { $self->_close($current) }
 
     # "<tr>"
     elsif ($start eq 'tr') { $self->_close($current, {tr => 1}) }
