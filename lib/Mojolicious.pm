@@ -33,8 +33,8 @@ has sessions => sub { Mojolicious::Sessions->new };
 has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
-our $CODENAME = 'Leaf Fluttering In Wind';
-our $VERSION  = '2.98';
+our $CODENAME = 'Rainbow';
+our $VERSION  = '3.0';
 
 # "These old doomsday devices are dangerously unstable.
 #  I'll rest easier not knowing where they are."
@@ -144,6 +144,7 @@ sub handler {
   # Embedded application
   my $stash = {};
   if (my $sub = $tx->can('stash')) { ($stash, $tx) = ($tx->$sub, $tx->tx) }
+  $stash->{'mojo.secret'} = defined $stash->{'mojo.secret'} ? $stash->{'mojo.secret'} : $self->secret;
 
   # Build default controller
   my $defaults = $self->defaults;
@@ -570,10 +571,6 @@ automatically.
 
 Route condition for all kinds of headers, loaded automatically.
 
-=item L<Mojolicious::Plugin::I18N>
-
-Internationalization helpers.
-
 =item L<Mojolicious::Plugin::JSONConfig>
 
 JSON configuration files.
@@ -684,6 +681,8 @@ L<http://www.apache.org/licenses/LICENSE-2.0>.
 Every major release of L<Mojolicious> has a code name, these are the ones that
 have been used in the past.
 
+3.0, C<Rainbow> (u1F308)
+
 2.0, C<Leaf Fluttering In Wind> (u1F343)
 
 1.4, C<Smiling Face With Sunglasses> (u1F60E)
@@ -740,9 +739,11 @@ Andre Vieth
 
 Andreas Jaekel
 
+Andreas Koenig
+
 Andrew Fresh
 
-Andreas Koenig
+Andrey Khozov
 
 Andy Grundman
 
@@ -782,6 +783,8 @@ Daniel Kimsey
 
 Danijel Tasov
 
+Danny Thomas
+
 David Davis
 
 Diego Kuperman
@@ -801,6 +804,8 @@ Graham Barr
 Henry Tang
 
 Hideki Yamamura
+
+Ilya Chesnokov
 
 James Duncan
 

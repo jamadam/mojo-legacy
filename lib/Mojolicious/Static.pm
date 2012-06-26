@@ -4,25 +4,13 @@ use Mojo::Base -base;
 use File::Spec::Functions 'catfile';
 use Mojo::Asset::File;
 use Mojo::Asset::Memory;
-use Mojo::Command;
 use Mojo::Content::Single;
 use Mojo::Home;
+use Mojo::Loader;
 use Mojo::Path;
 
 has classes => sub { ['main'] };
 has paths   => sub { [] };
-
-# DEPRECATED in Leaf Fluttering In Wind!
-sub default_static_class {
-  warn <<EOF;
-Mojolicious::Static->default_static_class is DEPRECATED in favor of
-Mojolicious::Static->classes!
-EOF
-  my $self = shift;
-  return $self->classes->[0] unless @_;
-  $self->classes->[0] = shift;
-  return $self;
-}
 
 # "Valentine's Day's coming? Aw crap! I forgot to get a girlfriend again!"
 sub dispatch {
@@ -54,14 +42,13 @@ sub serve {
 
   # Search all paths
   my $asset;
-  my $size     = 0;
-  my $modified = $self->{modified} ||= time;
-  my $res      = $c->res;
+  my $mtime = $self->{mtime} ||= time;
+  my $res = $c->res;
   for my $path (@{$self->paths}) {
     next unless my $data = $self->_get_file(catfile $path, split('/', $rel));
 
     # Exists
-    last if ($asset, $size, $modified) = @$data;
+    last if ($asset, $mtime) = @$data;
 
     # Forbidded
     $c->app->log->debug(qq{File "$rel" is forbidden.});
@@ -70,7 +57,6 @@ sub serve {
 
   # Search DATA
   if (!$asset && defined(my $data = $self->_get_data_file($c, $rel))) {
-    $size  = length $data;
     $asset = Mojo::Asset::Memory->new->add_chunk($data);
   }
 
@@ -79,7 +65,7 @@ sub serve {
     my $b = $self->{bundled} ||= Mojo::Home->new(Mojo::Home->mojo_lib_dir)
       ->rel_dir('Mojolicious/public');
     my $data = $self->_get_file(catfile($b, split('/', $rel)));
-    ($asset, $size, $modified) = @$data if $data && @$data;
+    ($asset, $mtime) = @$data if $data && @$data;
   }
 
   # Not a static file
@@ -92,7 +78,7 @@ sub serve {
 
     # Not modified
     my $since = Mojo::Date->new($date)->epoch;
-    if (defined $since && $since == $modified) {
+    if (defined $since && $since == $mtime) {
       $res_headers->remove('Content-Type')->remove('Content-Length')
         ->remove('Content-Disposition');
       return $res->code(304);
@@ -100,9 +86,12 @@ sub serve {
   }
 
   # Range
+  my $size  = $asset->size;
   my $start = 0;
-  my $end = $size - 1 >= 0 ? $size - 1 : 0;
+  my $end   = $size - 1 >= 0 ? $size - 1 : 0;
   if (my $range = $req_headers->range) {
+
+    # Satisfiable
     if ($range =~ m/^bytes=(\d+)-(\d+)?/ && $1 <= $end) {
       $start = $1;
       $end = $2 if defined $2 && $2 <= $end;
@@ -121,7 +110,7 @@ sub serve {
   $res->content->asset($asset);
   $rel =~ /\.(\w+)$/;
   return $res_headers->content_type($c->app->types->type($1) || 'text/plain')
-    ->accept_ranges('bytes')->last_modified(Mojo::Date->new($modified));
+    ->accept_ranges('bytes')->last_modified(Mojo::Date->new($mtime));
 }
 
 # "I like being a women.
@@ -133,15 +122,16 @@ sub _get_data_file {
   return if $rel =~ /\.\w+\.\w+$/;
 
   # Index DATA files
+  my $loader = Mojo::Loader->new;
   unless ($self->{index}) {
     my $index = $self->{index} = {};
     for my $class (reverse @{$self->classes}) {
-      $index->{$_} = $class for keys %{Mojo::Command->get_all_data($class)};
+      $index->{$_} = $class for keys %{$loader->data($class)};
     }
   }
 
   # Find file
-  return Mojo::Command->get_data($rel, $self->{index}{$rel});
+  return $loader->data($self->{index}{$rel}, $rel);
 }
 
 sub _get_file {
@@ -149,7 +139,7 @@ sub _get_file {
   no warnings 'newline';
   return unless -f $path;
   return [] unless -r $path;
-  return [Mojo::Asset::File->new(path => $path), (stat $path)[7, 9]];
+  return [Mojo::Asset::File->new(path => $path), (stat $path)[9]];
 }
 
 1;

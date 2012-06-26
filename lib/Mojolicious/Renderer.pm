@@ -3,9 +3,9 @@ use Mojo::Base -base;
 
 use File::Spec::Functions 'catfile';
 use Mojo::Cache;
-use Mojo::Command;
 use Mojo::Home;
 use Mojo::JSON;
+use Mojo::Loader;
 use Mojo::Util 'encode';
 
 has cache   => sub { Mojo::Cache->new };
@@ -58,34 +58,22 @@ sub add_helper {
   return $self;
 }
 
-# DEPRECATED in Leaf Fluttering In Wind!
-sub default_template_class {
-  warn <<EOF;
-Mojolicious::Renderer->default_template_class is DEPRECATED in favor of
-Mojolicious::Renderer->classes!
-EOF
-  my $self = shift;
-  return $self->classes->[0] unless @_;
-  $self->classes->[0] = shift;
-  return $self;
-}
-
 sub get_data_template {
   my ($self, $options, $template) = @_;
 
   # Index DATA templates
+  my $loader = Mojo::Loader->new;
   unless ($self->{index}) {
     my $index = $self->{index} = {};
     for my $class (reverse @{$self->classes}) {
-      $index->{$_} = $class for keys %{Mojo::Command->get_all_data($class)};
+      $index->{$_} = $class for keys %{$loader->data($class)};
     }
   }
 
   # Find template
-  return Mojo::Command->get_data($template, $self->{index}{$template});
+  return $loader->data($self->{index}{$template}, $template);
 }
 
-# "Bodies are for hookers and fat people."
 sub render {
   my ($self, $c, $args) = @_;
   $args ||= {};
@@ -201,8 +189,8 @@ sub _detect_handler {
 
   # DATA templates
   unless ($self->{data}) {
-    my @templates
-      = map { sort keys %{Mojo::Command->get_all_data($_)} } @{$self->classes};
+    my $loader = Mojo::Loader->new;
+    my @templates = map { sort keys %{$loader->data($_)} } @{$self->classes};
     s/\.(\w+)$// and $self->{data}{$_} ||= $1 for @templates;
   }
   return $self->{data}{$file} if exists $self->{data}{$file};
@@ -354,7 +342,7 @@ Register a new helper.
     handler        => 'epl'
   }, 'foo.html.ep');
 
-Get a DATA template by name, usually used by handlers.
+Get a C<DATA> section template by name, usually used by handlers.
 
 =head2 C<render>
 

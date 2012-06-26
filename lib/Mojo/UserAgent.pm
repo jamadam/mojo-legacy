@@ -3,11 +3,11 @@ use Mojo::Base 'Mojo::EventEmitter';
 
 use Carp 'croak';
 use List::Util 'first';
-use Mojo::CookieJar;
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
 use Mojo::Transaction::WebSocket;
 use Mojo::URL;
+use Mojo::UserAgent::CookieJar;
 use Mojo::UserAgent::Transactor;
 use Scalar::Util 'weaken';
 
@@ -17,7 +17,7 @@ use constant DEBUG => $ENV{MOJO_USERAGENT_DEBUG} || 0;
 has ca              => sub { $ENV{MOJO_CA_FILE} };
 has cert            => sub { $ENV{MOJO_CERT_FILE} };
 has connect_timeout => sub { $ENV{MOJO_CONNECT_TIMEOUT} || 10 };
-has cookie_jar      => sub { Mojo::CookieJar->new };
+has cookie_jar      => sub { Mojo::UserAgent::CookieJar->new };
 has [qw(http_proxy https_proxy local_address no_proxy)];
 has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 20 };
 has ioloop             => sub { Mojo::IOLoop->new };
@@ -48,7 +48,11 @@ sub app {
   # Try to detect application
   $self->{app} ||= $ENV{MOJO_APP} if ref $ENV{MOJO_APP};
   return $self->{app} unless $app;
-  $self->{app} = ref $app ? $app : $self->_server->app_class($app)->app;
+
+  # Initialize application if necessary
+  $ENV{MOJO_APP} = $app unless ref $app;
+  $self->{app} = ref $app ? $app : $self->_server->app;
+
   return $self;
 }
 
@@ -56,9 +60,7 @@ sub app_url {
   my $self = shift;
 
   # Prepare application for testing
-  my $server = $self->_server(@_);
-  delete $server->{app};
-  $server->app($self->app);
+  $self->_server(@_)->app($self->app);
 
   # Build absolute URL for test server
   return Mojo::URL->new("$self->{scheme}://localhost:$self->{port}/");
@@ -198,8 +200,7 @@ sub _connect {
       return $self->_error($id, $err) if $err;
 
       # Connection established
-      $stream->on(
-        timeout => sub { $self->_error($id => 'Inactivity timeout.') });
+      $stream->on(timeout => sub { $self->_error($id, 'Inactivity timeout') });
       $stream->on(close => sub { $self->_handle($id => 1) });
       $stream->on(error => sub { $self->_error($id, pop, 1) });
       $stream->on(read => sub { $self->_read($id => pop) });
@@ -219,7 +220,7 @@ sub _connect_proxy {
 
       # CONNECT failed
       unless (($tx->res->code || '') eq '200') {
-        $old->req->error('Proxy connection failed.');
+        $old->req->error('Proxy connection failed');
         return $self->_finish($old, $cb);
       }
 
@@ -248,12 +249,11 @@ sub _connected {
   my ($self, $id) = @_;
 
   # Inactivity timeout
-  my $loop = $self->_loop;
-  $loop->stream($id)->timeout($self->inactivity_timeout);
+  my $stream = $self->_loop->stream($id)->timeout($self->inactivity_timeout);
 
   # Store connection information in transaction
   my $tx     = $self->{connections}{$id}{tx}->connection($id);
-  my $handle = $loop->stream($id)->handle;
+  my $handle = $stream->handle;
   $tx->local_address($handle->sockhost)->local_port($handle->sockport);
   $tx->remote_address($handle->peerhost)->remote_port($handle->peerport);
 
@@ -307,7 +307,7 @@ sub _finish {
   unless ($res->error) {
 
     # Premature connection close
-    if ($close && !$res->code) { $res->error('Premature connection close.') }
+    if ($close && !$res->code) { $res->error('Premature connection close') }
 
     # 400/500
     elsif ($res->is_status_class(400) || $res->is_status_class(500)) {
@@ -467,9 +467,8 @@ sub _start {
   # Request timeout
   if (my $t = $self->request_timeout) {
     weaken $self;
-    my $loop = $self->_loop;
-    $self->{connections}{$id}{timeout}
-      = $loop->timer($t => sub { $self->_error($id => 'Request timeout.') });
+    $self->{connections}{$id}{timeout} = $self->_loop->timer(
+      $t => sub { $self->_error($id => 'Request timeout') });
   }
 
   return $id;
@@ -497,7 +496,7 @@ sub _upgrade {
 sub _write {
   my ($self, $id) = @_;
 
-  # Prepare outgoing data
+  # Get chunk
   return unless my $c  = $self->{connections}{$id};
   return unless my $tx = $c->{tx};
   return unless $tx->is_writing;
@@ -506,16 +505,15 @@ sub _write {
   delete $self->{writing};
   warn "-- Client >>> Server (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
 
-  # More data to follow
-  my $cb;
-  if ($tx->is_writing) {
-    weaken $self;
-    $cb = sub { $self->_write($id) };
-  }
-
-  # Write data
-  $self->_loop->stream($id)->write($chunk, $cb);
+  # Write chunk
+  my $stream = $self->_loop->stream($id);
+  $stream->write($chunk);
   $self->_handle($id) if $tx->is_finished;
+
+  # Continue writing
+  return unless $tx->is_writing;
+  weaken $self;
+  $stream->write('', sub { $self->_write($id) });
 }
 
 1;
@@ -531,8 +529,16 @@ Mojo::UserAgent - Non-blocking I/O HTTP 1.1 and WebSocket user agent
   use Mojo::UserAgent;
   my $ua = Mojo::UserAgent->new;
 
-  # Say hello to the unicode snowman with "Do Not Track" header
+  # Say hello to the Unicode snowman with "Do Not Track" header
   say $ua->get('www.☃.net?hello=there' => {DNT => 1})->res->body;
+
+  # Form POST with exception handling
+  my $tx = $ua->post_form('search.cpan.org/search' => {q => 'mojo'});
+  if (my $res = $tx->success) { say $res->body }
+  else {
+    my ($message, $code) = $tx->error;
+    say $code ? "$code $message response" : "Connection error: $message";
+  }
 
   # Quick JSON API request with Basic authentication
   say $ua->get('https://sri:s3cret@search.twitter.com/search.json?q=perl')
@@ -544,14 +550,6 @@ Mojo::UserAgent - Non-blocking I/O HTTP 1.1 and WebSocket user agent
   # Scrape the latest headlines from a news site
   $ua->max_redirects(5)->get('www.reddit.com/r/perl/')
     ->res->dom('p.title > a.title')->each(sub { say $_->text });
-
-  # Form POST with exception handling
-  my $tx = $ua->post_form('search.cpan.org/search' => {q => 'mojo'});
-  if (my $res = $tx->success) { say $res->body }
-  else {
-    my ($message, $code) = $tx->error;
-    say "Error: $message";
-  }
 
   # IPv6 PUT request with content
   my $tx
@@ -607,9 +605,10 @@ Mojo::UserAgent - Non-blocking I/O HTTP 1.1 and WebSocket user agent
 L<Mojo::UserAgent> is a full featured non-blocking I/O HTTP 1.1 and WebSocket
 user agent with C<IPv6>, C<TLS> and C<libev> support.
 
-Optional modules L<EV>, L<IO::Socket::INET6> and L<IO::Socket::SSL> are
-supported transparently and used if installed. Individual features can also be
-disabled with the C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
+Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
+L<IO::Socket::SSL> (1.75+) are supported transparently and used if installed.
+Individual features can also be disabled with the C<MOJO_NO_IPV6> and
+C<MOJO_NO_TLS> environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for more.
 
@@ -682,10 +681,10 @@ environment variable or C<10>.
 =head2 C<cookie_jar>
 
   my $cookie_jar = $ua->cookie_jar;
-  $ua            = $ua->cookie_jar(Mojo::CookieJar->new);
+  $ua            = $ua->cookie_jar(Mojo::UserAgent::CookieJar->new);
 
 Cookie jar to use for this user agents requests, defaults to a
-L<Mojo::CookieJar> object.
+L<Mojo::UserAgent::CookieJar> object.
 
   # Disable cookie jar
   $ua->cookie_jar(0);
@@ -801,8 +800,7 @@ implements the following new ones.
   $ua     = $ua->app(MyApp->new);
 
 Application relative URLs will be processed with, defaults to the value of the
-C<MOJO_APP> environment variable, which is usually a L<Mojo> or L<Mojolicious>
-object.
+C<MOJO_APP> environment variable or a L<Mojo::HelloWorld> object.
 
   # Introspect
   say $ua->app->secret;

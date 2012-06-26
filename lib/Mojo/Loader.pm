@@ -3,10 +3,20 @@ use Mojo::Base -base;
 
 use File::Basename 'fileparse';
 use File::Spec::Functions qw(catdir catfile splitdir);
-use Mojo::Command;
 use Mojo::Exception;
+use Mojo::Util qw(b64_decode class_to_path);
+
+# Cache
+my %CACHE;
 
 # "Homer no function beer well without."
+sub data {
+  my ($self, $class, $data) = @_;
+  return $class ? $data ? _all($class)->{$data} : _all($class) : undef;
+}
+
+# "Olive oil? Asparagus? If your mother wasn't so fancy,
+#  we could just shop at the gas station like normal people."
 sub load {
   my ($self, $module) = @_;
 
@@ -20,7 +30,7 @@ sub load {
   return if eval "require $module; 1";
 
   # Exists
-  my $path = Mojo::Command->class_to_path($module);
+  my $path = class_to_path $module;
   return 1 if $@ =~ /^Can't locate $path in \@INC/;
 
   # Real error
@@ -51,6 +61,37 @@ sub search {
   return \@modules;
 }
 
+sub _all {
+  my $class = shift;
+
+  # Refresh or use cached data
+  my $handle = do { no strict 'refs'; \*{"$class\::DATA"} };
+  return $CACHE{$class} || {} unless fileno $handle;
+  seek $handle, 0, 0;
+  my $content = join '', <$handle>;
+  close $handle;
+
+  # Ignore everything before __DATA__ (windows will seek to start of file)
+  $content =~ s/^.*\n__DATA__\r?\n/\n/s;
+
+  # Ignore everything after __END__
+  $content =~ s/\n__END__\r?\n.*$/\n/s;
+
+  # Split
+  my @data = split /^@@\s*(.+?)\s*\r?\n/m, $content;
+  shift @data;
+
+  # Find data
+  my $all = $CACHE{$class} = {};
+  while (@data) {
+    my ($name, $content) = splice @data, 0, 2;
+    $content = b64_decode $content if $name =~ s/\s*\(\s*base64\s*\)$//;
+    $all->{$name} = $content;
+  }
+
+  return $all;
+}
+
 1;
 
 =head1 NAME
@@ -65,9 +106,12 @@ Mojo::Loader - Loader
   my $loader = Mojo::Loader->new;
   for my $module (@{$loader->search('Some::Namespace')}) {
 
-    # And load them safely
+    # Load them safely
     my $e = $loader->load($module);
-    warn qq{Loading "$module" failed: $e} if ref $e;
+    warn qq{Loading "$module" failed: $e} and next if ref $e;
+
+    # And extract files from the DATA section
+    say $loader->data($module, 'some_file.txt');
   }
 
 =head1 DESCRIPTION
@@ -78,6 +122,13 @@ L<Mojo::Loader> is a class loader and plugin framework.
 
 L<Mojo::Loader> inherits all methods from L<Mojo::Base> and implements the
 following new ones.
+
+=head2 C<data>
+
+  my $all   = $loader->data('Foo::Bar');
+  my $index = $loader->data('Foo::Bar', 'index.html');
+
+Extract embedded file from the C<DATA> section of a class.
 
 =head2 C<load>
 

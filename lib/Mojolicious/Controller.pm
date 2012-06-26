@@ -407,9 +407,9 @@ sub signed_cookie {
   my ($self, $name, $value, $options) = @_;
 
   # Response cookie
-  my $secret = $self->app->secret;
+  my $secret = $self->stash->{'mojo.secret'};
   return $self->cookie($name,
-    "$value--" . Mojo::Util::hmac_md5_sum($value, $secret), $options)
+    "$value--" . Mojo::Util::hmac_sha1_sum($value, $secret), $options)
     if defined $value;
 
   # Request cookies
@@ -421,7 +421,7 @@ sub signed_cookie {
       my $sig = $1;
 
       # Verified
-      my $check = Mojo::Util::hmac_md5_sum $value, $secret;
+      my $check = Mojo::Util::hmac_sha1_sum $value, $secret;
       if (Mojo::Util::secure_compare $sig, $check) { push @results, $value }
 
       # Bad cookie
@@ -727,6 +727,9 @@ C<extends> features.
 Render the given content as raw bytes, similar to C<render_text> but data will
 not be encoded.
 
+  # Longer version
+  $c->render(data => $bytes);
+
 =head2 C<render_exception>
 
   $c->render_exception('Oops!');
@@ -741,6 +744,9 @@ C<exception.$format.*> and set the response status code to C<500>.
   $c->render_json([1, 2, -3], status => 201);
 
 Render a data structure as JSON.
+
+  # Longer version
+  $c->render(json => {foo => 'bar'});
 
 =head2 C<render_later>
 
@@ -770,6 +776,9 @@ C<not_found.$format.*> and set the response status code to C<404>.
 
 Same as C<render> but returns the rendered result.
 
+  # Longer version
+  my $output = $c->render('menubar', partial => 1);
+
 =head2 C<render_static>
 
   my $success = $c->render_static('images/logo.png');
@@ -787,6 +796,9 @@ Render the given content as Perl characters, which will be encoded to bytes.
 See C<render_data> for an alternative without encoding. Note that this does
 not change the content type of the response, which is
 C<text/html;charset=UTF-8> by default.
+
+  # Longer version
+  $c->render(text => 'Hello World!');
 
   # Render "text/plain" response
   $c->render_text('Hello World!', format => 'txt');
@@ -812,6 +824,10 @@ L<Mojo::Message::Request> object.
 
   # Extract request information
   my $userinfo = $c->req->url->userinfo;
+  my $agent    = $c->req->headers->user_agent;
+  my $body     = $c->req->body;
+  my $foo      = $c->req->json('/23/foo');
+  my $bar      = $c->req->dom('div.bar')->first->text;
 
 =head2 C<res>
 
@@ -873,8 +889,9 @@ timeout, which usually defaults to C<15> seconds.
   $c          = $c->session({foo => 'bar'});
   $c          = $c->session(foo => 'bar');
 
-Persistent data storage, stored C<JSON> serialized in a signed cookie. Note
-that cookies are generally limited to 4096 bytes of data.
+Persistent data storage, all session data gets serialized with L<Mojo::JSON>
+and stored in C<HMAC-SHA1> signed cookies. Note that cookies usually have a
+4096 byte limit, depending on browser.
 
   # Manipulate session
   $c->session->{foo} = 'bar';
@@ -892,7 +909,8 @@ that cookies are generally limited to 4096 bytes of data.
   $c         = $c->signed_cookie(foo => 'bar', {path => '/'});
 
 Access signed request cookie values and create new signed response cookies.
-Cookies failing signature verification will be automatically discarded.
+Cookies failing C<HMAC-SHA1> signature verification will be automatically
+discarded.
 
 =head2 C<stash>
 

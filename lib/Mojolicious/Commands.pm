@@ -1,5 +1,5 @@
 package Mojolicious::Commands;
-use Mojo::Base 'Mojo::Command';
+use Mojo::Base 'Mojolicious::Command';
 
 use Getopt::Long
   qw(GetOptions :config no_auto_abbrev no_ignore_case pass_through);
@@ -26,7 +26,7 @@ Tip: CGI and PSGI environments can be automatically detected very often and
 
 These commands are currently available:
 EOF
-has namespaces => sub { [qw(Mojolicious::Command Mojo::Command)] };
+has namespaces => sub { ['Mojolicious::Command'] };
 
 sub detect {
   my ($self, $guess) = @_;
@@ -68,10 +68,10 @@ sub run {
 
     # Try all namespaces
     my $module;
-    $module = _command("${_}::$name") and last for @{$self->namespaces};
+    $module = _command("${_}::$name", 1) and last for @{$self->namespaces};
 
-    # Command missing
-    die qq{Command "$name" missing, maybe you need to install it?\n}
+    # Unknown command
+    die qq{Unknown command "$name", maybe you need to install it?\n}
       unless $module;
 
     # Run
@@ -83,8 +83,9 @@ sub run {
 
   # Try all namespaces
   my (@commands, %seen);
+  my $loader = Mojo::Loader->new;
   for my $namespace (@{$self->namespaces}) {
-    for my $module (@{Mojo::Loader->search($namespace)}) {
+    for my $module (@{$loader->search($namespace)}) {
       next unless my $command = _command($module);
       $command =~ s/^$namespace\:\://;
       push @commands, [$command => $module] unless $seen{$command}++;
@@ -124,9 +125,10 @@ sub start_app {
 }
 
 sub _command {
-  my $module = shift;
-  if (my $e = Mojo::Loader->load($module)) { ref $e ? die $e : return }
-  return $module->isa('Mojo::Command') ? $module : undef;
+  my ($module, $fatal) = @_;
+  return $module->isa('Mojolicious::Command') ? $module : undef
+    unless my $e = Mojo::Loader->new->load($module);
+  $fatal && ref $e ? die $e : return;
 }
 
 1;
@@ -273,8 +275,8 @@ for debugging.
 
 =head1 ATTRIBUTES
 
-L<Mojolicious::Commands> inherits all attributes from L<Mojo::Command> and
-implements the following new ones.
+L<Mojolicious::Commands> inherits all attributes from L<Mojolicious::Command>
+and implements the following new ones.
 
 =head2 C<hint>
 
@@ -293,17 +295,16 @@ Short usage message shown before listing available commands.
 =head2 C<namespaces>
 
   my $namespaces = $commands->namespaces;
-  $commands      = $commands->namespaces(['Mojolicious::Commands']);
+  $commands      = $commands->namespaces(['MyApp::Command']);
 
-Namespaces to load commands from, defaults to C<Mojolicious::Command> and
-C<Mojo::Command>.
+Namespaces to load commands from, defaults to C<Mojolicious::Command>.
 
   # Add another namespace to load commands from
   push @{$commands->namespaces}, 'MyApp::Command';
 
 =head1 METHODS
 
-L<Mojolicious::Commands> inherits all methods from L<Mojo::Command> and
+L<Mojolicious::Commands> inherits all methods from L<Mojolicious::Command> and
 implements the following new ones.
 
 =head2 C<detect>

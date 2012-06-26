@@ -1,7 +1,6 @@
 package Mojolicious::Plugin::TagHelpers;
 use Mojo::Base 'Mojolicious::Plugin';
 
-use List::Util 'first';
 use Mojo::ByteStream 'b';
 use Mojo::Util 'xml_escape';
 
@@ -243,7 +242,7 @@ sub _input {
     my $value = defined $attrs{value} ? $attrs{value} : '';
     if ($type eq 'checkbox' || $type eq 'radio') {
       $attrs{value} = $value;
-      $attrs{checked} = 'checked' if defined first { $value eq $_ } @values;
+      $attrs{checked} = 'checked' if grep {$_ eq $value} @values;
     }
 
     # Others

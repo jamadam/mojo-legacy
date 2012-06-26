@@ -10,11 +10,11 @@ use Test::More;
 use Mojo::IOLoop::Server;
 plan skip_all => 'set TEST_ONLINE to enable this test (developer only!)'
   unless $ENV{TEST_ONLINE};
-plan skip_all => 'IO::Socket::INET6 2.69 required for this test!'
+plan skip_all => 'IO::Socket::IP 0.16 required for this test!'
   unless Mojo::IOLoop::Server::IPV6;
-plan skip_all => 'IO::Socket::SSL 1.37 required for this test!'
+plan skip_all => 'IO::Socket::SSL 1.75 required for this test!'
   unless Mojo::IOLoop::Server::TLS;
-plan tests => 86;
+plan tests => 88;
 
 # "So then I said to the cop, "No, you're driving under the influence...
 #  of being a jerk"."
@@ -92,7 +92,7 @@ ok $tx->error, 'has error';
 # Host does not exist
 $tx = $ua->build_tx(GET => 'http://cdeabcdeffoobarnonexisting.com');
 $ua->start($tx);
-is $tx->error, "Couldn't connect.", 'right error';
+is $tx->error, "Couldn't connect", 'right error';
 ok !$tx->is_finished, 'transaction is not finished';
 
 # Fresh user agent again
@@ -267,14 +267,16 @@ is_deeply [$tx->error],      ['Bad Request', 400], 'right error';
 is_deeply [$tx->res->error], ['Bad Request', 400], 'right error';
 ok $tx->local_address, 'has local address';
 ok $tx->local_port > 0, 'has local port';
+ok $tx->remote_address, 'has local address';
+ok $tx->remote_port > 0, 'has local port';
 
 # Connect timeout (non-routable address)
 $tx = $ua->connect_timeout(0.5)->get('192.0.2.1');
 ok !$tx->is_finished, 'transaction is not finished';
-is $tx->error, 'Connect timeout.', 'right error';
+is $tx->error, 'Connect timeout', 'right error';
 $ua->connect_timeout(3);
 
 # Request timeout (non-routable address)
 $tx = $ua->request_timeout(0.5)->get('192.0.2.1');
 ok !$tx->is_finished, 'transaction is not finished';
-is $tx->error, 'Request timeout.', 'right error';
+is $tx->error, 'Request timeout', 'right error';

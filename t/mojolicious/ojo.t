@@ -10,7 +10,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 11;
+use Test::More tests => 17;
 
 # "What do you mean 'we', flesh-tube?"
 use ojo;
@@ -21,7 +21,8 @@ a(
     my $self = shift;
     $self->render(text => $self->req->method . ($self->param('foo') || ''));
   }
-);
+)->secret('foobarbaz');
+is a->secret, 'foobarbaz', 'right secret';
 
 # GET /
 is g('/')->body, 'GET', 'right content';
@@ -50,8 +51,17 @@ is f('/' => {foo => 'bar'})->body, 'POSTbar', 'right content';
 # Parse XML
 is x('<title>works</title>')->at('title')->text, 'works', 'right text';
 
+# JSON
+is j([1, 2]), '[1,2]', 'right result';
+is_deeply j('[1,2]'), [1, 2], 'right structure';
+is j({foo => 'bar'}), '{"foo":"bar"}', 'right result';
+is_deeply j('{"foo":"bar"}'), {foo => 'bar'}, 'right structure';
+
 # ByteStream
 is b('<foo>')->url_escape, '%3Cfoo%3E', 'right result';
 
 # Collection
 is c(1, 2, 3)->join('-'), '1-2-3', 'right result';
+
+# Dumper
+is r([1, 2]), "[\n  1,\n  2\n]\n", 'right result';

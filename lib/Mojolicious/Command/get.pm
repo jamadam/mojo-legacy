@@ -1,5 +1,5 @@
 package Mojolicious::Command::get;
-use Mojo::Base 'Mojo::Command';
+use Mojo::Base 'Mojolicious::Command';
 
 use Getopt::Long qw(GetOptions :config no_auto_abbrev no_ignore_case);
 use Mojo::DOM;
@@ -87,9 +87,9 @@ sub run {
       my $tx = pop;
 
       # Prepare request information
-      my $req       = $tx->req;
-      my $startline = $req->build_start_line;
-      my $headers   = $req->build_headers;
+      my $req         = $tx->req;
+      my $startline   = $req->build_start_line;
+      my $req_headers = $req->build_headers;
 
       # Verbose callback
       my $v  = $verbose;
@@ -100,14 +100,14 @@ sub run {
         return unless $v && $res->headers->is_finished;
 
         # Request
-        warn "$startline$headers";
+        warn "$startline$req_headers";
 
         # Response
-        my $version = $res->version;
-        my $code    = $res->code;
-        my $message = $res->message;
-        warn "HTTP/$version $code $message\n", $res->headers->to_string,
-          "\n\n";
+        my $version     = $res->version;
+        my $code        = $res->code;
+        my $message     = $res->message;
+        my $res_headers = $res->headers->to_string;
+        warn "HTTP/$version $code $message\n$res_headers\n\n";
 
         # Finished
         $v = 0;
@@ -155,7 +155,7 @@ sub _json {
   my ($self, $buffer, $pointer) = @_;
   my $json = Mojo::JSON->new;
   return unless my $data = $json->decode($buffer);
-  return unless $data = Mojo::JSON::Pointer->get($data, $pointer);
+  return unless defined($data = Mojo::JSON::Pointer->get($data, $pointer));
   (ref $data eq 'HASH' || ref $data eq 'ARRAY') ? say($json->encode($data)) : _say($data);
 }
 
@@ -240,8 +240,8 @@ Usage information for this command, used for the help screen.
 
 =head1 METHODS
 
-L<Mojolicious::Command::get> inherits all methods from L<Mojo::Command> and
-implements the following new ones.
+L<Mojolicious::Command::get> inherits all methods from L<Mojolicious::Command>
+and implements the following new ones.
 
 =head2 C<run>
 

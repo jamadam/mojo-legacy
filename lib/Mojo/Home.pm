@@ -10,10 +10,7 @@ use File::Basename 'dirname';
 use File::Find 'find';
 use File::Spec::Functions qw(abs2rel catdir catfile splitdir);
 use FindBin;
-use List::Util 'first';
-use Mojo::Asset::File;
-use Mojo::Command;
-use Mojo::Loader;
+use Mojo::Util qw(class_to_path slurp);
 
 has app_class => 'Mojo::HelloWorld';
 
@@ -36,25 +33,13 @@ sub detect {
 
   # Try to find home from lib directory
   if ($class) {
-
-    # Load
-    my $file = Mojo::Command->class_to_path($class);
-    unless ($INC{$file}) {
-      if (my $e = Mojo::Loader->load($class)) { die $e if ref $e }
-    }
-
-    # Detect
+    my $file = class_to_path $class;
     if (my $path = $INC{$file}) {
-
-      # Directory
       $path =~ s/$file$//;
       my @home = splitdir $path;
 
       # Remove "lib" and "blib"
-      while (@home) {
-        last unless $home[-1] =~ /^b?lib$/ || $home[-1] eq '';
-        pop @home;
-      }
+      pop @home while @home && ($home[-1] =~ /^b?lib$/ || $home[-1] eq '');
 
       # Turn into absolute path
       $self->{parts} = [splitdir(abs_path(catdir(@home) || '.'))];
@@ -85,7 +70,7 @@ sub list_files {
   find {
     wanted => sub {
       my @parts = splitdir(abs2rel($File::Find::name, $dir));
-      push @files, join '/', @parts unless first {/^\./} @parts;
+      push @files, join '/', @parts unless grep(/^\./, @parts);
     },
     no_chdir => 1
   }, $dir;
@@ -109,9 +94,7 @@ sub rel_dir { catdir(@{shift->{parts} || []}, split '/', shift) }
 
 sub rel_file { catfile(@{shift->{parts} || []}, split '/', shift) }
 
-sub slurp_rel_file {
-  Mojo::Asset::File->new(path => shift->rel_file(@_))->slurp;
-}
+sub slurp_rel_file { slurp shift->rel_file(@_) }
 
 sub to_string { catdir(@{shift->{parts} || []}) }
 
@@ -206,7 +189,7 @@ Portably generate an absolute path for a file relative to the home directory.
 
 =head2 C<slurp_rel_file>
 
-  my $string = $home->slurp_rel_file('foo/bar.html');
+  my $content = $home->slurp_rel_file('foo/bar.html');
 
 Portably read all data at once from file relative to the home directory.
 

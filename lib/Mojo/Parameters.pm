@@ -89,15 +89,14 @@ sub params {
 }
 
 sub parse {
-  my ($self, $string) = @_;
-  $string = defined $string ? $string : $self->{string};
+  my $self = shift;
+  my $string = do {my $tmp = shift; defined $tmp ? $tmp : $self->{string}};
 
   # Clear
-  delete $self->{string};
-  $self->params([]);
+  delete $self->params([])->{string};
 
   # Detect pair separator for reconstruction
-  return $self unless defined $string && length $string;
+  return $self unless length(defined $string ? $string : '');
   $self->pair_separator(';') if $string =~ /;/ && $string !~ /\&/;
 
   # W3C suggests to also accept ";" as a separator
@@ -110,18 +109,13 @@ sub parse {
     my $value = defined $2 ? $2 : '';
 
     # Replace "+" with whitespace
-    $name  =~ s/\+/\ /g;
-    $value =~ s/\+/\ /g;
+    s/\+/\ /g for $name, $value;
 
     # Unescape
-    if (index($name, '%') >= 0) {
-      $name = url_unescape $name;
-      $name = defined decode($charset, $name) ? decode($charset, $name) : $name if $charset;
-    }
-    if (index($value, '%') >= 0) {
-      $value = url_unescape $value;
-      $value = defined decode($charset, $value) ? decode($charset, $value) : $value if $charset;
-    }
+    $name  = url_unescape $name;
+    $name  = do {my $tmp = decode($charset, $name); defined $tmp ? $tmp : $name} if $charset;
+    $value = url_unescape $value;
+    $value = do {my $tmp = decode($charset, $value); defined $tmp ? $tmp : $value} if $charset;
 
     push @{$self->params}, $name, $value;
   }
@@ -132,8 +126,8 @@ sub parse {
 # "Don't kid yourself, Jimmy. If a cow ever got the chance,
 #  he'd eat you and everyone you care about!"
 sub remove {
-  my ($self, $name) = @_;
-  $name = defined $name ? $name : '';
+  my $self = shift;
+  my $name = do {my $tmp = shift; defined $tmp ? $tmp : ''};
 
   # Remove
   my $params = $self->params;
@@ -150,22 +144,21 @@ sub to_hash {
 
   # Format
   my $params = $self->params;
-  my %params;
+  my %hash;
   for (my $i = 0; $i < @$params; $i += 2) {
-    my $name  = $params->[$i];
-    my $value = $params->[$i + 1];
+    my ($name, $value) = @{$params}[$i, $i + 1];
 
     # Array
-    if (exists $params{$name}) {
-      $params{$name} = [$params{$name}] unless ref $params{$name} eq 'ARRAY';
-      push @{$params{$name}}, $value;
+    if (exists $hash{$name}) {
+      $hash{$name} = [$hash{$name}] unless ref $hash{$name} eq 'ARRAY';
+      push @{$hash{$name}}, $value;
     }
 
     # String
-    else { $params{$name} = $value }
+    else { $hash{$name} = $value }
   }
 
-  return \%params;
+  return \%hash;
 }
 
 sub to_string {
@@ -180,30 +173,26 @@ sub to_string {
 
   # Build pairs
   my $params = $self->params;
-  return '' unless @{$self->params};
-  my @params;
+  return '' unless @$params;
+  my @pairs;
   for (my $i = 0; $i < @$params; $i += 2) {
-    my $name  = $params->[$i];
-    my $value = $params->[$i + 1];
+    my ($name, $value) = @{$params}[$i, $i + 1];
 
-    # Escape
+    # Escape and replace whitespace with "+"
     $name = encode $charset, $name if $charset;
     $name = url_escape $name, "^$Mojo::URL::UNRESERVED";
+    $name =~ s/\%20/\+/g;
     if ($value) {
       $value = encode $charset, $value if $charset;
       $value = url_escape $value, "^$Mojo::URL::UNRESERVED";
+      $value =~ s/\%20/\+/g;
     }
 
-    # Replace whitespace with "+"
-    $name =~ s/\%20/\+/g;
-    $value =~ s/\%20/\+/g if $value;
-
-    push @params, defined $value ? "$name=$value" : "$name";
+    push @pairs, defined $value ? "$name=$value" : $name;
   }
 
   # Concatenate pairs
-  my $separator = $self->pair_separator;
-  return join $separator, @params;
+  return join $self->pair_separator, @pairs;
 }
 
 1;

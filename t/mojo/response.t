@@ -66,7 +66,8 @@ is $res->code(428)->default_message, 'Precondition Required', 'right message';
 is $res->code(429)->default_message, 'Too Many Requests',     'right message';
 is $res->code(431)->default_message, 'Request Header Fields Too Large',
   'right message';
-is $res->code(449)->default_message, 'Retry With',            'right message';
+is $res->code(451)->default_message, 'Unavailable For Legal Reasons',
+  'right message';
 is $res->code(500)->default_message, 'Internal Server Error', 'right message';
 is $res->code(501)->default_message, 'Not Implemented',       'right message';
 is $res->code(502)->default_message, 'Bad Gateway',           'right message';

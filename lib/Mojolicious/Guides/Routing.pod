@@ -486,6 +486,30 @@ methods to pass.
   $r->route('/bye')->via('GET', 'POST')
     ->to(controller => 'foo', action => 'bye');
 
+=head2 WebSockets
+
+With the method L<Mojolicious::Routes::Route/"websocket"> you can restrict
+access to WebSocket handshakes, which are normal C<GET> requests with some
+additional information.
+
+  # /echo (WebSocket handshake)
+  $r->websocket('/echo')->to(controller => 'foo', action => 'echo');
+
+  # Controller
+  package MyApp::Foo;
+  use Mojo::Base 'Mojolicious::Controller';
+
+  # Action
+  sub echo {
+    my $self = shift;
+    $self->on(message => sub {
+      my ($self, $message) = @_;
+      $self->send("echo: $message");
+    });
+  }
+
+  1;
+
 =head2 Bridges
 
 Bridges can be used to share code with multiple nested routes, because unlike
@@ -592,6 +616,16 @@ which makes them a very powerful tool especially for plugins.
 
   1;
 
+Post-processing tasks such as setting additional response headers are a very
+common use.
+
+  # Make sure static files are cached
+  $self->hook(after_static_dispatch => sub {
+    my $self = shift;
+    $self->res->headers->cache_control('max-age=3600, must-revalidate')
+      if $self->res->code;
+  });
+
 For a full list of available hooks see L<Mojolicious/"hook">.
 
 =head2 Shortcuts
@@ -642,33 +676,22 @@ unescaped and decoded to Perl characters.
   use utf8;
 
   # GET /☃ (unicode snowman) -> {controller => 'foo', action => 'snowman'}
-  $r->get('/☃')->to(controller => 'foo', action => 'snowman');
+  $r->get('/☃')->to('foo#snowman');
 
-Just don't forget to use the L<utf8> pragma or you'll make the unicode
-snowman very sad.
+Just don't forget to use the L<utf8> pragma or you'll make the Unicode snowman
+very sad.
 
-=head2 WebSockets
+=head2 Rearranging routes
 
-You can restrict access to WebSocket handshakes using the method
-L<Mojolicious::Routes::Route/"websocket">.
+Until the first request has been handled, all routes can still be moved around
+or even removed. Especially for rearranging routes created by plugins this can
+be very useful.
 
-  # /echo (WebSocket handshake)
-  $r->websocket('/echo')->to(controller => 'foo', action => 'echo');
-
-  # Controller
-  package MyApp::Foo;
-  use Mojo::Base 'Mojolicious::Controller';
-
-  # Action
-  sub echo {
-    my $self = shift;
-    $self->on(message => sub {
-      my ($self, $message) = @_;
-      $self->send("echo: $message");
-    });
-  }
-
-  1;
+  # GET /example/show -> {controller => 'example', action => 'show'}
+  my $show = $r->get('/show')->to('example#show');
+  $r->any('/example')->add_child($show);
+  $r->get('/secrets/show')->to('secrets#show')->name('show_secrets');
+  $r->find('show_secrets')->remove;
 
 =head2 Conditions
 
@@ -696,9 +719,9 @@ play, they are basically router plugins.
   # /firefox_only (Firefox) -> {controller => 'foo', action => 'bar'}
   $r->get('/firefox_only')->over(agent => qr/Firefox/)->to('foo#bar');
 
-The method L<Mojolicious::Routes::Route/"add_condition"> registers the new
-condition in the router, while L<Mojolicious::Routes/"over"> actually applies
-it to the route.
+The method L<Mojolicious::Routes/"add_condition"> registers the new condition
+in the router, while L<Mojolicious::Routes/"over"> actually applies it to the
+route.
 
 =head2 Condition plugins
 

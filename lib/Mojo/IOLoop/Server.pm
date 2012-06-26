@@ -8,15 +8,15 @@ use IO::Socket::INET;
 use Scalar::Util 'weaken';
 use Socket qw(IPPROTO_TCP TCP_NODELAY);
 
-# IPv6 support requires IO::Socket::INET6
+# IPv6 support requires IO::Socket::IP
 use constant IPV6 => $ENV{MOJO_NO_IPV6}
   ? 0
-  : eval 'use IO::Socket::INET6 2.69 (); 1';
+  : eval 'use IO::Socket::IP 0.16 (); 1';
 
 # TLS support requires IO::Socket::SSL
 use constant TLS => $ENV{MOJO_NO_TLS} ? 0
-  : eval(IPV6 ? 'use IO::Socket::SSL 1.37 (); 1'
-  : 'use IO::Socket::SSL 1.37 "inet4"; 1');
+  : eval(IPV6 ? 'use IO::Socket::SSL 1.75 (); 1'
+  : 'use IO::Socket::SSL 1.75 "inet4"; 1');
 use constant TLS_READ  => TLS ? IO::Socket::SSL::SSL_WANT_READ()  : 0;
 use constant TLS_WRITE => TLS ? IO::Socket::SSL::SSL_WANT_WRITE() : 0;
 
@@ -59,7 +59,7 @@ sub listen {
 
   # Reuse file descriptor
   my $handle;
-  my $class = IPV6 ? 'IO::Socket::INET6' : 'IO::Socket::INET';
+  my $class = IPV6 ? 'IO::Socket::IP' : 'IO::Socket::INET';
   if (defined $fd) {
     $handle = $class->new;
     $handle->fdopen($fd, 'r') or croak "Can't open file descriptor $fd: $!";
@@ -86,13 +86,16 @@ sub listen {
 
   # TLS
   return unless $args->{tls};
-  croak "IO::Socket::SSL 1.37 required for TLS support" unless TLS;
+  croak "IO::Socket::SSL 1.75 required for TLS support" unless TLS;
 
-  # Options
+  # Options (Prioritize RC4 to mitigate BEAST attack)
   my $options = $self->{tls} = {
     SSL_cert_file => $args->{tls_cert} || $CERT,
-    SSL_key_file  => $args->{tls_key}  || $KEY,
-    SSL_startHandshake => 0
+    SSL_cipher_list =>
+      '!aNULL:!eNULL:!EXPORT:!DSS:!DES:!SSLv2:!LOW:RC4-SHA:RC4-MD5:ALL',
+    SSL_honor_cipher_order => 1,
+    SSL_key_file           => $args->{tls_key} || $KEY,
+    SSL_startHandshake     => 0
   };
   %$options = (
     %$options,
@@ -227,7 +230,7 @@ implements the following new ones.
   $server->listen(port => 3000);
 
 Create a new listen socket. Note that TLS support depends on
-L<IO::Socket::SSL> and IPv6 support on L<IO::Socket::INET6>.
+L<IO::Socket::SSL> (1.75+) and IPv6 support on L<IO::Socket::IP> (0.16+).
 
 These options are currently available:
 

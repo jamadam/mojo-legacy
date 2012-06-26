@@ -13,7 +13,8 @@ use Time::HiRes 'time';
 
 use constant DEBUG => $ENV{MOJO_IOLOOP_DEBUG} || 0;
 
-has client_class => 'Mojo::IOLoop::Client';
+has accept_interval => 0.025;
+has client_class    => 'Mojo::IOLoop::Client';
 has [qw(lock unlock)];
 has max_accepts     => 0;
 has max_connections => 1000;
@@ -80,12 +81,6 @@ sub delay {
   weaken $delay->ioloop($self)->{ioloop};
   $delay->once(finish => $cb) if $cb;
   return $delay;
-}
-
-# DEPRECATED in Leaf Fluttering In Wind!
-sub drop {
-  warn "Mojo::IOLoop->drop is DEPRECATED in favor of Mojo::IOLoop->remove!\n";
-  shift->remove(@_);
 }
 
 sub generate_port { Mojo::IOLoop::Server->generate_port }
@@ -224,7 +219,7 @@ sub _listening {
 sub _manage {
   my $self = shift;
   $self->{manager} ||= $self->recurring(
-    0.025 => sub {
+    $self->accept_interval => sub {
       my $self = shift;
 
       # Start listening if possible
@@ -347,9 +342,10 @@ L<Mojo::IOLoop> is a very minimalistic reactor based on L<Mojo::Reactor>, it
 has been reduced to the absolute minimal feature set required to build solid
 and scalable non-blocking TCP clients and servers.
 
-Optional modules L<EV>, L<IO::Socket::INET6> and L<IO::Socket::SSL> are
-supported transparently and used if installed. Individual features can also be
-disabled with the C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
+Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
+L<IO::Socket::SSL> (1.75+) are supported transparently and used if installed.
+Individual features can also be disabled with the C<MOJO_NO_IPV6> and
+C<MOJO_NO_TLS> environment variables.
 
 A TLS certificate and key are also built right in to make writing test servers
 as easy as possible. Also note that for convenience the C<PIPE> signal will be
@@ -360,6 +356,15 @@ See L<Mojolicious::Guides::Cookbook> for more.
 =head1 ATTRIBUTES
 
 L<Mojo::IOLoop> implements the following attributes.
+
+=head2 C<accept_interval>
+
+  my $interval = $loop->accept_interval;
+  $loop        = $loop->accept_interval(0.5);
+
+Interval in seconds for trying to reacquire the accept mutex and connection
+management, defaults to C<0.025>. Note that changing this value can affect
+performance and idle cpu usage.
 
 =head2 C<client_class>
 

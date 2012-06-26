@@ -22,19 +22,7 @@ has version          => '1.1';
 # "I'll keep it short and sweet. Family. Religion. Friendship.
 #  These are the three demons you must slay if you wish to succeed in
 #  business."
-sub at_least_version {
-  my ($self, $version) = @_;
-
-  # Major and minor
-  my ($search_major,  $search_minor)  = split /\./, $version;
-  my ($current_major, $current_minor) = split /\./, $self->version;
-
-  # Major version is newer
-  return 1 if $search_major < $current_major;
-
-  # Minor version is newer or equal
-  return $search_major == $current_major && $search_minor <= $current_minor;
-}
+sub at_least_version { shift->version >= shift }
 
 sub body {
   my $self = shift;
@@ -99,9 +87,9 @@ sub body_size { shift->content->body_size }
 #  It cost 80 million dollars to make.
 #  How do you sleep at night?
 #  On top of a pile of money, with many beautiful women."
-sub build_body       { shift->_build('body') }
-sub build_headers    { shift->_build('header') }
-sub build_start_line { shift->_build('start_line') }
+sub build_body       { shift->_build('get_body_chunk') }
+sub build_headers    { shift->_build('get_header_chunk') }
+sub build_start_line { shift->_build('get_start_line_chunk') }
 
 sub cookie {
   my ($self, $name) = @_;
@@ -310,10 +298,9 @@ sub write       { shift->content->write(@_) }
 sub write_chunk { shift->content->write_chunk(@_) }
 
 sub _build {
-  my ($self, $part) = @_;
+  my ($self, $method) = @_;
 
   # Build part from chunks
-  my $method = "get_${part}_chunk";
   my $buffer = '';
   my $offset = 0;
   while (1) {
@@ -339,15 +326,12 @@ sub _parse {
   my ($self, $until_body, $chunk) = @_;
 
   # Add chunk
-  $self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '';
-  $self->{raw_size} = defined $self->{raw_size} ? $self->{raw_size} : 0;
-  if (defined $chunk) {
-    $self->{raw_size} += length $chunk;
-    $self->{buffer} .= $chunk;
-  }
+  $chunk = defined $chunk ? $chunk : '';
+  $self->{raw_size} += length $chunk;
+  $self->{buffer} .= $chunk;
 
   # Check message size
-  return $self->error('Maximum message size exceeded.', 413)
+  return $self->error('Maximum message size exceeded', 413)
     if $self->{raw_size} > $self->max_message_size;
 
   # Start line
@@ -356,7 +340,7 @@ sub _parse {
     # Check line size
     my $len = index $self->{buffer}, "\x0a";
     $len = length $self->{buffer} if $len < 0;
-    return $self->error('Maximum line size exceeded.', 431)
+    return $self->error('Maximum line size exceeded', 431)
       if $len > $self->max_line_size;
 
     # Parse
@@ -386,7 +370,7 @@ sub _parse {
   }
 
   # Check line size
-  return $self->error('Maximum line size exceeded.', 431)
+  return $self->error('Maximum line size exceeded', 431)
     if $self->headers->is_limit_exceeded;
 
   # Finished
@@ -658,8 +642,8 @@ to perform a C<find> on it right away, which returns a collection.
 
   my $message          = $message->error;
   my ($message, $code) = $message->error;
-  $message             = $message->error('Parser error.');
-  $message             = $message->error('Parser error.', 500);
+  $message             = $message->error('Parser error');
+  $message             = $message->error('Parser error', 500);
 
 Parser errors and codes.
 

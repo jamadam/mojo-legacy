@@ -2,10 +2,9 @@ package Mojo::Template;
 use Mojo::Base -base;
 
 use Carp 'croak';
-use IO::Handle;
 use Mojo::ByteStream;
 use Mojo::Exception;
-use Mojo::Util qw(decode encode);
+use Mojo::Util qw(decode encode slurp);
 
 # "If for any reason you're not completely satisfied, I hate you."
 has [qw(auto_escape compiled)];
@@ -295,9 +294,7 @@ sub render_file {
 
   # Slurp file
   $self->name($path) unless defined $self->{name};
-  croak qq{Can't open template "$path": $!} unless open my $file, '<', $path;
-  my $tmpl = '';
-  while ($file->sysread(my $buffer, 131072, 0)) { $tmpl .= $buffer }
+  my $tmpl = slurp $path;
 
   # Decode and render
   if (my $encoding = $self->encoding) {
@@ -305,18 +302,6 @@ sub render_file {
       unless defined($tmpl = decode $encoding, $tmpl);
   }
   return $self->render($tmpl, @_);
-}
-
-sub render_file_to_file {
-  my ($self, $spath, $tpath) = (shift, shift, shift);
-  my $output = $self->render_file($spath, @_);
-  return ref $output ? $output : $self->_write_file($tpath, $output);
-}
-
-sub render_to_file {
-  my ($self, $tmpl, $path) = (shift, shift, shift);
-  my $output = $self->render($tmpl, @_);
-  return ref $output ? $output : $self->_write_file($path, $output);
 }
 
 sub _trim {
@@ -341,18 +326,6 @@ sub _trim {
     # Text left
     return if length $value;
   }
-}
-
-sub _write_file {
-  my ($self, $path, $output) = @_;
-
-  # Encode and write to file
-  croak qq{Can't open file "$path": $!} unless open my $file, '>', $path;
-  $output = encode $self->encoding, $output if $self->encoding;
-  croak qq{Can't write to file "$path": $!}
-    unless defined $file->syswrite($output);
-
-  return;
 }
 
 1;
@@ -402,6 +375,14 @@ L<Mojo::Template> is a minimalistic and very Perl-ish template engine,
 designed specifically for all those small tasks that come up during big
 projects. Like preprocessing a configuration file, generating text from
 heredocs and stuff like that.
+
+See L<Mojolicious::Guides::Rendering> for information on how to generate
+content with the L<Mojolicious> renderer.
+
+=head1 SYNTAX
+
+For all templates L<strict>, L<warnings> and Perl 5.10 features are
+automatically enabled.
 
   <% Perl code %>
   <%= Perl expression, replaced with result %>
@@ -476,8 +457,6 @@ stringify to error messages with context.
   4: % my $i = 2; xx
   5: %= $i * 2
   6: </body>
-
-See L<Mojolicious::Guides::Rendering> for more.
 
 =head1 ATTRIBUTES
 
@@ -697,21 +676,6 @@ Render template.
   my $output = $mt->render_file('/tmp/foo.mt', @args);
 
 Render template file.
-
-=head2 C<render_file_to_file>
-
-  my $exception = $mt->render_file_to_file('/tmp/foo.mt', '/tmp/foo.txt');
-  my $exception
-    = $mt->render_file_to_file('/tmp/foo.mt', '/tmp/foo.txt', @args);
-
-Render template file to another file.
-
-=head2 C<render_to_file>
-
-  my $exception = $mt->render_to_file($template, '/tmp/foo.txt');
-  my $exception = $mt->render_to_file($template, '/tmp/foo.txt', @args);
-
-Render template to a file.
 
 =head1 SEE ALSO
 

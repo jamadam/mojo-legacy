@@ -29,7 +29,7 @@ my %MESSAGES = (
   304 => 'Not Modified',
   305 => 'Use Proxy',
   307 => 'Temporary Redirect',
-  308 => 'Permanent Redirect',                 # draft-reschke-http-status-308
+  308 => 'Permanent Redirect',                 # Draft
   400 => 'Bad Request',
   401 => 'Unauthorized',
   402 => 'Payment Required',
@@ -57,7 +57,7 @@ my %MESSAGES = (
   428 => 'Precondition Required',              # RFC 6585
   429 => 'Too Many Requests',                  # RFC 6585
   431 => 'Request Header Fields Too Large',    # RFC 6585
-  449 => 'Retry With',                         # Unofficial (Microsoft)
+  451 => 'Unavailable For Legal Reasons',      # Draft
   500 => 'Internal Server Error',
   501 => 'Not Implemented',
   502 => 'Bad Gateway',
@@ -69,7 +69,7 @@ my %MESSAGES = (
   508 => 'Loop Detected',                      # RFC 5842
   509 => 'Bandwidth Limit Exceeded',           # Unofficial
   510 => 'Not Extended',                       # RFC 2774
-  511 => 'Network Authentication Required',    # RFC 6585
+  511 => 'Network Authentication Required'     # RFC 6585
 );
 
 sub cookies {
@@ -135,7 +135,7 @@ sub _parse_start_line {
 
   # We have a full HTTP 1.0+ response line
   return unless defined(my $line = get_line \$self->{buffer});
-  return $self->error('Bad response start line.')
+  return $self->error('Bad response start line')
     unless $line =~ m!^\s*HTTP/(\d\.\d)\s+(\d\d\d)\s*(.+)?$!;
   $self->version($1)->code($2)->message($3);
   $self->content->auto_relax(1);

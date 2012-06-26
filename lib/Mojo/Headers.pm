@@ -89,12 +89,11 @@ sub names {
 }
 
 sub parse {
-  my ($self, $chunk) = @_;
+  my $self = shift;
 
   # Parse headers with size limit
   $self->{state} = 'headers';
-  $self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '';
-  $self->{buffer} .= $chunk if defined $chunk;
+  $self->{buffer} .= do {my $buffer = shift; defined $buffer ? $buffer : ''};
   my $headers = $self->{cache} ||= [];
   my $max = $self->max_line_size;
   while (defined(my $line = get_line \$self->{buffer})) {
@@ -106,7 +105,7 @@ sub parse {
     }
 
     # New header
-    if ($line =~ /^(\S+)\s*:\s*(.*)$/) { push @$headers, $1, $2 }
+    elsif ($line =~ /^(\S+)\s*:\s*(.*)$/) { push @$headers, $1, $2 }
 
     # Multiline
     elsif (@$headers && $line =~ s/^\s+//) { $headers->[-1] .= " $line" }
@@ -126,6 +125,8 @@ sub parse {
   return $self;
 }
 
+# "You don't like your job, you don't strike.
+#  You go in every day and do it really half-assed. That's the American way."
 sub referrer { scalar shift->header(Referer => @_) }
 
 sub remove {
@@ -157,6 +158,8 @@ sub to_hash {
   return \%hash;
 }
 
+# "The only thing I asked you to do for this party was put on clothes,
+#  and you didn't do it."
 sub to_string {
   my $self = shift;
 

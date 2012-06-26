@@ -1,13 +1,14 @@
 package Mojo::Util;
 use Mojo::Base 'Exporter';
 
+use Carp 'croak';
 use Digest::MD5 qw(md5 md5_hex);
 BEGIN {eval {require Digest::SHA; import Digest::SHA qw(sha1 sha1_hex)}}
-use Encode 'find_encoding';
+use Encode ();
 use File::Basename 'dirname';
 use File::Spec::Functions 'catfile';
+use IO::Handle;
 use MIME::Base64 qw(decode_base64 encode_base64);
-use MIME::QuotedPrint qw(decode_qp encode_qp);
 
 # Punycode bootstring parameters
 use constant {
@@ -35,15 +36,12 @@ my %ENTITIES;
 my %REVERSE = ("\x{0027}" => '#39;');
 $REVERSE{$ENTITIES{$_}} = defined $REVERSE{$ENTITIES{$_}} ? $REVERSE{$ENTITIES{$_}} : $_ for sort grep {/;/} keys %ENTITIES;
 
-# Encode cache
-my %ENCODE;
-
 # "Bart, stop pestering Satan!"
 our @EXPORT_OK = (
-  qw(b64_decode b64_encode camelize decamelize decode encode get_line),
-  qw(hmac_md5_sum hmac_sha1_sum html_escape html_unescape md5_bytes md5_sum),
-  qw(punycode_decode punycode_encode qp_decode qp_encode quote),
-  qw(secure_compare sha1_bytes sha1_sum trim unquote url_escape),
+  qw(b64_decode b64_encode camelize class_to_file class_to_path decamelize),
+  qw(decode encode get_line hmac_md5_sum hmac_sha1_sum html_escape),
+  qw(html_unescape md5_bytes md5_sum punycode_decode punycode_encode),
+  qw(quote secure_compare sha1_bytes sha1_sum slurp trim unquote url_escape),
   qw(url_unescape xml_escape)
 );
 
@@ -60,6 +58,15 @@ sub camelize {
     join '', map { ucfirst lc } split /_/, $_
   } split /-/, $string;
 }
+
+sub class_to_file {
+  my $class = shift;
+  $class =~ s/:://g;
+  $class =~ s/([A-Z])([A-Z]*)/$1.lc($2)/ge;
+  return decamelize($class);
+}
+
+sub class_to_path { join '.', join('/', split /::|'/, shift), 'pm' }
 
 sub decamelize {
   my $string = shift;
@@ -80,46 +87,19 @@ sub decamelize {
 
 sub decode {
   my ($encoding, $bytes) = @_;
-
-  # Try decoding
-  return unless eval {
-
-    # UTF-8
-    if ($encoding eq 'UTF-8') { die unless utf8::decode $bytes }
-
-    # Everything else
-    else {
-      $bytes
-        = ($ENCODE{$encoding} ||= find_encoding($encoding))->decode($bytes, 1);
-    }
-
-    1;
-  };
-
+  return unless eval { $bytes = Encode::decode($encoding, $bytes, 1); 1 };
   return $bytes;
 }
 
-sub encode {
-  my ($encoding, $chars) = @_;
-
-  # UTF-8
-  if ($encoding eq 'UTF-8') {
-    utf8::encode $chars;
-    return $chars;
-  }
-
-  # Everything else
-  return ($ENCODE{$encoding} ||= find_encoding($encoding))->encode($chars);
-}
+sub encode { Encode::encode(shift, shift) }
 
 sub get_line {
-  my $stringref = shift;
 
   # Locate line ending
-  return if (my $pos = index $$stringref, "\x0a") == -1;
+  return if (my $pos = index ${$_[0]}, "\x0a") == -1;
 
   # Extract line and ending
-  my $line = substr $$stringref, 0, $pos + 1, '';
+  my $line = substr ${$_[0]}, 0, $pos + 1, '';
   $line =~ s/\x0d?\x0a$//;
 
   return $line;
@@ -267,10 +247,6 @@ sub punycode_encode {
   return $output;
 }
 
-sub qp_decode { decode_qp(shift) }
-
-sub qp_encode { encode_qp(shift) }
-
 sub quote {
   my $string = shift;
   $string =~ s/(["\\])/\\$1/g;
@@ -287,6 +263,14 @@ sub secure_compare {
 
 sub sha1_bytes { sha1(@_) }
 sub sha1_sum   { sha1_hex(@_) }
+
+sub slurp {
+  my $path = shift;
+  croak qq{Can't open file "$path": $!} unless open my $file, '<', $path;
+  my $content = '';
+  while ($file->sysread(my $buffer, 131072, 0)) { $content .= $buffer }
+  return $content;
+}
 
 sub trim {
   my $string = shift;
@@ -444,6 +428,25 @@ Convert snake case string to camel case and replace C<-> with C<::>.
   # "FooBar::Baz"
   camelize 'FooBar::Baz';
 
+=head2 C<class_to_file>
+
+  my $file = class_to_file 'Foo::Bar';
+
+Convert a class name to a file.
+
+  Foo::Bar -> foo_bar
+  FOO::Bar -> foobar
+  FooBar   -> foo_bar
+  FOOBar   -> foobar
+
+=head2 C<class_to_path>
+
+  my $path = class_to_path 'Foo::Bar';
+
+Convert class name to path.
+
+  Foo::Bar -> Foo/Bar.pm
+
 =head2 C<decamelize>
 
   my $snakecase = decamelize $camelcase;
@@ -463,7 +466,7 @@ Convert camel case string to snake case and replace C<::> with C<->.
 
   my $chars = decode 'UTF-8', $bytes;
 
-Decode bytes to characters.
+Decode bytes to characters and return C<undef> if decoding failed.
 
 =head2 C<encode>
 
@@ -534,18 +537,6 @@ Punycode encode string.
 
 Quote string.
 
-=head2 C<qp_decode>
-
-  my $string = qp_decode $qp;
-
-Quoted Printable decode string.
-
-=head2 C<qp_encode>
-
-  my $qp = qp_encode $string;
-
-Quoted Printable encode string.
-
 =head2 C<secure_compare>
 
   my $success = secure_compare $string1, $string2;
@@ -563,6 +554,12 @@ Generate binary SHA1 checksum for string.
   my $checksum = sha1_sum $string;
 
 Generate SHA1 checksum for string.
+
+=head2 C<slurp>
+
+  my $content = slurp '/etc/passwd';
+
+Read all data at once from file.
 
 =head2 C<trim>
 

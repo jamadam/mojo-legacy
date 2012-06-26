@@ -12,7 +12,7 @@ use Test::More tests => 201;
 
 # "Let's see how crazy I am now, Nixon. The correct answer is very."
 use Mojo::ByteStream 'b';
-use Mojo::CookieJar;
+use Mojo::UserAgent::CookieJar;
 use Mojolicious::Lite;
 use Test::Mojo;
 
@@ -253,7 +253,7 @@ ok $t->tx->res->cookie('mojolicious')->httponly,
 # GET /bridge2stash (broken session cookie)
 $t->reset_session;
 my $session = b("☃☃☃☃☃")->encode->b64_encode('');
-my $hmac    = $session->clone->hmac_md5_sum($t->app->secret);
+my $hmac    = $session->clone->hmac_sha1_sum($t->app->secret);
 $t->get_ok('/bridge2stash' => {Cookie => "mojolicious=$session--$hmac"})
   ->status_is(200)->content_is("stash too!!!!!!!\n");
 
@@ -265,7 +265,7 @@ $t->get_ok('/bridge2stash' => {'X-Flash' => 1})->status_is(200)
 # GET /bridge2stash (again without cookie jar)
 $t->get_ok('/bridge2stash' => {'X-Flash' => 1})->status_is(200)
   ->content_is("stash too!!!!!!!\n");
-$t->ua->cookie_jar(Mojo::CookieJar->new);
+$t->ua->cookie_jar(Mojo::UserAgent::CookieJar->new);
 
 # GET /bridge2stash (fresh start)
 $t->reset_session;

@@ -7,13 +7,15 @@ use Mojo::Util 'md5_sum';
 use Scalar::Util 'blessed';
 
 has app => sub {
-  my $self = shift;
+
+  # Try to detect application
   return $ENV{MOJO_APP} if ref $ENV{MOJO_APP};
-  if (my $e = Mojo::Loader->load($self->app_class)) { die $e if ref $e }
-  return $self->app_class->new;
+
+  # Load and initialize application
+  my $class = $ENV{MOJO_APP} ||= 'Mojo::HelloWorld';
+  if (my $e = Mojo::Loader->new->load($class)) { die $e if ref $e }
+  return $ENV{MOJO_APP} = $class->new;
 };
-has app_class =>
-  sub { ref $ENV{MOJO_APP} || $ENV{MOJO_APP} || 'Mojo::HelloWorld' };
 
 sub new {
   my $self = shift->SUPER::new(@_);
@@ -108,15 +110,8 @@ L<Mojo::Server> implements the following attributes.
   my $app = $server->app;
   $server = $server->app(MojoSubclass->new);
 
-Application this server handles, defaults to a L<Mojo::HelloWorld> object.
-
-=head2 C<app_class>
-
-  my $app_class = $server->app_class;
-  $server       = $server->app_class('MojoSubclass');
-
-Class of the application this server handles, defaults to the value of the
-C<MOJO_APP> environment variable or L<Mojo::HelloWorld>.
+Application this server handles, defaults to the value of the C<MOJO_APP>
+environment variable or a L<Mojo::HelloWorld> object.
 
 =head1 METHODS
 

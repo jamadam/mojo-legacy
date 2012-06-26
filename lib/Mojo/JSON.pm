@@ -45,16 +45,16 @@ sub decode {
   $self->error(undef);
 
   # Missing input
-  $self->error('Missing or empty input.') and return unless $bytes;
+  $self->error('Missing or empty input') and return unless $bytes;
 
   # Remove BOM
   $bytes =~ s/^(?:\357\273\277|\377\376\0\0|\0\0\376\377|\376\377|\377\376)//g;
 
   # Wide characters
-  $self->error('Wide character in input.') and return
+  $self->error('Wide character in input') and return
     unless utf8::downgrade($bytes, 1);
 
-  # Detect and decode unicode
+  # Detect and decode Unicode
   my $encoding = 'UTF-8';
   $bytes =~ $UTF_PATTERNS->{$_} and $encoding = $_ for keys %$UTF_PATTERNS;
   $bytes = Mojo::Util::decode $encoding, $bytes;
@@ -314,7 +314,7 @@ sub _exception {
   }
 
   # Throw
-  die "$context.\n";
+  die "$context\n";
 }
 
 # Emulate boolean type
@@ -356,7 +356,7 @@ similar native Perl value.
   null  -> undef
 
 Decoding UTF-16 (LE/BE) and UTF-32 (LE/BE) will be handled transparently,
-encoding will only generate UTF-8. The two unicode whitespace characters
+encoding will only generate UTF-8. The two Unicode whitespace characters
 C<u2028> and C<u2029> will always be escaped to make JSONP easier.
 
 =head1 ATTRIBUTES
@@ -366,7 +366,7 @@ L<Mojo::JSON> implements the following attributes.
 =head2 C<error>
 
   my $err = $json->error;
-  $json   = $json->error('Oops!');
+  $json   = $json->error('Parser error');
 
 Parser errors.
 
@@ -386,7 +386,7 @@ Decode JSON.
 
   my $bytes = $json->encode({foo => 'bar'});
 
-Encode Perl structure.
+Encode Perl data structure.
 
 =head2 C<false>
 

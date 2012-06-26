@@ -7,9 +7,10 @@ use utf8;
 #  Yes. *lie dectector blows up*"
 use Test::More tests => 146;
 
-# Need to be loaded first to trigger edge case
+# MIME::Base64 needs to be loaded first to trigger edge case
 use MIME::Base64;
-use MIME::QuotedPrint;
+use File::Spec::Functions qw(catfile splitdir);
+use FindBin;
 use Mojo::Util 'md5_bytes';
 use Mojo::ByteStream 'b';
 
@@ -97,14 +98,6 @@ is "$stream", 'foo%C3%9F%C4%80bar%E2%98%BA', 'right url escaped result';
 # utf8 url_unescape
 $stream = b('foo%C3%9F%C4%80bar%E2%98%BA')->url_unescape->decode('UTF-8');
 is "$stream", "foo\x{df}\x{0100}bar\x{263a}", 'right url unescaped result';
-
-# qp_encode
-$stream = b("foo\x{99}bar$%^&3217");
-like $stream->qp_encode, qr/^foo\=99bar0\^\&3217/, 'right qp encoded result';
-
-# qp_decode
-$stream = b("foo=99bar0^&3217=\n");
-is $stream->qp_decode, "foo\x{99}bar$%^&3217", 'right qp decoded result';
 
 # quote
 $stream = b('foo; 23 "bar');
@@ -409,13 +402,14 @@ b(1, 2, 3)->say;
 *STDOUT = $stdout;
 is $buffer, "test\n123\n", 'right output';
 
-# Nested bytestreams
-$stream = b(b('test'));
-ok !ref $stream->to_string, 'nested bytestream stringified';
-$stream = Mojo::ByteStream->new(Mojo::ByteStream->new('test'));
-ok !ref $stream->to_string, 'nested bytestream stringified';
+# slurp
+my $file = catfile(splitdir($FindBin::Bin), qw(templates exception.mt));
+$stream = b($file)->slurp;
+is $stream, "test\n% die;\n123\n", 'right content';
+$stream = b($file)->slurp->split("\n")->grep(sub {/die/})->join('');
+is $stream, '% die;', 'right content';
 
-# Secure compare
+# secure_compare
 ok b('hello')->secure_compare('hello'),  'values are equal';
 ok !b('hell')->secure_compare('hello'),  'values are not equal';
 ok !b('hallo')->secure_compare('hello'), 'values are not equal';
@@ -433,3 +427,9 @@ ok b('♥1')->secure_compare('♥1'),    'values are equal';
 ok !b('♥')->secure_compare('♥0'),    'values are not equal';
 ok !b('0♥')->secure_compare('♥'),    'values are not equal';
 ok !b('0♥1')->secure_compare('1♥0'), 'values are not equal';
+
+# Nested bytestreams
+$stream = b(b('test'));
+ok !ref $stream->to_string, 'nested bytestream stringified';
+$stream = Mojo::ByteStream->new(Mojo::ByteStream->new('test'));
+ok !ref $stream->to_string, 'nested bytestream stringified';

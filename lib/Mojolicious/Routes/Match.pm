@@ -1,7 +1,6 @@
 package Mojolicious::Routes::Match;
 use Mojo::Base -base;
 
-use List::Util 'first';
 use Mojo::Util qw(decode url_unescape);
 
 has captures => sub { {} };
@@ -40,7 +39,7 @@ sub match {
   # Method
   if (my $methods = $r->via) {
     my $method = $self->{method} eq 'HEAD' ? 'GET' : $self->{method};
-    return unless first { $method eq $_ } @$methods;
+    return unless grep {$_ eq $method} @$methods;
   }
 
   # Conditions
@@ -71,9 +70,6 @@ sub match {
     delete $captures->{cb};
     delete $captures->{app};
   }
-
-  # DEPRECATED in Leaf Fluttering In Wind!
-  return $self->endpoint($r) if $r->block && $empty;
 
   # Endpoint
   return $self->endpoint($r) if $endpoint && $empty;
@@ -144,7 +140,7 @@ sub path_for {
     = defined $captures->{format}
     ? $captures->{format}
     : $pattern->defaults->{format}
-    if $pattern->reqs->{format};
+    if $pattern->constraints->{format};
 
   # Render
   my $path = $endpoint->render('', \%values);

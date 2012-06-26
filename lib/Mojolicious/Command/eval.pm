@@ -1,5 +1,5 @@
 package Mojolicious::Command::eval;
-use Mojo::Base 'Mojo::Command';
+use Mojo::Base 'Mojolicious::Command';
 
 use Getopt::Long qw(GetOptions :config no_auto_abbrev no_ignore_case);
 
@@ -32,8 +32,7 @@ sub run {
   no warnings;
   my $result = eval "package main; sub app { \$app }; $code";
   say $result if $verbose && defined $result;
-  die $@ if $@;
-  return $result;
+  return $@ ? die($@) : $result;
 }
 
 1;
@@ -55,8 +54,8 @@ L<Mojolicious::Command::eval> runs code against applications.
 
 =head1 ATTRIBUTES
 
-L<Mojolicious::Command::eval> inherits all attributes from L<Mojo::Command>
-and implements the following new ones.
+L<Mojolicious::Command::eval> inherits all attributes from
+L<Mojolicious::Command> and implements the following new ones.
 
 =head2 C<description>
 
@@ -74,8 +73,8 @@ Usage information for this command, used for the help screen.
 
 =head1 METHODS
 
-L<Mojolicious::Command::eval> inherits all methods from L<Mojo::Command> and
-implements the following new ones.
+L<Mojolicious::Command::eval> inherits all methods from
+L<Mojolicious::Command> and implements the following new ones.
 
 =head2 C<run>
 

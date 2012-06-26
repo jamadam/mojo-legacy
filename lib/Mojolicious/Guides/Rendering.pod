@@ -208,8 +208,8 @@ performed.
 
 =head2 Rendering JSON
 
-The C<json> stash value allows you to pass Perl structures to the renderer
-which get directly encoded to JSON.
+The C<json> stash value allows you to pass Perl data structures to the
+renderer which get directly encoded to JSON.
 
   $self->render(json => {foo => [1, 'test', 3]});
 
@@ -321,6 +321,34 @@ single render call.
 
 And if no viable representation could be found, the C<any> fallback will be
 used or an empty C<204> response rendered automatically.
+
+=head2 Rendering C<exception> and C<not_found> pages
+
+By now you've probably already encountered the built-in 404 (Not Found) and
+500 (Server Error) pages, that get rendered automatically when you make a
+mistake. Especially during development they can be a great help, the methods
+L<Mojolicious::Controller/"render_exception"> and
+L<Mojolicious::Controller/"render_not_found"> can be used to render them
+manually.
+
+  # 500
+  $self->render_exception("I've made a huge mistake!");
+
+  # 404
+  $self->render_not_found;
+
+You can also change the templates of those pages, since you most likely want
+to show your users something more closely related to your application in
+production. The renderer will always try to find C<exception.$mode.$format.*>
+or C<not_found.$mode.$format.*> before falling back to the built-in default
+templates.
+
+  @@ not_found.production.html.ep
+  <!DOCTYPE html>
+  <html>
+    <head><title>Page not found</title></head>
+    <body>Page does not seem to exist.</body>
+  </html>
 
 =head2 Helpers
 
@@ -724,56 +752,9 @@ plugin.
   @@ alertassets.html.ep
   %= javascript "/alertassets.js"
 
-=head2 Custom C<exception> and C<not_found> templates
-
-While the built-in C<exception> and C<not_found> templates are very useful
-during development, you most likely want to show your users something more
-related to your application in production. That's why L<Mojolicious> will
-always try to render C<exception.$mode.$format.*> or
-C<not_found.$mode.$format.*> before falling back to the built-in default
-templates.
-
-  @@ not_found.production.html.ep
-  <!DOCTYPE html>
-  <html>
-    <head><title>Page not found</title></head>
-    <body>Page does not seem to exist.</body>
-  </html>
-
 =head1 ADVANCED
 
 Less commonly used and more powerful features.
-
-=head2 Internationalization
-
-Thanks to L<Locale::Maketext> all you need for basic internationalization
-support in your application is the plugin L<Mojolicious::Plugin::I18N> and a
-few lexicon classes.
-
-  package MyApp::I18N::de;
-  use Mojo::Base -strict;
-  use base 'MyApp::I18N';
-
-  our %Lexicon = ('Hello World' => 'Hallo Welt');
-
-  package main;
-  use Mojolicious::Lite;
-
-  plugin I18N => {namespace => 'MyApp::I18N'};
-
-  get '/' => 'hello';
-
-  app->start;
-  __DATA__
-
-  @@ hello.html.ep
-  <%=l 'Hello World' %>!
-
-Preferred languages will be automatically detected from the C<Accept-Language>
-header or can be manually changed with the helper
-L<Mojolicious::Plugin::I18N/"languages">.
-
-  $ ./myapp.pl get -H 'Accept-Language: de' /
 
 =head2 Chunked transfer encoding
 
@@ -820,7 +801,7 @@ be easily changed.
 
   1;
 
-All templates from the DATA section are bound to the encoding of the Perl
+All templates from the C<DATA> section are bound to the encoding of the Perl
 script, so don't forget to use the L<utf8> pragma if necessary.
 
   use Mojolicious::Lite;

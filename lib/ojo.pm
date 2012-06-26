@@ -6,6 +6,7 @@ use Mojo::Base -strict;
 use Mojo::ByteStream 'b';
 use Mojo::Collection 'c';
 use Mojo::DOM;
+use Mojo::JSON;
 use Mojo::UserAgent;
 
 # Silent oneliners
@@ -36,18 +37,23 @@ sub import {
   $UA->app(*{"${caller}::app"}->());
 
   # Functions
+  *{"${caller}::a"} = sub { *{"${caller}::any"}->(@_) and return $UA->app };
   *{"${caller}::b"} = \&b;
   *{"${caller}::c"} = \&c;
-  *{"${caller}::a"}
-    = sub { *{"${caller}::any"}->(@_) and return *{"${caller}::app"}->() };
   *{"${caller}::d"} = sub { _request($UA->build_tx(DELETE => @_)) };
   *{"${caller}::f"} = sub { _request($UA->build_form_tx(@_)) };
   *{"${caller}::g"} = sub { _request($UA->build_tx(GET => @_)) };
   *{"${caller}::h"} = sub { _request($UA->build_tx(HEAD => @_)) };
+  *{"${caller}::j"} = sub {
+    my $d = shift;
+    my $j = Mojo::JSON->new;
+    return ref $d eq 'ARRAY' || ref $d eq 'HASH' ? $j->encode($d) : $j->decode($d);
+  };
   *{"${caller}::o"} = sub { _request($UA->build_tx(OPTIONS => @_)) };
-  *{"${caller}::p"} = sub { _request($UA->build_tx(POST => @_)) };
-  *{"${caller}::t"} = sub { _request($UA->build_tx(PATCH => @_)) };
-  *{"${caller}::u"} = sub { _request($UA->build_tx(PUT => @_)) };
+  *{"${caller}::p"} = sub { _request($UA->build_tx(POST    => @_)) };
+  *{"${caller}::r"} = sub { $UA->app->dumper(@_) };
+  *{"${caller}::t"} = sub { _request($UA->build_tx(PATCH   => @_)) };
+  *{"${caller}::u"} = sub { _request($UA->build_tx(PUT     => @_)) };
   *{"${caller}::x"} = sub { Mojo::DOM->new(@_) };
 }
 
@@ -89,13 +95,13 @@ L<ojo> implements the following functions.
 
 =head2 C<a>
 
-  my $app = a('/' => sub { shift->render(json => {hello => 'world'}) });
+  my $app = a('/hello' => sub { shift->render(json => {hello => 'world'}) });
 
 Create a route with L<Mojolicious::Lite/"any"> and return the current
 L<Mojolicious::Lite> object. See also the L<Mojolicious::Lite> tutorial for
 more argument variations.
 
-  $ perl -Mojo -E 'a("/" => {text => "Hello Mojo!"})->start' daemon
+  $ perl -Mojo -E 'a("/hello" => {text => "Hello Mojo!"})->start' daemon
 
 =head2 C<b>
 
@@ -143,6 +149,16 @@ L<Mojo::Message::Response> object.
 Perform C<HEAD> request with L<Mojo::UserAgent/"head"> and return resulting
 L<Mojo::Message::Response> object.
 
+=head2 C<j>
+
+  my $bytes = j({foo => 'bar'});
+  my $array = j($bytes);
+  my $hash  = j($bytes);
+
+Encode Perl data structure or decode JSON with L<Mojo::JSON>.
+
+  $ perl -Mojo -E 'say j({hello => "world!"})'
+
 =head2 C<o>
 
   my $res = o('mojolicio.us');
@@ -158,6 +174,14 @@ resulting L<Mojo::Message::Response> object.
 
 Perform C<POST> request with L<Mojo::UserAgent/"post"> and return resulting
 L<Mojo::Message::Response> object.
+
+=head2 C<r>
+
+  my $perl = r({data => 'structure'});
+
+Dump a Perl data structure using L<Data::Dumper>.
+
+  perl -Mojo -E 'say r(g("mojolicio.us")->headers->to_hash)'
 
 =head2 C<t>
 
@@ -181,7 +205,7 @@ L<Mojo::Message::Response> object.
 
 Turn HTML5/XML input into L<Mojo::DOM> object.
 
-  $ perl -Mojo -E 'say x("<div>Hello!</div>")->at("div")->text'
+  $ perl -Mojo -E 'say x(b("/home/sri/test.html")->slurp)->at("title")->text'
 
 =head1 SEE ALSO
 
