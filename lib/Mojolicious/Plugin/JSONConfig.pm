@@ -33,8 +33,8 @@ sub render {
   $prepend .= q[sub app; *app = sub { $app }; use Mojo::Base -strict;];
 
   # Render
-  my $mt = Mojo::Template->new($conf->{template} || {});
-  my $json = $mt->prepend($prepend)->render($content, $app);
+  my $mt = Mojo::Template->new($conf->{template} || {})->name($file);
+  my $json = $mt->prepend($prepend . $mt->prepend)->render($content, $app);
   return ref $json ? die($json) : encode('UTF-8', $json);
 }
 
@@ -58,7 +58,10 @@ Mojolicious::Plugin::JSONConfig - JSON configuration plugin
   # Mojolicious::Lite
   my $config = plugin 'JSONConfig';
 
-  # Reads "myapp.json" by default
+  # foo.html.ep
+  %= $config->{foo}
+
+  # The configuration is available application wide
   my $config = app->config;
 
   # Everything can be customized with options

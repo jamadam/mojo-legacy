@@ -1,7 +1,7 @@
 package Mojolicious::Command::routes;
 use Mojo::Base 'Mojolicious::Command';
 
-use re 'regexp_pattern';
+use MojoLegacy::re 'regexp_pattern';
 use Getopt::Long qw(GetOptions :config no_auto_abbrev no_ignore_case);
 
 has description => "Show available routes.\n";

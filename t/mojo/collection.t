@@ -1,6 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 50;
+use Test::More tests => 57;
 
 # "'What are you lookin at?' - the innocent words of a drunken child."
 use Mojo::Collection 'c';
@@ -29,6 +29,7 @@ is $collection->first, 5, 'right result';
 is_deeply $collection->first(sub { ref $_ eq 'ARRAY' }), [3, 2],
   'right result';
 is $collection->first(sub { shift() < 5 }), 4, 'right result';
+is $collection->first(qr/[1-4]/), 4, 'right result';
 is $collection->first(sub { ref $_ eq 'CODE' }), undef, 'no result';
 $collection = c();
 is $collection->first, undef, 'no result';
@@ -36,6 +37,9 @@ is $collection->first(sub { defined $_ }), undef, 'no result';
 
 # grep
 $collection = c(1, 2, 3, 4, 5, 6, 7, 8, 9);
+is_deeply [$collection->grep(qr/[6-9]/)->each], [6, 7, 8, 9], 'right elements';
+is_deeply [$collection->grep(sub {/[6-9]/})->each], [6, 7, 8, 9],
+  'right elements';
 is_deeply [$collection->grep(sub { $_ > 5 })->each], [6, 7, 8, 9],
   'right elements';
 is_deeply [$collection->grep(sub { $_ < 5 })->each], [1, 2, 3, 4],
@@ -110,3 +114,14 @@ is_deeply [$collection->slice(-3, -5)->each], [10, 6], 'right result';
 is_deeply [$collection->slice(1, 2, 3)->each], [2, 3, 4], 'right result';
 is_deeply [$collection->slice(6, 1, 4)->each], [7, 2, 5], 'right result';
 is_deeply [$collection->slice(6 .. 9)->each], [7, 10, 9, 8], 'right result';
+
+# pluck
+$collection = c(c(1, 2, 3), c(4, 5, 6), c(7, 8, 9));
+is $collection->pluck('reverse'), "3\n2\n1\n6\n5\n4\n9\n8\n7", 'right result';
+is $collection->pluck(join => '-'), "1-2-3\n4-5-6\n7-8-9", 'right result';
+
+# uniq
+$collection = c(1, 2, 3, 2, 3, 4, 5, 4);
+is_deeply [$collection->uniq->each], [1, 2, 3, 4, 5], 'right result';
+is_deeply [$collection->uniq->reverse->uniq->each], [5, 4, 3, 2, 1],
+  'right result';

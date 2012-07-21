@@ -9,7 +9,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 83;
+use Test::More tests => 86;
 
 # "This calls for a party, baby.
 #  I'm ordering 100 kegs, 100 hookers and 100 Elvis impersonators that aren't
@@ -17,6 +17,7 @@ use Test::More tests => 83;
 use Mojolicious::Lite;
 use Test::Mojo;
 
+# No real templates
 app->renderer->paths->[0] = app->home->rel_dir('does_not_exist');
 
 # Logger
@@ -139,20 +140,23 @@ $t->post_ok('/does_not_exist')->status_is(404)
 # GET /dead_template
 $t->get_ok('/dead_template')->status_is(500)->content_like(qr/1\./)
   ->content_like(qr/dead template!/);
+like $log, qr/dead template!/, 'right result';
 
 # GET /dead_included_template
 $t->get_ok('/dead_included_template')->status_is(500)->content_like(qr/1\./)
   ->content_like(qr/dead template!/);
 
 # GET /dead_template_with_layout
-$t->get_ok('/dead_template_with_layout')->status_is(500)->content_like(qr/2\./)
-  ->content_like(qr/dead template with layout!/);
+$t->get_ok('/dead_template_with_layout')->status_is(500)
+  ->content_like(qr/2\./)->content_like(qr/dead template with layout!/);
+like $log, qr/dead template with layout!/, 'right result';
 
 # GET /dead_action
 $t->get_ok('/dead_action')->status_is(500)
   ->content_type_is('text/html;charset=UTF-8')
   ->content_like(qr!get &#39;/dead_action&#39;!)
   ->content_like(qr/dead action!/);
+like $log, qr/dead action!/, 'right result';
 
 # GET /dead_action.xml (different format)
 $t->get_ok('/dead_action.xml')->status_is(500)->content_type_is('text/xml')

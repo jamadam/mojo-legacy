@@ -49,6 +49,7 @@ sub import {
     my $j = Mojo::JSON->new;
     return ref $d eq 'ARRAY' || ref $d eq 'HASH' ? $j->encode($d) : $j->decode($d);
   };
+  *{"${caller}::n"} = sub { _request($UA->build_json_tx(@_)) };
   *{"${caller}::o"} = sub { _request($UA->build_tx(OPTIONS => @_)) };
   *{"${caller}::p"} = sub { _request($UA->build_tx(POST    => @_)) };
   *{"${caller}::r"} = sub { $UA->app->dumper(@_) };
@@ -70,7 +71,7 @@ sub _request {
 
 =head1 NAME
 
-ojo - Fun Oneliners with Mojo!
+ojo - Fun oneliners with Mojo!
 
 =head1 SYNOPSIS
 
@@ -130,7 +131,7 @@ resulting L<Mojo::Message::Response> object.
   my $res = f('http://kraih.com' => {a => 'b'});
   my $res = f('kraih.com' => 'UTF-8' => {a => 'b'} => {DNT => 1});
 
-Perform C<POST> form request with L<Mojo::UserAgent/"post_form"> and return
+Perform C<POST> request with L<Mojo::UserAgent/"post_form"> and return
 resulting L<Mojo::Message::Response> object.
 
 =head2 C<g>
@@ -140,6 +141,8 @@ resulting L<Mojo::Message::Response> object.
 
 Perform C<GET> request with L<Mojo::UserAgent/"get"> and return resulting
 L<Mojo::Message::Response> object.
+
+  $ perl -Mojo -E 'say g("mojolicio.us")->dom("h1, h2, h3")->pluck("text")'
 
 =head2 C<h>
 
@@ -157,7 +160,15 @@ L<Mojo::Message::Response> object.
 
 Encode Perl data structure or decode JSON with L<Mojo::JSON>.
 
-  $ perl -Mojo -E 'say j({hello => "world!"})'
+  $ perl -Mojo -E 'b(j({hello => "world!"}))->spurt("hello.json")'
+
+=head2 C<n>
+
+  my $res = n('http://kraih.com' => {a => 'b'});
+  my $res = n('kraih.com' => {a => 'b'} => {DNT => 1});
+
+Perform C<POST> request with L<Mojo::UserAgent/"post_json"> and return
+resulting L<Mojo::Message::Response> object.
 
 =head2 C<o>
 
@@ -205,7 +216,7 @@ L<Mojo::Message::Response> object.
 
 Turn HTML5/XML input into L<Mojo::DOM> object.
 
-  $ perl -Mojo -E 'say x(b("/home/sri/test.html")->slurp)->at("title")->text'
+  $ perl -Mojo -E 'say x(b("test.html")->slurp)->at("title")->text'
 
 =head1 SEE ALSO
 

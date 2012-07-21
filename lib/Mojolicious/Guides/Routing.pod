@@ -512,9 +512,9 @@ additional information.
 
 =head2 Bridges
 
-Bridges can be used to share code with multiple nested routes, because unlike
-normal nested routes, they always match and result in additional dispatch
-cycles.
+Bridge routes can be used to share code with multiple nested routes, because
+unlike normal nested routes, they always match and result in additional
+dispatch cycles.
 
   # /foo     -> undef
   # /foo/bar -> {controller => 'foo', action => 'baz'}
@@ -626,6 +626,15 @@ common use.
       if $self->res->code;
   });
 
+Same for monitoring tasks.
+
+  # Forward exceptions to a web service
+  $self->hook(after_dispatch => sub {
+    my $self = shift;
+    return unless my $e = $self->stash('exception');
+    $self->ua->post_form('https://kraih.com/bugs' => {exception => $e});
+  });
+
 For a full list of available hooks see L<Mojolicious/"hook">.
 
 =head2 Shortcuts
@@ -690,6 +699,8 @@ be very useful.
   # GET /example/show -> {controller => 'example', action => 'show'}
   my $show = $r->get('/show')->to('example#show');
   $r->any('/example')->add_child($show);
+
+  # Nothing
   $r->get('/secrets/show')->to('secrets#show')->name('show_secrets');
   $r->find('show_secrets')->remove;
 

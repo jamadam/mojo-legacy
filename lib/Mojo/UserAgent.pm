@@ -35,7 +35,7 @@ has transactor => sub { Mojo::UserAgent::Transactor->new };
     *{__PACKAGE__ . '::' . lc($name)} = sub {
       my $self = shift;
       my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
-      $self->start($self->build_tx($name, @_), $cb);
+      return $self->start($self->build_tx($name, @_), $cb);
     };
   }
 }
@@ -67,18 +67,15 @@ sub app_url {
 }
 
 sub build_form_tx      { shift->transactor->form(@_) }
+sub build_json_tx      { shift->transactor->json(@_) }
 sub build_tx           { shift->transactor->tx(@_) }
 sub build_websocket_tx { shift->transactor->websocket(@_) }
 
 sub detect_proxy {
   my $self = shift;
-
-  # Upper case gets priority
   $self->http_proxy($ENV{HTTP_PROXY}   || $ENV{http_proxy});
   $self->https_proxy($ENV{HTTPS_PROXY} || $ENV{https_proxy});
-  $self->no_proxy([split /,/, $ENV{NO_PROXY} || $ENV{no_proxy} || '']);
-
-  return $self;
+  return $self->no_proxy([split /,/, $ENV{NO_PROXY} || $ENV{no_proxy} || '']);
 }
 
 sub need_proxy {
@@ -89,7 +86,13 @@ sub need_proxy {
 sub post_form {
   my $self = shift;
   my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
-  $self->start($self->build_form_tx(@_), $cb);
+  return $self->start($self->build_form_tx(@_), $cb);
+}
+
+sub post_json {
+  my $self = shift;
+  my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
+  return $self->start($self->build_json_tx(@_), $cb);
 }
 
 sub start {
@@ -103,8 +106,8 @@ sub start {
     unless ($self->{nb}) {
       croak 'Blocking request in progress' if keys %{$self->{connections}};
       warn "-- Switching to non-blocking mode\n" if DEBUG;
-      $self->_cleanup;
-      $self->{nb} = 1;
+      $self->{nb}++;
+      $self->_cleanup(1);
     }
     return $self->_start($tx, $cb);
   }
@@ -114,7 +117,7 @@ sub start {
   if (delete $self->{nb}) {
     croak 'Non-blocking requests in progress' if keys %{$self->{connections}};
     warn "-- Switching to blocking mode\n" if DEBUG;
-    $self->_cleanup;
+    $self->_cleanup(1);
   }
   $self->_start($tx, sub { $tx = $_[1] });
 
@@ -163,18 +166,18 @@ sub _cache {
 }
 
 sub _cleanup {
-  my $self = shift;
+  my ($self, $restart) = @_;
   return unless my $loop = $self->_loop;
 
-  # Stop server
-  delete $self->{port};
-  delete $self->{server};
-
   # Clean up active connections
-  $loop->remove($_) for keys %{$self->{connections} || {}};
+  $loop->remove($_) for keys %{delete $self->{connections} || {}};
 
   # Clean up keep alive connections
-  $loop->remove($_->[1]) for @{$self->{cache} || []};
+  $loop->remove($_->[1]) for @{delete $self->{cache} || []};
+
+  # Stop or restart server
+  delete $self->{server};
+  $self->_server if $restart;
 }
 
 sub _connect {
@@ -409,15 +412,14 @@ sub _redirect {
 sub _server {
   my ($self, $scheme) = @_;
 
-  # Restart with different scheme
-  delete $self->{port}   if $scheme;
-  return $self->{server} if $self->{port};
+  # Reuse server
+  return $self->{server} if $self->{server} && !$scheme;
 
   # Start test server
   my $loop   = $self->_loop;
   my $server = $self->{server}
     = Mojo::Server::Daemon->new(ioloop => $loop, silent => 1);
-  my $port = $self->{port} = $loop->generate_port;
+  my $port = $self->{port} ||= $loop->generate_port;
   die "Couldn't find a free TCP port for testing.\n" unless $port;
   $self->{scheme} = $scheme ||= 'http';
   $server->listen(["$scheme://127.0.0.1:$port"])->start;
@@ -537,7 +539,7 @@ Mojo::UserAgent - Non-blocking I/O HTTP 1.1 and WebSocket user agent
   if (my $res = $tx->success) { say $res->body }
   else {
     my ($message, $code) = $tx->error;
-    say $code ? "$code $message response" : "Connection error: $message";
+    say $code ? "$code response: $message" : "Connection error: $message";
   }
 
   # Quick JSON API request with Basic authentication
@@ -548,8 +550,8 @@ Mojo::UserAgent - Non-blocking I/O HTTP 1.1 and WebSocket user agent
   say $ua->get('mojolicio.us')->res->dom->html->head->title->text;
 
   # Scrape the latest headlines from a news site
-  $ua->max_redirects(5)->get('www.reddit.com/r/perl/')
-    ->res->dom('p.title > a.title')->each(sub { say $_->text });
+  say $ua->max_redirects(5)->get('www.reddit.com/r/perl/')
+    ->res->dom('p.title > a.title')->pluck('text')->shuffle;
 
   # IPv6 PUT request with content
   my $tx
@@ -559,8 +561,9 @@ Mojo::UserAgent - Non-blocking I/O HTTP 1.1 and WebSocket user agent
   $ua->max_redirects(5)->get('latest.mojolicio.us')
     ->res->content->asset->move_to('/Users/sri/mojo.tar.gz');
 
-  # TLS certificate authentication
-  my $tx = $ua->cert('tls.crt')->key('tls.key')->get('https://mojolicio.us');
+  # TLS certificate authentication and JSON POST
+  my $tx = $ua->cert('tls.crt')->key('tls.key')
+    ->post_json('https://mojolicio.us' => {top => 'secret'});
 
   # Blocking parallel requests (does not work inside a running event loop)
   my $delay = Mojo::IOLoop->delay;
@@ -829,6 +832,13 @@ Get absolute L<Mojo::URL> object for C<app> and switch protocol if necessary.
 
 Alias for L<Mojo::UserAgent::Transactor/"form">.
 
+=head2 C<build_json_tx>
+
+  my $tx = $ua->build_json_tx('http://kraih.com' => {a => 'b'});
+  my $tx = $ua->build_json_tx('kraih.com' => {a => 'b'} => {DNT => 1});
+
+Alias for L<Mojo::UserAgent::Transactor/"json">.
+
 =head2 C<build_tx>
 
   my $tx = $ua->build_tx(GET => 'kraih.com');
@@ -974,6 +984,22 @@ perform requests non-blocking.
   });
   Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
+=head2 C<post_json>
+
+  my $tx = $ua->post_json('http://kraih.com' => {a => 'b'});
+  my $tx = $ua->post_json('kraih.com' => {a => 'b'} => {DNT => 1});
+
+Perform blocking HTTP C<POST> request with JSON data and return resulting
+L<Mojo::Transaction::HTTP> object, takes the exact same arguments as
+L<Mojo::UserAgent::Transactor/"json">. You can also append a callback to
+perform requests non-blocking.
+
+  $ua->post_json('http://kraih.com' => {q => 'test'} => sub {
+    my ($ua, $tx) = @_;
+    say $tx->res->body;
+  });
+  Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
+
 =head2 C<put>
 
   my $tx = $ua->put('kraih.com');
@@ -992,7 +1018,7 @@ append a callback to perform requests non-blocking.
 
 =head2 C<start>
 
-  $ua = $ua->start($tx);
+  my $tx = $ua->start(Mojo::Transaction::HTTP->new);
 
 Process blocking transaction. You can also append a callback to perform
 transactions non-blocking.

@@ -144,18 +144,17 @@ sub run {
 
   # JSON Pointer
   return unless $selector;
-  return $self->_json($buffer, $selector)
+  return _json($buffer, $selector)
     if ($tx->res->headers->content_type || '') =~ /JSON/i;
 
   # Selector
-  $self->_select($buffer, defined $charset ? $charset : $tx->res->content->charset, $selector);
+  _select($buffer, defined $charset ? $charset : $tx->res->content->charset, $selector);
 }
 
 sub _json {
-  my ($self, $buffer, $pointer) = @_;
   my $json = Mojo::JSON->new;
-  return unless my $data = $json->decode($buffer);
-  return unless defined($data = Mojo::JSON::Pointer->get($data, $pointer));
+  return unless my $data = $json->decode(shift);
+  return unless defined($data = Mojo::JSON::Pointer->get($data, shift));
   (ref $data eq 'HASH' || ref $data eq 'ARRAY') ? say($json->encode($data)) : _say($data);
 }
 
@@ -165,14 +164,14 @@ sub _say {
 }
 
 sub _select {
-  my ($self, $buffer, $charset, $selector) = @_;
+  my ($buffer, $charset, $selector) = @_;
 
   # Find
   my $dom     = Mojo::DOM->new->charset($charset)->parse($buffer);
   my $results = $dom->find($selector);
 
   # Commands
-  my $finished = 0;
+  my $finished;
   while (defined(my $command = shift @ARGV)) {
 
     # Number

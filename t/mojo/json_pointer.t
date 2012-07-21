@@ -45,21 +45,20 @@ is $p->get({foo => {bar => [0, undef, 3]}}, '/foo/bar/6'), undef,
 
 # "get" (encoded)
 is $p->get({'♥' => [0, 1]}, '/%E2%99%A5/0'), 0, '"/%E2%99%A5/0" is "0"';
+is $p->get([{'^foob ar' => 'foo'}], '/0/^foob ar'), 'foo',
+  '"/0/^foob ar" is "foo"';
 is $p->get([{'foob ar' => 'foo'}], '/0/foob%20ar'), 'foo',
   '"/0/foob%20ar" is "foo"';
 is $p->get([{'foo/bar' => 'bar'}], '/0/foo%2Fbar'), undef,
   '"/0/foo%2Fbar" is "undef"';
-is $p->get([{'foo/bar' => 'bar'}], '/0/foo^%2Fbar'), 'bar',
-  '"/0/foo^%2Fbar" is "bar"';
-is $p->get([{'foo/bar' => 'bar'}], '/0/foo%5E%2Fbar'), 'bar',
-  '"/0/foo%5E%2Fbar" is "bar"';
-is $p->get([{'foo^/bar' => 'bar'}], '/0/foo^^^/bar'), 'bar',
-  '"/0/foo^^^/bar" is "bar"';
-is $p->get([{'foo^/bar' => 'bar'}], '/0/foo%5E%5E%5E/bar'), 'bar',
-  '"/0/foo%5E%5E%5E/bar" is "bar"';
+is $p->get([{'foo/bar' => 'bar'}], '/0/foo~1bar'), 'bar',
+  '"/0/foo~1bar" is "bar"';
+is $p->get([{'foo/bar/baz' => 'yada'}], '/0/foo~1bar~1baz'), 'yada',
+  '"/0/foo~1bar~1baz" is "yada"';
+is $p->get([{'foo~/bar' => 'bar'}], '/0/foo~0~1bar'), 'bar',
+  '"/0/foo~0~1bar" is "bar"';
+is $p->get([{'foo~/bar' => 'bar'}], '/0/foo%7E%30%7E%31bar'), 'bar',
+  '"/0/foo%7E%30%7E%31bar" is "bar"';
 is $p->get(
-  [{'f^o^o^/b^' => {'a^' => {'r' => 'baz'}}}] => '/0/f^^o^^o^^^/b^^/a^^/r'),
-  'baz', '"/0/f^^o^^o^^^/b^^/a^^/r" is "baz"';
-is $p->get([{'f^o^o^/b^' => {'a^' => {'r' => 'baz'}}}] =>
-    '%2F0%2Ff%5E%5Eo%5E%5Eo%5E%5E%5E%2Fb%5E%5E%2Fa%5E%5E%2Fr'), 'baz',
-  '"%2F0%2Ff%5E%5Eo%5E%5Eo%5E%5E%5E%2Fb%5E%5E%2Fa%5E%5E%2Fr" is "baz"';
+  [{'f~o~o~/b~' => {'a~' => {'r' => 'baz'}}}] => '/0/f~0o~0o~0~1b~0/a~0/r'),
+  'baz', '"/0/f~0o~0o~0~1b~0/a~0/r" is "baz"';

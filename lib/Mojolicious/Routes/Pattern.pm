@@ -219,7 +219,7 @@ sub _tokenize {
     # Relaxed or wildcard start (upgrade when quoted)
     elsif ($char eq $relaxed || $char eq $wildcard) {
       push @tree, ['placeholder', ''] unless $quoted;
-      $tree[-1]->[0] = $state = $char eq $relaxed ? 'relaxed' : 'wildcard';
+      $tree[-1][0] = $state = $char eq $relaxed ? 'relaxed' : 'wildcard';
     }
 
     # Quote end
@@ -235,17 +235,17 @@ sub _tokenize {
     }
 
     # Placeholder, relaxed or wildcard
-    elsif ($inside && $char =~ /\w/) { $tree[-1]->[-1] .= $char }
+    elsif ($inside && $char =~ /\w/) { $tree[-1][-1] .= $char }
 
     # Text
     else {
       $state = 'text';
 
       # New text element
-      push @tree, ['text', $char] and next unless $tree[-1]->[0] eq 'text';
+      push @tree, ['text', $char] and next unless $tree[-1][0] eq 'text';
 
       # More text
-      $tree[-1]->[-1] .= $char;
+      $tree[-1][-1] .= $char;
     }
   }
 
@@ -282,7 +282,7 @@ L<Mojolicious::Routes::Pattern> implements the following attributes.
   my $constraints = $pattern->constraints;
   $pattern        = $pattern->constraints({foo => qr/\w+/});
 
-Regex constraints.
+Regular expression constraints.
 
 =head2 C<defaults>
 
@@ -296,7 +296,7 @@ Default parameters.
   my $regex = $pattern->format_regex;
   $pattern  = $pattern->format_regex($regex);
 
-Compiled regex for format matching.
+Compiled regular expression for format matching.
 
 =head2 C<pattern>
 
@@ -338,7 +338,7 @@ Character indicating the start of a quoted placeholder, defaults to C<(>.
   my $regex = $pattern->regex;
   $pattern  = $pattern->regex($regex);
 
-Pattern in compiled regex form.
+Pattern in compiled regular expression form.
 
 =head2 C<relaxed_start>
 

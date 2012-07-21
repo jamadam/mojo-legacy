@@ -29,69 +29,57 @@ sub app {
 
 sub content_is {
   my ($self, $value, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is $self->_get_content($self->tx), $value,
-    $desc || 'exact match for content';
-  return $self;
+  $desc ||= 'exact match for content';
+  return $self->_test('is', $self->_get_content($self->tx), $value, $desc);
 }
 
 sub content_isnt {
   my ($self, $value, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt $self->_get_content($self->tx), $value,
-    $desc || 'no match for content';
-  return $self;
+  $desc ||= 'no match for content';
+  return $self->_test('isnt', $self->_get_content($self->tx), $value, $desc);
 }
 
 sub content_like {
   my ($self, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::like $self->_get_content($self->tx), $regex,
-    $desc || 'content is similar';
-  return $self;
+  $desc ||= 'content is similar';
+  return $self->_test('like', $self->_get_content($self->tx), $regex, $desc);
 }
 
 sub content_unlike {
   my ($self, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::unlike $self->_get_content($self->tx), $regex,
-    $desc || 'content is not similar';
-  return $self;
+  $desc ||= 'content is not similar';
+  return $self->_test('unlike', $self->_get_content($self->tx), $regex, $desc);
 }
 
 # "Marge, I can't wear a pink shirt to work.
 #  Everybody wears white shirts.
 #  I'm not popular enough to be different."
 sub content_type_is {
-  my ($self, $type) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is $self->tx->res->headers->content_type, $type,
-    "Content-Type: $type";
-  return $self;
+  my ($self, $type, $desc) = @_;
+  $desc ||= "Content-Type: $type";
+  return $self->_test('is', $self->tx->res->headers->content_type, $type,
+    $desc);
 }
 
 sub content_type_isnt {
-  my ($self, $type) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt $self->tx->res->headers->content_type, $type,
-    "not Content-Type: $type";
-  return $self;
+  my ($self, $type, $desc) = @_;
+  $desc ||= "not Content-Type: $type";
+  return $self->_test('isnt', $self->tx->res->headers->content_type, $type,
+    $desc);
 }
 
 sub content_type_like {
   my ($self, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::like $self->tx->res->headers->content_type, $regex,
-    $desc || 'Content-Type is similar';
-  return $self;
+  $desc ||= 'Content-Type is similar';
+  return $self->_test('like', $self->tx->res->headers->content_type, $regex,
+    $desc);
 }
 
 sub content_type_unlike {
   my ($self, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::unlike $self->tx->res->headers->content_type, $regex,
-    $desc || 'Content-Type is not similar';
-  return $self;
+  $desc ||= 'Content-Type is not similar';
+  return $self->_test('unlike', $self->tx->res->headers->content_type,
+    $regex, $desc);
 }
 
 # "A job's a job. I mean, take me.
@@ -101,144 +89,126 @@ sub delete_ok { shift->_request_ok(delete => @_) }
 
 sub element_exists {
   my ($self, $selector, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok $self->tx->res->dom->at($selector),
-    $desc || qq{"$selector" exists};
-  return $self;
+  $desc ||= encode 'UTF-8', qq{element for selector "$selector" exists};
+  return $self->_test('ok', $self->tx->res->dom->at($selector), $desc);
 }
 
 sub element_exists_not {
   my ($self, $selector, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok !$self->tx->res->dom->at($selector),
-    $desc || qq{"$selector" exists not};
-  return $self;
+  $desc ||= encode 'UTF-8', qq{no element for selector "$selector"};
+  return $self->_test('ok', !$self->tx->res->dom->at($selector), $desc);
 }
 
 sub finish_ok {
   my ($self, $desc) = @_;
-
   $self->tx->finish;
   Mojo::IOLoop->one_tick while !$self->{finished};
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok 1, $desc || 'finished websocket';
-
-  return $self;
+  return $self->_test('ok', 1, $desc || 'finished websocket');
 }
 
 sub get_ok  { shift->_request_ok(get  => @_) }
 sub head_ok { shift->_request_ok(head => @_) }
 
 sub header_is {
-  my ($self, $name, $value) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is scalar $self->tx->res->headers->header($name), $value,
-    "$name: " . ($value ? $value : '');
-  return $self;
+  my ($self, $name, $value, $desc) = @_;
+  $desc ||= "$name: " . ($value ? $value : '');
+  return $self->_test('is', scalar $self->tx->res->headers->header($name),
+    $value, $desc);
 }
 
 sub header_isnt {
-  my ($self, $name, $value) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt scalar $self->tx->res->headers->header($name), $value,
-    "not $name: " . ($value ? $value : '');
-  return $self;
+  my ($self, $name, $value, $desc) = @_;
+  $desc ||= "not $name: " . ($value ? $value : '');
+  return $self->_test('isnt', scalar $self->tx->res->headers->header($name),
+    $value, $desc);
 }
 
 sub header_like {
   my ($self, $name, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::like scalar $self->tx->res->headers->header($name), $regex,
-    $desc || "$name is similar";
-  return $self;
+  $desc ||= "$name is similar";
+  return $self->_test('like', scalar $self->tx->res->headers->header($name),
+    $regex, $desc);
 }
 
 sub header_unlike {
   my ($self, $name, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::unlike scalar $self->tx->res->headers->header($name), $regex,
-    $desc || "$name is not similar";
-  return $self;
+  $desc ||= "$name is not similar";
+  return $self->_test('unlike', scalar $self->tx->res->headers->header($name),
+    $regex, $desc);
 }
 
 sub json_content_is {
   my ($self, $data, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is_deeply $self->tx->res->json, $data,
-    $desc || 'exact match for JSON structure';
-  return $self;
+  $desc ||= 'exact match for JSON structure';
+  return $self->_test('is_deeply', $self->tx->res->json, $data, $desc);
 }
 
 sub json_is {
   my ($self, $p, $data, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is_deeply $self->tx->res->json($p), $data,
-    $desc || qq{exact match for JSON Pointer "$p"};
-  return $self;
+  $desc ||= qq{exact match for JSON Pointer "$p"};
+  return $self->_test('is_deeply', $self->tx->res->json($p), $data, $desc);
 }
 
 sub json_has {
   my ($self, $p, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok(
-    Mojo::JSON::Pointer->contains($self->tx->res->json, $p),
-    $desc || qq{has value for JSON Pointer "$p"}
-  );
-  return $self;
+  $desc ||= qq{has value for JSON Pointer "$p"};
+  return $self->_test('ok',
+    Mojo::JSON::Pointer->contains($self->tx->res->json, $p), $desc);
 }
 
 sub json_hasnt {
   my ($self, $p, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok(
-    !Mojo::JSON::Pointer->contains($self->tx->res->json, $p),
-    $desc || qq{has no value for JSON Pointer "$p"}
-  );
-  return $self;
+  $desc ||= qq{has no value for JSON Pointer "$p"};
+  return $self->_test('ok',
+    !Mojo::JSON::Pointer->contains($self->tx->res->json, $p), $desc);
 }
 
 sub message_is {
   my ($self, $value, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is $self->_message, $value, $desc || 'exact match for message';
-  return $self;
+  $desc ||= 'exact match for message';
+  return $self->_test('is', $self->_message, $value, $desc);
 }
 
 sub message_isnt {
   my ($self, $value, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt $self->_message, $value, $desc || 'no match for message';
-  return $self;
+  $desc ||= 'no match for message';
+  return $self->_test('isnt', $self->_message, $value, $desc);
 }
 
 sub message_like {
   my ($self, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::like $self->_message, $regex, $desc || 'message is similar';
-  return $self;
+  $desc ||= 'message is similar';
+  return $self->_test('like', $self->_message, $regex, $desc);
 }
 
 sub message_unlike {
   my ($self, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::unlike $self->_message, $regex,
-    $desc || 'message is not similar';
-  return $self;
+  $desc ||= 'message is not similar';
+  return $self->_test('unlike', $self->_message, $regex, $desc);
 }
 
 # "God bless those pagans."
 sub options_ok { shift->_request_ok(options => @_) }
-sub patch_ok   { shift->_request_ok(patch   => @_) }
-sub post_ok    { shift->_request_ok(post    => @_) }
+
+sub or {
+  my ($self, $diag) = @_;
+  $self->$diag unless $self->{latest};
+  return $self;
+}
+
+sub patch_ok { shift->_request_ok(patch => @_) }
+sub post_ok  { shift->_request_ok(post  => @_) }
 
 sub post_form_ok {
   my ($self, $url) = (shift, shift);
+  my $tx = $self->tx($self->ua->post_form($url, @_))->tx;
+  return $self->_test('ok', $tx->is_finished, encode('UTF-8', "post $url"));
+}
 
-  $self->tx($self->ua->post_form($url, @_));
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok $self->tx->is_finished, encode('UTF-8', "post $url");
-
-  return $self;
+sub post_json_ok {
+  my ($self, $url) = (shift, shift);
+  my $tx = $self->tx($self->ua->post_json($url, @_))->tx;
+  return $self->_test('ok', $tx->is_finished, encode('UTF-8', "post $url"));
 }
 
 # "WHO IS FONZY!?! Don't they teach you anything at school?"
@@ -246,51 +216,41 @@ sub put_ok { shift->_request_ok(put => @_) }
 
 sub reset_session {
   my $self = shift;
-  $self->ua->cookie_jar->empty;
-  $self->tx(undef);
-  return $self;
+  if (my $jar = $self->ua->cookie_jar) { $jar->empty }
+  return $self->tx(undef);
 }
 
 sub send_ok {
   my ($self, $message, $desc) = @_;
-
   $self->tx->send($message, sub { Mojo::IOLoop->stop });
   Mojo::IOLoop->start;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok 1, $desc || 'send message';
-
-  return $self;
+  return $self->_test('ok', 1, $desc || 'send message');
 }
 
 # "Internet! Is that thing still around?"
 sub status_is {
-  my ($self, $status) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is $self->tx->res->code, $status, "$status "
-    . Mojo::Message::Response->new(code => $status)->default_message;
-  return $self;
+  my ($self, $status, $desc) = @_;
+  $desc ||= "$status " . $self->tx->res->new(code => $status)->default_message;
+  return $self->_test('is', $self->tx->res->code, $status, $desc);
 }
 
 sub status_isnt {
-  my ($self, $status) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt $self->tx->res->code, $status, "not $status "
-    . Mojo::Message::Response->new(code => $status)->default_message;
-  return $self;
+  my ($self, $status, $desc) = @_;
+  $desc
+    ||= "not $status " . $self->tx->res->new(code => $status)->default_message;
+  return $self->_test('isnt', $self->tx->res->code, $status, $desc);
 }
 
 sub text_is {
   my ($self, $selector, $value, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::is $self->_text($selector), $value, $desc || $selector;
-  return $self;
+  $desc ||= encode 'UTF-8', qq{exact match for selector "$selector"};
+  return $self->_test('is', $self->_text($selector), $value, $desc);
 }
 
 sub text_isnt {
   my ($self, $selector, $value, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::isnt $self->_text($selector), $value, $desc || $selector;
-  return $self;
+  $desc ||= encode 'UTF-8', qq{no match for selector "$selector"};
+  return $self->_test('isnt', $self->_text($selector), $value, $desc);
 }
 
 # "Hello, my name is Barney Gumble, and I'm an alcoholic.
@@ -298,16 +258,14 @@ sub text_isnt {
 #  Is it, or is it you girls can't admit that you have a problem?"
 sub text_like {
   my ($self, $selector, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::like $self->_text($selector), $regex, $desc || $selector;
-  return $self;
+  $desc ||= encode 'UTF-8', qq{similar match for selector "$selector"};
+  return $self->_test('like', $self->_text($selector), $regex, $desc);
 }
 
 sub text_unlike {
   my ($self, $selector, $regex, $desc) = @_;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::unlike $self->_text($selector), $regex, $desc || $selector;
-  return $self;
+  $desc ||= encode 'UTF-8', qq{no similar match for selector "$selector"};
+  return $self->_test('unlike', $self->_text($selector), $regex, $desc);
 }
 
 sub websocket_ok {
@@ -325,11 +283,8 @@ sub websocket_ok {
     }
   );
   Mojo::IOLoop->start;
-  local $Test::Builder::Level = $Test::Builder::Level + 1;
-  Test::More::ok $self->tx->res->code eq 101,
-    encode('UTF-8', "websocket $url");
-
-  return $self;
+  my $desc = encode 'UTF-8', "websocket $url";
+  return $self->_test('ok', $self->tx->res->code eq 101, $desc);
 }
 
 sub _get_content {
@@ -352,20 +307,23 @@ sub _request_ok {
   $headers = {} if !ref $headers;
 
   # Perform request against application
-  $self->tx($self->ua->$method($url, %$headers, $body));
-  local $Test::Builder::Level = $Test::Builder::Level + 2;
+  $self->tx($self->ua->$method($url, $headers, $body));
+  local $Test::Builder::Level = $Test::Builder::Level + 1;
   my ($err, $code) = $self->tx->error;
   Test::More::diag $err if !(my $ok = !$err || $code) && $err;
-  Test::More::ok $ok, encode('UTF-8', "$method $url");
+  return $self->_test('ok', $ok, encode('UTF-8', "$method $url"));
+}
 
+sub _test {
+  my ($self, $name) = (shift, shift);
+  local $Test::Builder::Level = $Test::Builder::Level + 2;
+  $self->{latest} = Test::More->can($name)->(@_);
   return $self;
 }
 
 sub _text {
-  my ($self, $selector) = @_;
-  my $text;
-  if (my $e = $self->tx->res->dom->at($selector)) { $text = $e->text }
-  return $text;
+  return '' unless my $e = shift->tx->res->dom->at(shift);
+  return $e->text;
 }
 
 1;
@@ -505,12 +463,14 @@ Opposite of C<content_like>.
 =head2 C<content_type_is>
 
   $t = $t->content_type_is('text/html');
+  $t = $t->content_type_is('text/html', 'right content type');
 
 Check response C<Content-Type> header for exact match.
 
 =head2 C<content_type_isnt>
 
   $t = $t->content_type_isnt('text/html');
+  $t = $t->content_type_isnt('text/html', 'different content type');
 
 Opposite of C<content_type_is>.
 
@@ -577,12 +537,14 @@ arguments as L<Mojo::UserAgent/"head">.
 =head2 C<header_is>
 
   $t = $t->header_is(Expect => 'fun');
+  $t = $t->header_is(Expect => 'fun', 'right header');
 
 Check response header for exact match.
 
 =head2 C<header_isnt>
 
   $t = $t->header_isnt(Expect => 'fun');
+  $t = $t->header_isnt(Expect => 'fun', 'different header');
 
 Opposite of C<header_is>.
 
@@ -668,6 +630,16 @@ Opposite of C<message_like>.
 Perform a C<OPTIONS> request and check for transport errors, takes the exact
 same arguments as L<Mojo::UserAgent/"options">.
 
+=head2 C<or>
+
+  $t = $t->or(sub {...});
+
+Invoke callback if previous test failed.
+
+  # Diagnostics
+  $t->get_ok('/bad')->or(sub { diag 'Must have been Glen!' })
+    ->status_is(200)->or(sub { diag $t->tx->res->dom->at('title')->text });
+
 =head2 C<patch_ok>
 
   $t = $t->patch_ok('/foo');
@@ -689,8 +661,24 @@ arguments as L<Mojo::UserAgent/"post">.
   $t = $t->post_form_ok('/foo' => {a => 'b'});
   $t = $t->post_form_ok('/foo' => 'UTF-8' => {a => 'b'} => {DNT => 1});
 
-Submit a C<POST> form and check for transport errors, takes the exact same
-arguments as L<Mojo::UserAgent/"post_form">.
+Perform a C<POST> request with form data and check for transport errors, takes
+the exact same arguments as L<Mojo::UserAgent/"post_form">.
+
+  # Test file upload
+  $t->post_form_ok('/upload' => {foo => {content => 'bar'}})->status_is(200);
+
+=head2 C<post_json_ok>
+
+  $t = $t->post_json_ok('/foo' => {a => 'b'});
+  $t = $t->post_json_ok('/foo' => {a => 'b'} => {DNT => 1});
+
+Perform a C<POST> request with JSON data and check for transport errors, takes
+the exact same arguments as L<Mojo::UserAgent/"post_json">.
+
+  # Test JSON API
+  $t->post_json_ok('/hello.json' => {hello => 'world'})
+    ->status_is(200)
+    ->json_content_is({bye => 'world'});
 
 =head2 C<put_ok>
 
@@ -719,12 +707,14 @@ Send message or frame via WebSocket.
 =head2 C<status_is>
 
   $t = $t->status_is(200);
+  $t = $t->status_is(200, 'right status');
 
 Check response status for exact match.
 
 =head2 C<status_isnt>
 
   $t = $t->status_isnt(200);
+  $t = $t->status_isnt(200, 'different status');
 
 Opposite of C<status_is>.
 

@@ -6,6 +6,7 @@ use Mojo::Asset::File;
 use Mojo::Asset::Memory;
 use Mojo::Content::MultiPart;
 use Mojo::Content::Single;
+use Mojo::JSON;
 use Mojo::Parameters;
 use Mojo::Transaction::HTTP;
 use Mojo::Transaction::WebSocket;
@@ -50,7 +51,7 @@ sub form {
     elsif (ref $value eq 'HASH') {
 
       # Enforce "multipart/form-data"
-      $multipart = 1;
+      $multipart++;
 
       # File
       if (my $file = $value->{file}) {
@@ -72,11 +73,11 @@ sub form {
   }
 
   # New transaction
-  my $tx      = $self->tx(POST => $url);
-  my $req     = $tx->req;
-  my $headers = $req->headers->from_hash(ref $_[0] eq 'HASH' ? $_[0] : {@_});
+  my $tx = $self->tx(POST => $url, @_);
 
   # Multipart
+  my $req     = $tx->req;
+  my $headers = $req->headers;
   $headers->content_type('multipart/form-data') if $multipart;
   if (($headers->content_type || '') eq 'multipart/form-data') {
     my $parts = $self->_multipart($encoding, $p->to_hash);
@@ -90,6 +91,14 @@ sub form {
     $req->body($p->to_string);
   }
 
+  return $tx;
+}
+
+sub json {
+  my ($self, $url, $data) = (shift, shift, shift);
+  my $tx = $self->tx(POST => $url, @_, Mojo::JSON->new->encode($data));
+  my $headers = $tx->req->headers;
+  $headers->content_type('application/json') unless $headers->content_type;
   return $tx;
 }
 
@@ -155,20 +164,18 @@ sub redirect {
 sub tx {
   my $self = shift;
 
-  # New transaction
+  # Method and URL
   my $tx  = Mojo::Transaction::HTTP->new;
-  my $req = $tx->req;
-  $req->method(shift);
+  my $req = $tx->req->method(shift);
   my $url = shift;
   $url = "http://$url" unless $url =~ m!^/|\://!;
   ref $url ? $req->url($url) : $req->url->parse($url);
 
-  # Body
-  $req->body(pop)
-    if @_ & 1 == 1 && ref $_[0] ne 'HASH' || ref $_[-2] eq 'HASH';
-
   # Headers
-  $req->headers->from_hash(ref $_[0] eq 'HASH' ? $_[0] : {@_});
+  $req->headers->from_hash(shift) if ref $_[0] eq 'HASH';
+
+  # Body
+  $req->body(shift) if @_;
 
   return $tx;
 }
@@ -177,7 +184,7 @@ sub tx {
 sub websocket {
   my $self = shift;
 
-  # New WebSocket
+  # New WebSocket transaction
   my $tx  = $self->tx(GET => @_);
   my $req = $tx->req;
   my $abs = $req->url->to_abs;
@@ -270,7 +277,7 @@ implements the following new ones.
 
 =head2 C<endpoint>
 
-  my ($scheme, $host, $port) = $t->endpoint($tx);
+  my ($scheme, $host, $port) = $t->endpoint(Mojo::Transaction::HTTP->new);
 
 Actual endpoint for transaction.
 
@@ -295,11 +302,15 @@ Actual endpoint for transaction.
 Versatile L<Mojo::Transaction::HTTP> builder for C<POST> requests with form
 data.
 
-  # Inspect generated request
-  say $t->form('mojolicio.us' => {a => [1, 2, 3]})->req->to_string;
+  # Multipart upload with filename
+  my $tx = $t->form(
+    'mojolicio.us' => {fun => {content => 'Hello!', filename => 'test.txt'}});
 
-  # Streaming multipart file upload
+  # Multipart upload streamed from file
   my $tx = $t->form('mojolicio.us' => {fun => {file => '/etc/passwd'}});
+
+  # Inspect generated request
+  say $t->form('mojolicio.us' => {a => [1, 2], b => 3})->req->to_string;
 
 While the "multipart/form-data" content type will be automatically used
 instead of "application/x-www-form-urlencoded" when necessary, you can also
@@ -312,22 +323,36 @@ enforce it by setting the header manually.
     {'Content-Type' => 'multipart/form-data'}
   );
 
+=head2 C<json>
+
+  my $tx = $t->json('kraih.com' => {a => 'b'});
+  my $tx = $t->json('http://kraih.com' => [1, 2, 3]);
+  my $tx = $t->json('http://kraih.com' => {a => 'b'} => {DNT => 1});
+  my $tx = $t->json('http://kraih.com' => [1, 2, 3] => {DNT => 1});
+
+Versatile L<Mojo::Transaction::HTTP> builder for C<POST> requests with JSON
+data.
+
+  # Change method
+  my $tx = $t->json('mojolicio.us/hello', {hello => 'world'});
+  $tx->req->method('PATCH');
+
 =head2 C<peer>
 
-  my ($scheme, $host, $port) = $t->peer($tx);
+  my ($scheme, $host, $port) = $t->peer(Mojo::Transaction::HTTP->new);
 
 Actual peer for transaction.
 
 =head2 C<proxy_connect>
 
-  my $tx = $t->proxy_connect($old);
+  my $tx = $t->proxy_connect(Mojo::Transaction::HTTP->new);
 
 Build L<Mojo::Transaction::HTTP> proxy connect request for transaction if
 possible.
 
 =head2 C<redirect>
 
-  my $tx = $t->redirect($old);
+  my $tx = $t->redirect(Mojo::Transaction::HTTP->new);
 
 Build L<Mojo::Transaction::HTTP> followup request for C<301>, C<302>, C<303>,
 C<307> or C<308> redirect response if possible.

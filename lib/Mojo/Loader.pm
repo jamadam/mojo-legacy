@@ -71,7 +71,7 @@ sub _all {
   my $content = join '', <$handle>;
   close $handle;
 
-  # Ignore everything before __DATA__ (windows will seek to start of file)
+  # Ignore everything before __DATA__ (Windows will seek to start of file)
   $content =~ s/^.*\n__DATA__\r?\n/\n/s;
 
   # Ignore everything after __END__
@@ -129,6 +129,8 @@ following new ones.
   my $index = $loader->data('Foo::Bar', 'index.html');
 
 Extract embedded file from the C<DATA> section of a class.
+
+  say for keys %{$loader->data('Foo::Bar')};
 
 =head2 C<load>
 

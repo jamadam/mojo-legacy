@@ -119,7 +119,7 @@ sub parse {
     $self->{real_size} += length $self->{pre_buffer};
     $self->{buffer} .= $self->{pre_buffer}
       unless $self->is_finished
-        && length($self->{buffer}) > $self->max_leftover_size;
+      && length($self->{buffer}) > $self->max_leftover_size;
     $self->{pre_buffer} = '';
   }
 
@@ -578,13 +578,13 @@ Parse content chunk.
 
 =head2 C<parse_body>
 
-  $content = $content->parse_body("Hi!");
+  $content = $content->parse_body('Hi!');
 
 Parse body chunk.
 
 =head2 C<parse_body_once>
 
-  $content = $content->parse_body_once("Hi!");
+  $content = $content->parse_body_once('Hi!');
 
 Parse body chunk once.
 

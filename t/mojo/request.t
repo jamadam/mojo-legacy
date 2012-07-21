@@ -8,7 +8,7 @@ use Test::More tests => 989;
 #  The answer to life's problems aren't at the bottom of a bottle,
 #  they're on TV!"
 use File::Spec::Functions 'catfile';
-use File::Temp;
+use File::Temp 'tempdir';
 use Mojo::Content::Single;
 use Mojo::Content::MultiPart;
 use Mojo::Cookie::Request;
@@ -498,7 +498,7 @@ is $req->url, '/foo/bar/baz.html?foo=13#23', 'right URL';
 is $req->headers->content_type,   'text/plain', 'right "Content-Type" value';
 is $req->headers->content_length, 27,           'right "Content-Length" value';
 
-# Parse full HTTP 1.0 request with utf8 form input
+# Parse full HTTP 1.0 request with UTF-8 form input
 $req = Mojo::Message::Request->new;
 $req->parse('GET /foo/bar/baz.html?fo');
 $req->parse("o=13#23 HTTP/1.0\x0d\x0aContent");
@@ -817,8 +817,7 @@ is $req->body_params->to_hash->{text2}, '', 'right value';
 is $req->upload('upload')->filename,  'hello.pl',            'right filename';
 isa_ok $req->upload('upload')->asset, 'Mojo::Asset::Memory', 'right file';
 is $req->upload('upload')->asset->size, 69, 'right size';
-my $file
-  = catfile(File::Temp::tempdir(CLEANUP => 1), ("MOJO_TMP." . time . ".txt"));
+my $file = catfile(tempdir(CLEANUP => 1), ("MOJO_TMP." . time . ".txt"));
 ok $req->upload('upload')->move_to($file), 'moved file';
 ok unlink($file), 'unlinked file';
 is $req->content->boundary, '----------0xKhTmLbOuNdArY', 'right boundary';

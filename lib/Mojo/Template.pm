@@ -6,6 +6,8 @@ use Mojo::ByteStream;
 use Mojo::Exception;
 use Mojo::Util qw(decode encode slurp);
 
+use constant DEBUG => $ENV{MOJO_TEMPLATE_DEBUG} || 0;
+
 # "If for any reason you're not completely satisfied, I hate you."
 has [qw(auto_escape compiled)];
 has [qw(append code prepend template)] => '';
@@ -21,9 +23,8 @@ has tag_start => '<%';
 has tag_end   => '%>';
 has tree      => sub { [] };
 
-# Helpers
-my $HELPERS = <<'EOF';
-use Mojo::Util;
+# Escape helper
+my $ESCAPE = <<'EOF';
 no warnings 'redefine';
 sub _escape {
   return $_[0] if ref $_[0] eq 'Mojo::ByteStream';
@@ -32,14 +33,13 @@ sub _escape {
 }
 use Mojo::Base -strict;
 EOF
-$HELPERS =~ s/\n//g;
+$ESCAPE =~ s/\n//g;
 
 sub build {
   my $self = shift;
 
   # Lines
-  my (@lines, $cpst);
-  my $multi = 0;
+  my (@lines, $cpst, $multi);
   for my $line (@{$self->tree}) {
 
     # New line
@@ -79,8 +79,8 @@ sub build {
         unless ($multi) {
 
           # Escaped
-          my $a = $self->auto_escape;
-          if (($type eq 'escp' && !$a) || ($type eq 'expr' && $a)) {
+          my $escape = $self->auto_escape;
+          if (($type eq 'escp' && !$escape) || ($type eq 'expr' && $escape)) {
             $lines[-1] .= "\$_M .= _escape";
             $lines[-1] .= " scalar $value" if length $value;
           }
@@ -106,13 +106,16 @@ sub build {
     }
   }
 
-  # Closure
+  # Wrap lines
   my $first = $lines[0] ||= '';
-  $lines[0] = 'package ' . $self->namespace . "; $HELPERS ";
+  $lines[0] = 'package ' . $self->namespace . "; $ESCAPE ";
   $lines[0]  .= "sub { my \$_M = ''; " . $self->prepend . "; do { $first";
   $lines[-1] .= $self->append . "; \$_M; } };";
 
-  return $self->code(join "\n", @lines)->tree([]);
+  # Code
+  my $code = join "\n", @lines;
+  warn "-- Code for @{[$self->name]}\n@{[encode 'UTF-8', $code]}\n\n" if DEBUG;
+  return $self->code($code)->tree([]);
 }
 
 sub compile {
@@ -199,8 +202,7 @@ sub parse {
 
   # Split lines
   my $state = 'text';
-  my @capture_token;
-  my $trimming = 0;
+  my ($trimming, @capture_token);
   for my $line (split /\n/, $tmpl) {
     $trimming = 0 if $state eq 'text';
 
@@ -405,12 +407,13 @@ L<Mojo::ByteStream> objects are always excluded from automatic escaping.
 
   <%= Mojo::ByteStream->new('<div>excluded!</div>') %>
 
-Newlines can be escaped with a backslash.
+Newline characters can be escaped with a backslash.
 
   This is <%= 1 + 1 %> a\
   single line
 
-And a backslash in front of a newline can be escaped with another backslash.
+And a backslash in front of a newline character can be escaped with another
+backslash.
 
   This will <%= 1 + 1 %> result\\
   in multiple\\
@@ -474,7 +477,9 @@ Activate automatic XML escaping.
   my $code = $mt->append;
   $mt      = $mt->append('warn "Processed template"');
 
-Append Perl code to compiled template.
+Append Perl code to compiled template. Note that this code should not contain
+newline characters, or line numbers in error messages might end up being
+wrong.
 
 =head2 C<capture_end>
 
@@ -568,7 +573,9 @@ Namespace used to compile templates, defaults to C<Mojo::Template::SandBox>.
   my $code = $mt->prepend;
   $mt      = $mt->prepend('my $self = shift;');
 
-Prepend Perl code to compiled template.
+Prepend Perl code to compiled template. Note that this code should not contain
+newline characters, or line numbers in error messages might end up being
+wrong.
 
 =head2 C<replace_mark>
 
@@ -676,6 +683,13 @@ Render template.
   my $output = $mt->render_file('/tmp/foo.mt', @args);
 
 Render template file.
+
+=head1 DEBUGGING
+
+You can set the C<MOJO_TEMPLATE_DEBUG> environment variable to get some
+advanced diagnostics information printed to C<STDERR>.
+
+  MOJO_TEMPLATE_DEBUG=1
 
 =head1 SEE ALSO
 

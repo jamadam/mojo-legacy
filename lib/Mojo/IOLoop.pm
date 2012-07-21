@@ -14,17 +14,14 @@ use Time::HiRes 'time';
 use constant DEBUG => $ENV{MOJO_IOLOOP_DEBUG} || 0;
 
 has accept_interval => 0.025;
-has client_class    => 'Mojo::IOLoop::Client';
 has [qw(lock unlock)];
 has max_accepts     => 0;
 has max_connections => 1000;
 has reactor         => sub {
   my $class = Mojo::Reactor::Poll->detect;
-  warn "-- Reactor ($class)\n" if DEBUG;
+  warn "-- Reactor initialized ($class)\n" if DEBUG;
   return $class->new;
 };
-has server_class => 'Mojo::IOLoop::Server';
-has stream_class => 'Mojo::IOLoop::Stream';
 
 # Ignore PIPE signal
 $SIG{PIPE} = 'IGNORE';
@@ -41,7 +38,7 @@ sub client {
   $self->_manage;
 
   # New client
-  my $client = $self->client_class->new;
+  my $client = Mojo::IOLoop::Client->new;
   my $id     = $self->_id;
   my $c      = $self->{connections}{$id} ||= {};
   $c->{client} = $client;
@@ -56,7 +53,7 @@ sub client {
       # New stream
       my $c = $self->{connections}{$id};
       delete $c->{client};
-      my $stream = $c->{stream} = $self->stream_class->new($handle);
+      my $stream = $c->{stream} = Mojo::IOLoop::Stream->new($handle);
       $self->_stream($stream => $id);
 
       # Connected
@@ -74,12 +71,20 @@ sub client {
   return $id;
 }
 
+# DEPRECATED in Rainbow!
+sub client_class {
+  warn "Mojo::IOLoop->client_class is DEPRECATED!\n";
+  return @_ > 1 ? shift : 'Mojo::IOLoop::Client';
+}
+
 sub delay {
   my ($self, $cb) = @_;
   $self = $self->singleton unless ref $self;
+
   my $delay = Mojo::IOLoop::Delay->new;
   weaken $delay->ioloop($self)->{ioloop};
   $delay->once(finish => $cb) if $cb;
+
   return $delay;
 }
 
@@ -121,7 +126,7 @@ sub server {
   $self->_manage;
 
   # New server
-  my $server = $self->server_class->new;
+  my $server = Mojo::IOLoop::Server->new;
   my $id     = $self->_id;
   $self->{servers}{$id} = $server;
   weaken $server->reactor($self->reactor)->{reactor};
@@ -133,13 +138,14 @@ sub server {
       my $handle = pop;
 
       # Accept
-      my $stream = $self->stream_class->new($handle);
+      my $stream = Mojo::IOLoop::Stream->new($handle);
       my $id     = $self->stream($stream);
       $self->$cb($stream, $id);
 
-      # Enforce connection limit
+      # Enforce connection limit (randomize to improve load balancing)
       $self->max_connections(0)
-        if defined $self->{accepts} && --$self->{accepts} == 0;
+        if defined $self->{accepts}
+        && ($self->{accepts} -= int(rand 2) + 1) <= 0;
 
       # Stop listening
       $self->_not_listening;
@@ -152,6 +158,12 @@ sub server {
   $self->_not_listening;
 
   return $id;
+}
+
+# DEPRECATED in Rainbow!
+sub server_class {
+  warn "Mojo::IOLoop->server_class is DEPRECATED!\n";
+  return @_ > 1 ? shift : 'Mojo::IOLoop::Server';
 }
 
 our $singleton_loop;
@@ -180,6 +192,12 @@ sub stream {
   # Find stream for id
   return unless my $c = $self->{connections}{$stream};
   return $c->{stream};
+}
+
+# DEPRECATED in Rainbow!
+sub stream_class {
+  warn "Mojo::IOLoop->stream_class is DEPRECATED!\n";
+  return @_ > 1 ? shift : 'Mojo::IOLoop::Stream';
 }
 
 sub timer {
@@ -232,7 +250,7 @@ sub _manage {
           if $c->{finish} && (!$c->{stream} || !$c->{stream}->is_writing);
       }
 
-      # Graceful shutdown
+      # Graceful stop
       $self->_remove(delete $self->{manager})
         unless keys %$connections || keys %{$self->{servers}};
       $self->stop if $self->max_connections == 0 && keys %$connections == 0;
@@ -366,14 +384,6 @@ Interval in seconds for trying to reacquire the accept mutex and connection
 management, defaults to C<0.025>. Note that changing this value can affect
 performance and idle cpu usage.
 
-=head2 C<client_class>
-
-  my $class = $loop->client_class;
-  $loop     = $loop->client_class('Mojo::IOLoop::Client');
-
-Class to be used for opening TCP connections with the C<client> method,
-defaults to L<Mojo::IOLoop::Client>.
-
 =head2 C<lock>
 
   my $cb = $loop->lock;
@@ -398,7 +408,8 @@ this callback are not captured.
 The maximum number of connections this loop is allowed to accept before
 shutting down gracefully without interrupting existing connections, defaults
 to C<0>. Setting the value to C<0> will allow this loop to accept new
-connections indefinitely.
+connections indefinitely. Note that half of this value can be subtracted
+randomly to improve load balancing between multiple server processes.
 
 =head2 C<max_connections>
 
@@ -425,22 +436,6 @@ L<Mojo::Reactor::EV> object.
     say $writable ? 'Handle is writable' : 'Handle is readable';
   });
 
-=head2 C<server_class>
-
-  my $class = $loop->server_class;
-  $loop     = $loop->server_class('Mojo::IOLoop::Server');
-
-Class to be used for accepting TCP connections with the C<server> method,
-defaults to L<Mojo::IOLoop::Server>.
-
-=head2 C<stream_class>
-
-  my $class = $loop->stream_class;
-  $loop     = $loop->stream_class('Mojo::IOLoop::Stream');
-
-Class to be used by C<client> and C<server> methods for I/O streams, defaults
-to L<Mojo::IOLoop::Stream>.
-
 =head2 C<unlock>
 
   my $cb = $loop->unlock;
@@ -461,8 +456,7 @@ following new ones.
   my $id = $loop->client(address => '127.0.0.1', port => 3000, sub {...});
   my $id = $loop->client({address => '127.0.0.1', port => 3000}, sub {...});
 
-Open TCP connection with C<client_class>, which is usually
-L<Mojo::IOLoop::Client>, takes the same arguments as
+Open TCP connection with L<Mojo::IOLoop::Client>, takes the same arguments as
 L<Mojo::IOLoop::Client/"connect">.
 
   # Connect to localhost on port 3000
@@ -542,9 +536,8 @@ them to finish writing all data in their write buffers.
   my $id = $loop->server(port => 3000, sub {...});
   my $id = $loop->server({port => 3000}, sub {...});
 
-Accept TCP connections with C<server_class>, which is usually
-L<Mojo::IOLoop::Server>, takes the same arguments as
-L<Mojo::IOLoop::Server/"listen">.
+Accept TCP connections with L<Mojo::IOLoop::Server>, takes the same arguments
+as L<Mojo::IOLoop::Server/"listen">.
 
   # Listen on port 3000
   Mojo::IOLoop->server({port => 3000} => sub {

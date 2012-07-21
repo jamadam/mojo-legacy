@@ -126,9 +126,7 @@ sub move_to {
   # Move file and prevent clean up
   my $from = $self->path;
   move($from, $to) or croak qq{Can't move file "$from" to "$to": $!};
-  $self->path($to)->cleanup(0);
-
-  return $self;
+  return $self->path($to)->cleanup(0);
 }
 
 sub size {

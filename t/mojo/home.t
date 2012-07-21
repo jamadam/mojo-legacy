@@ -35,7 +35,7 @@ is_deeply [split /\\|\//, canonpath($home->to_string)],
   [split /\\|\//, canonpath(realpath cwd())], 'right path detected';
 
 # FindBin detection
-$home = Mojo::Home->new->app_class(undef)->detect;
+$home = Mojo::Home->new->detect(undef);
 is_deeply [split /\\|\//, catdir(splitdir($FindBin::Bin))],
   [split /\\|\//, $home], 'right path detected';
 
@@ -51,12 +51,12 @@ is $home->rel_dir('foo/bar'), catdir(splitdir($FindBin::Bin), 'foo', 'bar'),
   'right path';
 
 # List files
-is first(sub {/Base1\.pm$/}, @{$home->list_files('lib')}), 'BaseTest/Base1.pm',
-  'right result';
-is first(sub {/Base2\.pm$/}, @{$home->list_files('lib')}), 'BaseTest/Base2.pm',
-  'right result';
-is first(sub {/Base3\.pm$/}, @{$home->list_files('lib')}), 'BaseTest/Base3.pm',
-  'right result';
+is first(sub {/Base1\.pm$/}, @{$home->list_files('lib')}),
+  'BaseTest/Base1.pm', 'right result';
+is first(sub {/Base2\.pm$/}, @{$home->list_files('lib')}),
+  'BaseTest/Base2.pm', 'right result';
+is first(sub {/Base3\.pm$/}, @{$home->list_files('lib')}),
+  'BaseTest/Base3.pm', 'right result';
 
 # Slurp files
 like $home->slurp_rel_file('lib/BaseTest/Base1.pm'), qr/Base1/,

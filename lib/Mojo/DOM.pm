@@ -56,15 +56,13 @@ sub at { shift->find(@_)->[0] }
 sub attrs {
   my $self = shift;
 
-  # Not a tag
-  return {} if (my $tree = $self->tree)->[0] eq 'root';
-
   # Hash
-  my $attrs = $tree->[2];
+  my $tree = $self->tree;
+  my $attrs = $tree->[0] eq 'root' ? {} : $tree->[2];
   return $attrs unless @_;
 
   # Get
-  return $attrs->{$_[0]} unless @_ > 1 || ref $_[0];
+  return defined $attrs->{$_[0]} ? $attrs->{$_[0]} : '' unless @_ > 1 || ref $_[0];
 
   # Set
   %$attrs = (%$attrs, %{ref $_[0] ? $_[0] : {@_}});
@@ -132,26 +130,26 @@ sub find {
 sub namespace {
   my $self = shift;
 
-  # Prefix
-  return if (my $current = $self->tree)->[0] eq 'root';
-  my $prefix = $current->[1] =~ /^(.*?)\:/ ? $1 : '';
+  # Namespace prefix
+  return '' if (my $current = $self->tree)->[0] eq 'root';
+  my $ns = $current->[1] =~ /^(.*?)\:/ ? "xmlns:$1" : undef;
 
   # Walk tree
   while ($current) {
-    return if $current->[0] eq 'root';
-    my $attrs = $current->[2];
+    last if $current->[0] eq 'root';
 
     # Namespace for prefix
-    if ($prefix) {
-      /^xmlns\:$prefix$/ and return $attrs->{$_} for keys %$attrs;
-    }
+    my $attrs = $current->[2];
+    if ($ns) { /^\Q$ns\E$/ and return $attrs->{$_} for keys %$attrs }
 
     # Namespace attribute
-    elsif (defined $attrs->{xmlns}) { return $attrs->{xmlns} || undef }
+    elsif (defined $attrs->{xmlns}) { return $attrs->{xmlns} }
 
     # Parent
     $current = $current->[3];
   }
+
+  return '';
 }
 
 sub parent {
@@ -279,10 +277,8 @@ sub tree { shift->_parser(tree => @_) }
 sub type {
   my ($self, $type) = @_;
 
-  # Not a tag
-  return if (my $tree = $self->tree)->[0] eq 'root';
-
   # Get
+  return '' if (my $tree = $self->tree)->[0] eq 'root';
   return $tree->[1] unless $type;
 
   # Set
@@ -318,7 +314,7 @@ sub _add {
 }
 
 sub _elements {
-  my $e = shift;
+  return [] unless my $e = shift;
   return [@$e[($e->[0] eq 'root' ? 1 : 4) .. $#$e]];
 }
 
@@ -391,7 +387,7 @@ sub _trim {
   my ($e, $trim) = @_;
 
   # Disabled
-  return 0 unless $trim = defined $trim ? $trim : 1;
+  return 0 unless $e && ($trim = defined $trim ? $trim : 1);
 
   # Detect "pre" tag
   while ($e->[0] eq 'tag') {
@@ -551,7 +547,8 @@ similar to C<find>.
 
   my $xml = $dom->content_xml;
 
-Render content of this element to XML.
+Render content of this element to XML. Note that the XML will be encoded if a
+C<charset> has been defined.
 
   # "<b>test</b>"
   $dom->parse('<div><b>test</b></div>')->div->content_xml;
@@ -567,7 +564,7 @@ selectors from L<Mojo::DOM::CSS> are supported.
   my $id = $dom->find('div')->[23]{id};
 
   # Extract information from multiple elements
-  my @headers = $dom->find('h1, h2, h3')->map(sub { shift->text })->each;
+  my @headers = $dom->find('h1, h2, h3')->pluck('text')->each;
 
 =head2 C<namespace>
 
@@ -690,7 +687,8 @@ is enabled by default.
 
   my $xml = $dom->to_xml;
 
-Render this element and its content to XML.
+Render this element and its content to XML. Note that the XML will be encoded
+if a C<charset> has been defined.
 
   # "<b>test</b>"
   $dom->parse('<div><b>test</b></div>')->div->b->to_xml;
@@ -710,7 +708,7 @@ Alias for L<Mojo::DOM::HTML/"tree">.
 Element type.
 
   # List types of child elements
-  $dom->children->each(sub { say $_->type });
+  say $dom->children->pluck('type');
 
 =head2 C<xml>
 
@@ -727,7 +725,7 @@ L<Mojo::Collection> object, depending on number of children.
 
   say $dom->p->text;
   say $dom->div->[23]->text;
-  $dom->div->each(sub { say $_->text });
+  say $dom->div->pluck('text');
 
 =head1 ELEMENT ATTRIBUTES
 

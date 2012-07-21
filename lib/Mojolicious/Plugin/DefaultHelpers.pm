@@ -97,8 +97,8 @@ sub register {
       my $expires = $args->{expires} || 0;
       delete $memorize{$name}
         if exists $memorize{$name}
-          && $expires > 0
-          && $memorize{$name}{expires} < time;
+        && $expires > 0
+        && $memorize{$name}{expires} < time;
 
       # Memorized
       return $memorize{$name}{content} if exists $memorize{$name};
@@ -203,7 +203,7 @@ Dump a Perl data structure using L<Data::Dumper>.
   % extends 'blue';
   % extends 'blue', title => 'Blue!';
 
-Extend a template, all arguments get merged into the stash.
+Extend a template. All additional values get merged into the C<stash>.
 
 =head2 C<flash>
 
@@ -224,7 +224,8 @@ only available in the partial template.
   % layout 'green';
   % layout 'green', title => 'Green!';
 
-Render this template with a layout, all arguments get merged into the stash.
+Render this template with a layout. All additional values get merged into the
+C<stash>.
 
 =head2 C<memorize>
 
@@ -262,13 +263,15 @@ Alias for L<Mojolicious::Controller/"session">.
 
 Alias for L<Mojolicious::Controller/"stash">.
 
+  %= stash 'name' // 'Somebody'
+
 =head2 C<title>
 
   % title 'Welcome!';
   % title 'Welcome!', foo => 'bar';
   %= title
 
-Page title, all arguments get merged into the stash.
+Page title. All additional values get merged into the C<stash>.
 
 =head2 C<url_for>
 

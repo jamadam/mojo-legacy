@@ -20,7 +20,7 @@ has match => sub {
 };
 has tx => sub { Mojo::Transaction::HTTP->new };
 
-# Bundled files
+# Bundled templates
 our $H = Mojo::Home->new;
 $H->parse($H->parse($H->mojo_lib_dir)->rel_dir('Mojolicious/templates'));
 our $MOJOBAR = $H->slurp_rel_file('mojobar.html.ep');
@@ -242,33 +242,29 @@ sub render_data { shift->render(data => @_) }
 #  Neat."
 sub render_exception {
   my ($self, $e) = @_;
-  $e = Mojo::Exception->new($e);
 
-  # Recursion
+  # Log exception
   my $app = $self->app;
-  $app->log->error($e);
-  my $stash = $self->stash;
-  return if $stash->{'mojo.exception'};
+  $app->log->error($e = Mojo::Exception->new($e));
 
   # Filtered stash snapshot
+  my $stash = $self->stash;
   my %snapshot = map { $_ => $stash->{$_} }
     grep { !/^mojo\./ and defined $stash->{$_} } keys %$stash;
 
   # Render with fallbacks
   my $mode    = $app->mode;
   my $options = {
-    template         => "exception.$mode",
-    format           => $stash->{format} || 'html',
-    handler          => undef,
-    status           => 500,
-    snapshot         => \%snapshot,
-    exception        => $e,
-    'mojo.exception' => 1
+    exception => $e,
+    snapshot  => \%snapshot,
+    template  => "exception.$mode",
+    format    => $stash->{format} || $app->renderer->default_format,
+    handler   => undef,
+    status    => 500
   };
   my $inline = $mode eq 'development' ? $DEV_EXCEPTION : $EXCEPTION;
-  return if $self->_render_fallbacks($options, 'exception', $inline);
-  $options->{format} = 'html';
-  $self->_render_fallbacks($options, 'exception', $inline);
+  return if $self->_fallbacks($options, 'exception', $inline);
+  $self->_fallbacks({%$options, format => 'html'}, 'exception', $inline);
 }
 
 # "If you hate intolerance and being punched in the face by me,
@@ -282,22 +278,15 @@ sub render_later { shift->stash->{'mojo.rendered'}++ }
 sub render_not_found {
   my $self = shift;
 
-  # Recursion
-  my $stash = $self->stash;
-  return if $stash->{'mojo.exception'} || $stash->{'mojo.not_found'};
-
   # Render with fallbacks
-  my $mode    = $self->app->mode;
-  my $options = {
-    template         => "not_found.$mode",
-    format           => $stash->{format} || 'html',
-    status           => 404,
-    'mojo.not_found' => 1
-  };
+  my $app    = $self->app;
+  my $mode   = $app->mode;
+  my $format = $self->stash->{format} || $app->renderer->default_format;
+  my $options
+    = {template => "not_found.$mode", format => $format, status => 404};
   my $inline = $mode eq 'development' ? $DEV_NOT_FOUND : $NOT_FOUND;
-  return if $self->_render_fallbacks($options, 'not_found', $inline);
-  $options->{format} = 'html';
-  $self->_render_fallbacks($options, 'not_found', $inline);
+  return if $self->_fallbacks($options, 'not_found', $inline);
+  $self->_fallbacks({%$options, format => 'html'}, 'not_found', $inline);
 }
 
 # "You called my thesis a fat sack of barf, and then you stole it?
@@ -522,7 +511,7 @@ sub write_chunk {
   return $self->rendered;
 }
 
-sub _render_fallbacks {
+sub _fallbacks {
   my ($self, $options, $template, $inline) = @_;
 
   # Mode specific template
@@ -661,7 +650,17 @@ L<Mojo::Transaction::WebSocket> object.
   $c        = $c->param(foo => qw(ba;r ba;z));
 
 Access GET/POST parameters, file uploads and route captures that are not
-reserved stash values.
+reserved stash values. Note that this method is context sensitive and
+therefore needs to be used with care, every GET/POST parameter can have
+multiple values, which might have unexpected consequences.
+
+  # List context is ambiguous and should be avoided
+  my $hash = {name => $self->param('name')};
+
+  # Better enforce scalar context
+  my $hash = {name => scalar $self->param('name')};
+
+For more control you can also access request information directly.
 
   # Only GET parameters
   my $foo = $c->req->url->query->param('foo');
@@ -703,11 +702,9 @@ C<url_for>.
   my $success = $c->render('foo/index');
   my $output  = $c->render('foo/index', partial => 1);
 
-This is a wrapper around L<Mojolicious::Renderer/"render"> exposing pretty
-much all functionality provided by it. It will set a default template to use
-based on the controller and action name or fall back to the route name. You
-can call it with a hash or hash reference of options which can be preceded by
-an optional template name.
+Render content using L<Mojolicious::Renderer/"render">, if no template is
+provided a default one based on controller and action or route name will be
+generated. All additional values get merged into the C<stash>.
 
 =head2 C<render_content>
 
@@ -716,7 +713,7 @@ an optional template name.
   my $output = $c->render_content(header => 'Hello world!');
   my $output = $c->render_content(header => sub { 'Hello world!' });
 
-Contains partial rendered templates, used for the renderers C<layout> and
+Contains partial rendered content, used for the renderers C<layout> and
 C<extends> features.
 
 =head2 C<render_data>
@@ -725,7 +722,7 @@ C<extends> features.
   $c->render_data($bytes, format => 'png');
 
 Render the given content as raw bytes, similar to C<render_text> but data will
-not be encoded.
+not be encoded. All additional values get merged into the C<stash>.
 
   # Longer version
   $c->render(data => $bytes);
@@ -743,7 +740,8 @@ C<exception.$format.*> and set the response status code to C<500>.
   $c->render_json({foo => 'bar'});
   $c->render_json([1, 2, -3], status => 201);
 
-Render a data structure as JSON.
+Render a data structure as JSON. All additional values get merged into the
+C<stash>.
 
   # Longer version
   $c->render(json => {foo => 'bar'});
@@ -793,9 +791,9 @@ C<public> directory or C<DATA> section of your application.
   $c->render_text('Hello World', layout => 'green');
 
 Render the given content as Perl characters, which will be encoded to bytes.
-See C<render_data> for an alternative without encoding. Note that this does
-not change the content type of the response, which is
-C<text/html;charset=UTF-8> by default.
+All additional values get merged into the C<stash>. See C<render_data> for an
+alternative without encoding. Note that this does not change the content type
+of the response, which is C<text/html;charset=UTF-8> by default.
 
   # Longer version
   $c->render(text => 'Hello World!');
@@ -808,7 +806,8 @@ C<text/html;charset=UTF-8> by default.
   $c = $c->rendered;
   $c = $c->rendered(302);
 
-Finalize response and run C<after_dispatch> plugin hook.
+Finalize response and emit C<after_dispatch> plugin hook, defaults to using a
+C<200> response code.
 
   # Stream content directly from file
   $c->res->content->asset(Mojo::Asset::File->new(path => '/etc/passwd'));
@@ -923,7 +922,8 @@ Non persistent data storage and exchange, application wide default values can
 be set with L<Mojolicious/"defaults">. Many stash values have a special
 meaning and are reserved, the full list is currently C<action>, C<app>, C<cb>,
 C<controller>, C<data>, C<extends>, C<format>, C<handler>, C<json>, C<layout>,
-C<namespace>, C<partial>, C<path>, C<status>, C<template> and C<text>.
+C<namespace>, C<partial>, C<path>, C<status>, C<template> and C<text>. Note
+that all stash values with a C<mojo.*> prefix are reserved for internal use.
 
   # Manipulate stash
   $c->stash->{foo} = 'bar';

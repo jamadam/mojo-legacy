@@ -2,7 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 768;
+use Test::More tests => 783;
 
 # "Homer gave me a kidney: it wasn't his, I didn't need it,
 #  and it came postage due- but I appreciated the gesture!"
@@ -14,7 +14,7 @@ my $dom = Mojo::DOM->new->parse(
   '<div><div FOO="0" id="a">A</div><div id="b">B</div></div>');
 is $dom->at('#b')->text, 'B', 'right text';
 my @div;
-$dom->find('div[id]')->each(sub { push @div, shift->text });
+push @div, $dom->find('div[id]')->pluck('text')->each;
 is_deeply \@div, [qw(A B)], 'found all div elements with id';
 @div = ();
 $dom->find('div[id]')->each(sub { push @div, $_->text });
@@ -29,31 +29,30 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 <foo><bar a="b&lt;c">ju<baz a23>s<bazz />t</bar>works</foo>
 EOF
 is $dom->tree->[0], 'root', 'right element';
-is $dom->tree->[1]->[0], 'tag', 'right element';
-is $dom->tree->[1]->[1], 'foo', 'right tag';
-is_deeply $dom->tree->[1]->[2], {}, 'empty attributes';
-is $dom->tree->[1]->[3], $dom->tree, 'right parent';
-is $dom->tree->[1]->[4]->[0], 'tag', 'right element';
-is $dom->tree->[1]->[4]->[1], 'bar', 'right tag';
-is_deeply $dom->tree->[1]->[4]->[2], {a => 'b<c'}, 'right attributes';
-is $dom->tree->[1]->[4]->[3], $dom->tree->[1], 'right parent';
-is $dom->tree->[1]->[4]->[4]->[0], 'text', 'right element';
-is $dom->tree->[1]->[4]->[4]->[1], 'ju',   'right text';
-is $dom->tree->[1]->[4]->[5]->[0], 'tag',  'right element';
-is $dom->tree->[1]->[4]->[5]->[1], 'baz',  'right tag';
-is_deeply $dom->tree->[1]->[4]->[5]->[2], {a23 => undef}, 'right attributes';
-is $dom->tree->[1]->[4]->[5]->[3], $dom->tree->[1]->[4], 'right parent';
-is $dom->tree->[1]->[4]->[5]->[4]->[0], 'text', 'right element';
-is $dom->tree->[1]->[4]->[5]->[4]->[1], 's',    'right text';
-is $dom->tree->[1]->[4]->[5]->[5]->[0], 'tag',  'right element';
-is $dom->tree->[1]->[4]->[5]->[5]->[1], 'bazz', 'right tag';
-is_deeply $dom->tree->[1]->[4]->[5]->[5]->[2], {}, 'empty attributes';
-is $dom->tree->[1]->[4]->[5]->[5]->[3], $dom->tree->[1]->[4]->[5],
-  'right parent';
-is $dom->tree->[1]->[4]->[5]->[6]->[0], 'text', 'right element';
-is $dom->tree->[1]->[4]->[5]->[6]->[1], 't',    'right text';
-is $dom->tree->[1]->[5]->[0], 'text',  'right element';
-is $dom->tree->[1]->[5]->[1], 'works', 'right text';
+is $dom->tree->[1][0], 'tag', 'right element';
+is $dom->tree->[1][1], 'foo', 'right tag';
+is_deeply $dom->tree->[1][2], {}, 'empty attributes';
+is $dom->tree->[1][3], $dom->tree, 'right parent';
+is $dom->tree->[1][4][0], 'tag', 'right element';
+is $dom->tree->[1][4][1], 'bar', 'right tag';
+is_deeply $dom->tree->[1][4][2], {a => 'b<c'}, 'right attributes';
+is $dom->tree->[1][4][3], $dom->tree->[1], 'right parent';
+is $dom->tree->[1][4][4][0], 'text', 'right element';
+is $dom->tree->[1][4][4][1], 'ju',   'right text';
+is $dom->tree->[1][4][5][0], 'tag',  'right element';
+is $dom->tree->[1][4][5][1], 'baz',  'right tag';
+is_deeply $dom->tree->[1][4][5][2], {a23 => undef}, 'right attributes';
+is $dom->tree->[1][4][5][3], $dom->tree->[1][4], 'right parent';
+is $dom->tree->[1][4][5][4][0], 'text', 'right element';
+is $dom->tree->[1][4][5][4][1], 's',    'right text';
+is $dom->tree->[1][4][5][5][0], 'tag',  'right element';
+is $dom->tree->[1][4][5][5][1], 'bazz', 'right tag';
+is_deeply $dom->tree->[1][4][5][5][2], {}, 'empty attributes';
+is $dom->tree->[1][4][5][5][3], $dom->tree->[1][4][5], 'right parent';
+is $dom->tree->[1][4][5][6][0], 'text', 'right element';
+is $dom->tree->[1][4][5][6][1], 't',    'right text';
+is $dom->tree->[1][5][0], 'text',  'right element';
+is $dom->tree->[1][5][1], 'works', 'right text';
 is "$dom", <<EOF, 'right result';
 <foo><bar a="b&lt;c">ju<baz a23>s<bazz></bazz>t</baz></bar>works</foo>
 EOF
@@ -90,9 +89,12 @@ $dom = Mojo::DOM->new->parse(<<EOF);
   more text
 </foo>
 EOF
-is $dom->xml, undef, 'xml mode not detected';
-is $dom->tree->[1]->[0], 'doctype', 'right element';
-is $dom->tree->[1]->[1], ' foo',    'right doctype';
+is $dom->xml,  undef, 'xml mode not detected';
+is $dom->type, '',    'no type';
+is $dom->attrs('foo'), '', 'no attribute';
+is $dom->attrs(foo => 'bar')->attrs('foo'), '', 'no attribute';
+is $dom->tree->[1][0], 'doctype', 'right element';
+is $dom->tree->[1][1], ' foo',    'right doctype';
 is "$dom", <<EOF, 'right result';
 <!DOCTYPE foo>
 <foo bar="ba&lt;z">
@@ -208,10 +210,11 @@ is $dom->at('[id="snowm\000021an"]'),  undef, 'no result';
 is $dom->at('[id="snowm\000021 an"]'), undef, 'no result';
 
 # Unicode and escaped selectors
-my $unicode = encode 'UTF-8',
-  qq#<html><div id="☃x">Snowman</div><div class="x ♥">Heart</div></html>#;
+my $chars
+  = qq#<html><div id="☃x">Snowman</div><div class="x ♥">Heart</div></html>#;
+my $bytes = encode 'UTF-8', $chars;
 $dom = Mojo::DOM->new->charset('UTF-8');
-$dom->parse($unicode);
+$dom->parse($bytes);
 is $dom->at("#\\\n\\002603x")->text,                  'Snowman', 'right text';
 is $dom->at('#\\2603 x')->text,                       'Snowman', 'right text';
 is $dom->at("#\\\n\\2603 x")->text,                   'Snowman', 'right text';
@@ -273,7 +276,11 @@ is $dom->at('[class~=x]')->text,                      'Heart',   'right text';
 is $dom->at('div[class~=x]')->text,                   'Heart',   'right text';
 is $dom->at('html div[class~=x]')->text,              'Heart',   'right text';
 is $dom->at('html > div[class~=x]')->text,            'Heart',   'right text';
+is $dom->to_xml,      $bytes, 'XML is encoded';
+is $dom->content_xml, $bytes, 'XML is encoded';
 $dom->charset(undef);
+is $dom->to_xml,      $chars, 'XML is not encoded';
+is $dom->content_xml, $chars, 'XML is not encoded';
 
 # Looks remotely like HTML
 $dom = Mojo::DOM->new->parse(
@@ -302,7 +309,7 @@ is $dom->replace(''), '', 'right result';
 is "$dom", '', 'right result';
 $dom->replace('<div>foo<p>lalala</p>bar</div>');
 is "$dom", '<div>foo<p>lalala</p>bar</div>', 'right result';
-$dom->find('p')->each(sub { shift->replace('') });
+$dom->find('p')->pluck(replace => '');
 is "$dom", '<div>foobar</div>', 'right result';
 $dom = Mojo::DOM->new->parse('<div>♥</div>');
 $dom->at('div')->replace_content('☃');
@@ -416,10 +423,11 @@ $dom = Mojo::DOM->new->parse(<<EOF);
   </meta>
 </bk:book>
 EOF
-is $dom->xml, 1, 'xml mode detected';
+is $dom->xml,       1,  'xml mode detected';
+is $dom->namespace, '', 'no namespace';
 is $dom->at('book comment')->namespace, 'uri:default-ns', 'right namespace';
 is $dom->at('book comment')->text,      'rocks!',         'right text';
-is $dom->at('book nons section')->namespace, undef,         'no namespace';
+is $dom->at('book nons section')->namespace, '',            'no namespace';
 is $dom->at('book nons section')->text,      'Nothing',     'right text';
 is $dom->at('book meta number')->namespace,  'uri:isbn-ns', 'right namespace';
 is $dom->at('book meta number')->text, '978-0596000271', 'right text';
@@ -433,11 +441,27 @@ is $dom->at('ook'),     undef, 'no result';
 is $dom->at('[xmlns\:bk]')->{'xmlns:bk'}, 'uri:book-ns', 'right attribute';
 is $dom->at('[bk]')->{'xmlns:bk'},        'uri:book-ns', 'right attribute';
 is $dom->at('[bk]')->attrs('xmlns:bk'), 'uri:book-ns', 'right attribute';
-is $dom->at('[bk]')->attrs('s:bk'),     undef,         'no attribute';
-is $dom->at('[bk]')->attrs('bk'),       undef,         'no attribute';
-is $dom->at('[bk]')->attrs('k'),        undef,         'no attribute';
+is $dom->at('[bk]')->attrs('s:bk'),     '',            'no attribute';
+is $dom->at('[bk]')->attrs('bk'),       '',            'no attribute';
+is $dom->at('[bk]')->attrs('k'),        '',            'no attribute';
 is $dom->at('[s\:bk]'), undef, 'no result';
 is $dom->at('[k]'),     undef, 'no result';
+
+# Namespace with dot
+$dom = Mojo::DOM->new(<<EOF);
+<?xml version="1.0"?>
+<foo xmlns:foo.bar="uri:first">
+  <bar xmlns:fooxbar="uri:second">
+    <foo.bar:baz>First</fooxbar:baz>
+    <fooxbar:yada>Second</foo.bar:yada>
+  </bar>
+</foo>
+EOF
+is $dom->at('foo bar baz')->text,  'First',      'right text';
+is $dom->at('baz')->namespace,     'uri:first',  'right namespace';
+is $dom->at('foo bar yada')->text, 'Second',     'right text';
+is $dom->at('yada')->namespace,    'uri:second', 'right namespace';
+is $dom->at('foo')->namespace,     '',           'no namespace';
 
 # Yadis
 $dom = Mojo::DOM->new->parse(<<'EOF');
@@ -515,8 +539,8 @@ is $dom->find('xrds\3A Service > Type')->[1], undef, 'no result';
 is $dom->find('xrds\00003AService > Type')->[0]->text, 'http://o.r.g/sso/4.0',
   'right text';
 is $dom->find('xrds\00003AService > Type')->[1], undef, 'no result';
-is $dom->find('xrds\00003A Service > Type')->[0]->text, 'http://o.r.g/sso/4.0',
-  'right text';
+is $dom->find('xrds\00003A Service > Type')->[0]->text,
+  'http://o.r.g/sso/4.0', 'right text';
 is $dom->find('xrds\00003A Service > Type')->[1], undef, 'no result';
 is "$dom", $yadis, 'successful roundtrip';
 
@@ -1444,7 +1468,7 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 EOF
 is $dom->xml, 1, 'xml mode detected';
 is $dom->at('root')->attrs('att'), 'test', 'right attribute';
-is $dom->tree->[5]->[1], ' root [
+is $dom->tree->[5][1], ' root [
   <!ELEMENT root (#PCDATA)>
   <!ATTLIST root att CDATA #REQUIRED>
 ]', 'right doctype';
@@ -1457,7 +1481,7 @@ SYSTEM "usr.dtd"
 ]>
 <foo />
 EOF
-is $dom->tree->[1]->[1], ' book
+is $dom->tree->[1][1], ' book
 SYSTEM "usr.dtd"
 [
   <!ENTITY test "yeah">
@@ -1475,7 +1499,7 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 <foo xml:lang="de">Check!</fOo>
 EOF
 is $dom->xml, 1, 'xml mode detected';
-is $dom->tree->[3]->[1], ' foo [
+is $dom->tree->[3][1], ' foo [
   <!ELEMENT foo ANY>
   <!ATTLIST foo xml:lang CDATA #IMPLIED>
   <!ENTITY % e SYSTEM "myentities.ent">
@@ -1495,7 +1519,7 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 <?check for-nothing?>
 <foo bar='false'>&leertaste;!!!</foo>
 EOF
-is $dom->tree->[1]->[1], ' TESTSUITE PUBLIC "my.dtd" \'mhhh\' [
+is $dom->tree->[1][1], ' TESTSUITE PUBLIC "my.dtd" \'mhhh\' [
   <!ELEMENT foo ANY>
   <!ATTLIST foo bar ENTITY \'true\'>
   <!ENTITY system_entities SYSTEM \'systems.xml\'>
@@ -1906,6 +1930,8 @@ is $dom->text(0), "\n", 'right text';
 is $dom->all_text, "looks like\n  it\n    really\n  works", 'right text';
 is $dom->all_text(0), "\n  looks\n  like\n  it\n    really\n  \n  works\n\n",
   'right text';
+is $dom->text_before, '', 'no text';
+is $dom->text_after,  '', 'no text';
 is $dom->div->text, 'looks works', 'right text';
 is $dom->div->text(0), "\n  looks\n  \n  works\n", 'right text';
 is $dom->div->all_text, "looks like\n  it\n    really\n  works", 'right text';
@@ -2058,15 +2084,15 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 <bar>after</bar>
 EOF
 is $dom->tree->[0], 'root', 'right element';
-is $dom->tree->[1]->[0], 'tag', 'right element';
-is $dom->tree->[1]->[1], 'foo', 'right tag';
-is_deeply $dom->tree->[1]->[2], {bar => ''}, 'right attributes';
-is $dom->tree->[1]->[4]->[0], 'text',       'right element';
-is $dom->tree->[1]->[4]->[1], "\n  test\n", 'right text';
-is $dom->tree->[3]->[0], 'tag', 'right element';
-is $dom->tree->[3]->[1], 'bar', 'right tag';
-is $dom->tree->[3]->[4]->[0], 'text',  'right element';
-is $dom->tree->[3]->[4]->[1], 'after', 'right text';
+is $dom->tree->[1][0], 'tag', 'right element';
+is $dom->tree->[1][1], 'foo', 'right tag';
+is_deeply $dom->tree->[1][2], {bar => ''}, 'right attributes';
+is $dom->tree->[1][4][0], 'text',       'right element';
+is $dom->tree->[1][4][1], "\n  test\n", 'right text';
+is $dom->tree->[3][0], 'tag', 'right element';
+is $dom->tree->[3][1], 'bar', 'right tag';
+is $dom->tree->[3][4][0], 'text',  'right element';
+is $dom->tree->[3][4][1], 'after', 'right text';
 is "$dom", <<EOF, 'right result';
 <foo bar="">
   test

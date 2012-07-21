@@ -116,12 +116,13 @@ Only L<Mojo::ByteStream> objects are excluded from automatic escaping.
 
   <%= Mojo::ByteStream->new('<p>test</p>') %>
 
-Newlines can be escaped with a backslash.
+Newline characters can be escaped with a backslash.
 
   This is <%= 1 + 1 %> a\
   single line
 
-And a backslash in front of a newline can be escaped with another backslash.
+And a backslash in front of a newline character can be escaped with another
+backslash.
 
   This will <%= 1 + 1 %> result\\
   in multiple\\
@@ -331,11 +332,26 @@ L<Mojolicious::Controller/"render_exception"> and
 L<Mojolicious::Controller/"render_not_found"> can be used to render them
 manually.
 
-  # 500
-  $self->render_exception("I've made a huge mistake!");
+  use Mojolicious::Lite;
+  use Scalar::Util 'looks_like_number';
 
-  # 404
-  $self->render_not_found;
+  get '/divide/:dividend/by/:divisor' => sub {
+    my $self     = shift;
+    my $dividend = $self->param('dividend');
+    my $divisor  = $self->param('divisor');
+
+    # 404
+    return $self->render_not_found
+      unless looks_like_number $dividend && looks_like_number $divisor;
+
+    # 500
+    return $self->render_exception('Division by zero!') if $divisor == 0;
+
+    # 200
+    $self->render_text($dividend / $divisor);
+  };
+
+  app->start;
 
 You can also change the templates of those pages, since you most likely want
 to show your users something more closely related to your application in
@@ -343,11 +359,11 @@ production. The renderer will always try to find C<exception.$mode.$format.*>
 or C<not_found.$mode.$format.*> before falling back to the built-in default
 templates.
 
-  @@ not_found.production.html.ep
+  @@ exception.production.html.ep
   <!DOCTYPE html>
   <html>
-    <head><title>Page not found</title></head>
-    <body>Page does not seem to exist.</body>
+    <head><title>Server error</title></head>
+    <body><%= $exception %></body>
   </html>
 
 =head2 Helpers
@@ -815,7 +831,6 @@ script, so don't forget to use the L<utf8> pragma if necessary.
   @@ heart.html.ep
   I ♥ Mojolicious!
 
-
 =head2 Base64 encoded DATA files
 
 Base64 encoded static files such as images can be easily stored in the C<DATA>
@@ -836,8 +851,8 @@ C<templates> and C<public> directories.
 
 =head2 Customizing the template syntax
 
-You can easily change the whole template syntax by loading the C<ep_renderer>
-plugin with a custom configuration.
+You can easily change the whole template syntax by loading
+L<Mojolicious::Plugin::EPRenderer> with a custom configuration.
 
   use Mojolicious::Lite;
 

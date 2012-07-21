@@ -45,8 +45,7 @@ sub trace {
   $start = defined $start ? $start : 1;
   my @frames;
   while (my @trace = caller($start++)) { push @frames, \@trace }
-  $self->frames(\@frames);
-  return $self;
+  return $self->frames(\@frames);
 }
 
 # "You killed zombie Flanders!
@@ -55,7 +54,7 @@ sub _context {
   my ($self, $line, $lines) = @_;
 
   # Wrong file
-  return unless defined $lines->[0]->[$line - 1];
+  return unless defined $lines->[0][$line - 1];
 
   # Line
   $self->line([$line]);
@@ -67,7 +66,7 @@ sub _context {
   # Before
   for my $i (2 .. 6) {
     last if ((my $previous = $line - $i) < 0);
-    if (defined($lines->[0]->[$previous])) {
+    if (defined($lines->[0][$previous])) {
       unshift @{$self->lines_before}, [$previous + 1];
       for my $l (@$lines) {
         chomp(my $code = $l->[$previous]);
@@ -79,7 +78,7 @@ sub _context {
   # After
   for my $i (0 .. 4) {
     next if ((my $next = $line + $i) < 0);
-    if (defined($lines->[0]->[$next])) {
+    if (defined($lines->[0][$next])) {
       push @{$self->lines_after}, [$next + 1];
       for my $l (@$lines) {
         next unless defined(my $code = $l->[$next]);
@@ -125,7 +124,7 @@ sub _detect {
     my $filter = sub {
       my $num  = shift;
       my $new  = "$name line $num";
-      my $line = $lines[0]->[$num];
+      my $line = $lines[0][$num];
       return defined $line ? qq{$new, near "$line".} : "$new.";
     };
     $message =~ s/\(eval\s+\d+\) line (\d+).*/$filter->($1)/ge;

@@ -3,6 +3,7 @@ use Mojo::Base 'Mojolicious::Plugin';
 
 use Mojo::Template;
 use Mojo::Util qw(encode md5_sum);
+use Scalar::Util ();
 
 # "What do you want?
 #  I'm here to kick your ass!
@@ -11,8 +12,7 @@ sub register {
   my ($self, $app, $conf) = @_;
 
   # Auto escape by default to prevent XSS attacks
-  my $template = $conf->{template} || {};
-  $template->{auto_escape} = defined $template->{auto_escape} ? $template->{auto_escape} : 1;
+  my $template = {auto_escape => 1, %{$conf->{template} || {}}};
 
   # Add "ep" handler
   $app->renderer->add_handler(
@@ -25,41 +25,33 @@ sub register {
       my $id = encode 'UTF-8', join(', ', $path, sort keys %{$c->stash});
       my $key = $options->{cache} = md5_sum $id;
 
-      # Cache
+      # Compile helpers and stash values
       my $cache = $r->cache;
       unless ($cache->get($key)) {
         my $mt = Mojo::Template->new($template);
 
         # Be a bit more relaxed for helpers
-        my $prepend = q[my $self = shift; use Scalar::Util 'weaken';]
-          . q[weaken $self; no strict 'refs'; no warnings 'redefine';];
+        my $prepend = q[my $self = shift; Scalar::Util::weaken $self;]
+          . q[no strict 'refs'; no warnings 'redefine';];
 
         # Helpers
         $prepend .= 'my $_H = $self->app->renderer->helpers;';
-        for my $name (sort keys %{$r->helpers}) {
-          next unless $name =~ /^\w+$/;
-          $prepend .= "sub $name; *$name = sub { ";
-          $prepend .= "\$_H->{'$name'}->(\$self, \@_) };";
-        }
+        $prepend .= "sub $_; *$_ = sub { \$_H->{'$_'}->(\$self, \@_) };"
+          for grep {/^\w+$/} keys %{$r->helpers};
 
         # Be less relaxed for everything else
         $prepend .= 'use strict;';
 
         # Stash
         $prepend .= 'my $_S = $self->stash;';
-        for my $var (keys %{$c->stash}) {
-          next unless $var =~ /^\w+$/;
-          $prepend .= " my \$$var = \$_S->{'$var'};";
-        }
-
-        # Prepend generated code
-        $mt->prepend($prepend);
+        $prepend .= " my \$$_ = \$_S->{'$_'};"
+          for grep {/^\w+$/} keys %{$c->stash};
 
         # Cache
-        $cache->set($key => $mt);
+        $cache->set($key => $mt->prepend($prepend . $mt->prepend));
       }
 
-      # Render with epl
+      # Render with "epl" handler
       return $r->handlers->{epl}->($r, $c, $output, $options);
     }
   );

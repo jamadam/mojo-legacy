@@ -72,6 +72,11 @@
         margin: 0;
         text-shadow: #333 0 1px 0;
       }
+      #showcase td {
+        padding-top: 0;
+        padding-bottom: 0;
+      }
+      #showcase .key { padding-right: 0 }
       #more, #trace {
         -moz-border-radius-bottomleft: 5px;
         border-bottom-left-radius: 5px;
@@ -99,7 +104,7 @@
       % my $cv = begin
         % my ($key, $value, $i) = @_;
         %= tag 'tr', $i ? (class => 'important') : undef, begin
-          <td class="key"><%= $key %>.</td>
+          <td class="key"><%= $key %></td>
           <td class="value"><pre class="prettyprint"><%= $value %></pre></td>
         % end
       % end

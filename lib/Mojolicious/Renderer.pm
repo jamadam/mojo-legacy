@@ -3,8 +3,8 @@ use Mojo::Base -base;
 
 use File::Spec::Functions 'catfile';
 use Mojo::Cache;
-use Mojo::Home;
 use Mojo::JSON;
+use Mojo::Home;
 use Mojo::Loader;
 use Mojo::Util 'encode';
 
@@ -154,8 +154,8 @@ sub render {
 
 sub template_name {
   my ($self, $options) = @_;
-  return unless my $template = $options->{template} || '';
-  return unless my $format = $options->{format};
+  return unless my $template = $options->{template};
+  return unless my $format   = $options->{format};
   my $handler = $options->{handler};
   return defined $handler ? "$template.$format.$handler" : "$template.$format";
 }

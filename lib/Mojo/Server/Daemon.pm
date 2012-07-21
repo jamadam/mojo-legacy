@@ -155,6 +155,8 @@ sub _listen {
     tls_cert => scalar $query->param('cert'),
     tls_key  => scalar $query->param('key')
   };
+  my $verify = $query->param('verify');
+  $options->{tls_verify} = hex $verify if defined $verify;
   delete $options->{address} if $options->{address} eq '*';
   my $tls = $options->{tls} = $url->scheme eq 'https' ? 1 : undef;
 
@@ -382,6 +384,10 @@ Path to the TLS cert file, defaults to a built-in test certificate.
 =item C<key>
 
 Path to the TLS key file, defaults to a built-in test key.
+
+=item C<verify>
+
+TLS verification mode, defaults to C<0x03>.
 
 =back
 

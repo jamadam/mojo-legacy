@@ -6,10 +6,10 @@ use Cwd 'getcwd';
 use File::Basename 'dirname';
 use File::Path 'mkpath';
 use File::Spec::Functions qw(catdir catfile);
-use IO::Handle;
 use Mojo::Loader;
 use Mojo::Server;
 use Mojo::Template;
+use Mojo::Util 'spurt';
 
 has description => 'No description.';
 has quiet       => 0;
@@ -60,8 +60,9 @@ sub rel_dir { catdir(getcwd(), split /\//, pop) }
 sub rel_file { catfile(getcwd(), split /\//, pop) }
 
 sub render_data {
-  my $self = shift;
-  Mojo::Template->new->render(Mojo::Loader->new->data(ref $self, shift), @_);
+  my ($self, $name) = (shift, shift);
+  Mojo::Template->new->name(qq{template "$name" from DATA section})
+    ->render(Mojo::Loader->new->data(ref $self, $name), @_);
 }
 
 sub render_to_file {
@@ -79,16 +80,9 @@ sub run { croak 'Method "run" not implemented by subclass' }
 
 sub write_file {
   my ($self, $path, $data) = @_;
-
-  # Create directory
   $self->create_dir(dirname $path);
-
-  # Write unbuffered
-  croak qq{Can't open file "$path": $!} unless open my $file, '>', $path;
-  croak qq{Can't write to file "$path": $!}
-    unless defined $file->syswrite($data);
+  spurt $data, $path;
   say "  [write] $path" unless $self->quiet;
-
   return $self;
 }
 
