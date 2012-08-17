@@ -6,16 +6,16 @@ use Cwd 'getcwd';
 use File::Basename 'dirname';
 use File::Path 'mkpath';
 use File::Spec::Functions qw(catdir catfile);
+use Getopt::Long qw(GetOptions :config no_auto_abbrev no_ignore_case);
 use Mojo::Loader;
 use Mojo::Server;
 use Mojo::Template;
 use Mojo::Util 'spurt';
 
+has app => sub { Mojo::Server->new->build_app('Mojo::HelloWorld') };
 has description => 'No description.';
 has quiet       => 0;
 has usage       => "usage: $0\n";
-
-sub app { Mojo::Server->new->app }
 
 sub chmod_file {
   my ($self, $path, $mod) = @_;
@@ -91,6 +91,13 @@ sub write_rel_file {
   $self->write_file($self->rel_file($path), $data);
 }
 
+sub _options {
+  my ($self, $args) = (shift, shift);
+  local @ARGV = @$args;
+  GetOptions @_;
+  @$args = @ARGV;
+}
+
 1;
 
 =head1 NAME
@@ -101,12 +108,7 @@ Mojolicious::Command - Command base class
 
   # Lower case command name
   package Mojolicious::Command::mycommand;
-
-  # Subclass
   use Mojo::Base 'Mojolicious::Command';
-
-  # Take care of command line options
-  use Getopt::Long 'GetOptions';
 
   # Short description
   has description => "My first Mojo command.\n";
@@ -121,11 +123,7 @@ Mojolicious::Command - Command base class
 
   # <suitable Futurama quote here>
   sub run {
-    my $self = shift;
-
-    # Handle options
-    local @ARGV = @_;
-    GetOptions('s|something' => sub { $something = 1 });
+    my ($self, @args) = @_;
 
     # Magic here! :)
   }
@@ -140,6 +138,16 @@ default.
 =head1 ATTRIBUTES
 
 L<Mojolicious::Command> implements the following attributes.
+
+=head2 C<app>
+
+  my $app  = $command->app;
+  $command = $command->app(MyApp->new);
+
+Application for command, defaults to a L<Mojo::HelloWorld> object.
+
+  # Introspect
+  say "Template path: $_" for @{$command->app->renderer->paths};
 
 =head2 C<description>
 
@@ -166,15 +174,6 @@ Usage information for command, used for the help screen.
 
 L<Mojolicious::Command> inherits all methods from L<Mojo::Base> and implements
 the following new ones.
-
-=head2 C<app>
-
-  my $app = $command->app;
-
-Currently active application.
-
-  # Introspect
-  say "Template path: $_" for @{$command->app->renderer->paths};
 
 =head2 C<chmod_file>
 
@@ -222,6 +221,8 @@ directory.
 
 =head2 C<render_data>
 
+
+  my $data = $command->render_data('foo_bar');
   my $data = $command->render_data('foo_bar', @args);
 
 Render a template from the C<DATA> section of the command class with
@@ -230,6 +231,7 @@ L<Mojo::Template>.
 =head2 C<render_to_file>
 
   $command = $command->render_to_file('foo_bar', '/home/sri/foo.txt');
+  $command = $command->render_to_file('foo_bar', '/home/sri/foo.txt', @args);
 
 Render a template from the C<DATA> section of the command class with
 L<Mojo::Template> to a file and create directory if necessary.
@@ -237,6 +239,7 @@ L<Mojo::Template> to a file and create directory if necessary.
 =head2 C<render_to_rel_file>
 
   $command = $command->render_to_rel_file('foo_bar', 'foo/bar.txt');
+  $command = $command->render_to_rel_file('foo_bar', 'foo/bar.txt', @args);
 
 Portably render a template from the C<DATA> section of the command class with
 L<Mojo::Template> to a file relative to the current working directory and

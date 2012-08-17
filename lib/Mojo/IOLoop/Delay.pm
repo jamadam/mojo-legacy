@@ -16,6 +16,7 @@ sub end {
   my $self = shift;
   push @{$self->{args} ||= []}, @_;
   $self->emit_safe('finish', @{$self->{args}}) if --$self->{counter} <= 0;
+  return $self->{counter};
 }
 
 # "Mrs. Simpson, bathroom is not for customers.
@@ -62,7 +63,7 @@ L<Mojo::IOLoop::Delay> can emit the following events.
 =head2 C<finish>
 
   $delay->on(finish => sub {
-    my $delay = shift;
+    my ($delay, @args) = @_;
     ...
   });
 
@@ -77,7 +78,8 @@ L<Mojo::IOLoop::Delay> implements the following attributes.
   my $ioloop = $delay->ioloop;
   $delay     = $delay->ioloop(Mojo::IOLoop->new);
 
-Loop object to control, defaults to the global L<Mojo::IOLoop> singleton.
+Event loop object to control, defaults to the global L<Mojo::IOLoop>
+singleton.
 
 =head1 METHODS
 
@@ -89,7 +91,7 @@ implements the following new ones.
   my $cb = $delay->begin;
 
 Increment active event counter, the returned callback can be used instead of
-C<end>.
+C<end>. Note that the first argument passed to the callback will be ignored.
 
   my $delay = Mojo::IOLoop->delay;
   Mojo::UserAgent->new->get('mojolicio.us' => $delay->begin);
@@ -97,10 +99,11 @@ C<end>.
 
 =head2 C<end>
 
-  $delay->end;
-  $delay->end(@args);
+  my $remaining = $delay->end;
+  my $remaining = $delay->end(@args);
 
-Decrement active event counter.
+Decrement active event counter, all arguments are queued for the C<finish>
+event and C<wait> method.
 
 =head2 C<wait>
 

@@ -102,9 +102,8 @@ sub _detect {
   while ($message =~ /at\s+(.+?)\s+line\s+(\d+)/g) { push @trace, [$1, $2] }
 
   # Extract file and line from stacktrace
-  if (my $first = $self->frames->[0]) {
-    unshift @trace, [$first->[1], $first->[2]] if $first->[1];
-  }
+  my $first = $self->frames->[0];
+  unshift @trace, [$first->[1], $first->[2]] if $first && $first->[1];
 
   # Search for context
   for my $frame (reverse @trace) {
@@ -155,7 +154,8 @@ Mojo::Exception - Exceptions with context
 
   use Mojo::Exception;
 
-  my $e = Mojo::Exception->new;
+  my $e = Mojo::Exception->new('Not again!');
+  $e->throw;
 
 =head1 DESCRIPTION
 

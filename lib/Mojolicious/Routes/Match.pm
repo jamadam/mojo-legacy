@@ -16,7 +16,7 @@ sub new {
 
   # Path
   my $path = url_unescape shift;
-  $self->{path} = defined decode('UTF-8', $path) ? decode('UTF-8', $path) : $path;
+  $self->{path} = do {my $tmp = decode('UTF-8', $path); defined $tmp ? $tmp : $path};
 
   # WebSocket
   $self->{websocket} = shift;
@@ -67,8 +67,7 @@ sub match {
   my $endpoint = $r->is_endpoint;
   if ($r->inline || ($endpoint && $empty)) {
     push @{$self->stack}, {%$captures};
-    delete $captures->{cb};
-    delete $captures->{app};
+    delete $captures->{$_} for qw(app cb);
   }
 
   # Endpoint

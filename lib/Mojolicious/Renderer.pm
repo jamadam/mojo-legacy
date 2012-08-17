@@ -16,34 +16,18 @@ has encoding => 'UTF-8';
 has [qw(handlers helpers)] => sub { {} };
 has paths => sub { [] };
 
+# Bundled templates
+my $HOME = Mojo::Home->new;
+$HOME->parse(
+  $HOME->parse($HOME->mojo_lib_dir)->rel_dir('Mojolicious/templates'));
+my %TEMPLATES = map { $_ => $HOME->slurp_rel_file($_) } @{$HOME->list_files};
+
 # "This is not how Xmas is supposed to be.
 #  In my day Xmas was about bringing people together,
 #  not blowing them apart."
 sub new {
-
-  # Add "data" handler
-  my $self = shift->SUPER::new(@_)->add_handler(
-    data => sub {
-      my ($r, $c, $output, $options) = @_;
-      $$output = $options->{data};
-    }
-  );
-
-  # Add "json" handler
-  $self->add_handler(
-    json => sub {
-      my ($r, $c, $output, $options) = @_;
-      $$output = Mojo::JSON->new->encode($options->{json});
-    }
-  );
-
-  # Add "text" handler
-  return $self->add_handler(
-    text => sub {
-      my ($r, $c, $output, $options) = @_;
-      $$output = $options->{text};
-    }
-  );
+  my $self = shift->SUPER::new(@_)->add_handler(json => \&_json);
+  return $self->add_handler(data => \&_data)->add_handler(text => \&_text);
 }
 
 sub add_handler {
@@ -176,6 +160,13 @@ sub template_path {
   return catfile($self->paths->[0], split '/', $name);
 }
 
+sub _bundled { $TEMPLATES{"@{[pop]}.html.ep"} }
+
+sub _data {
+  my ($self, $c, $output, $options) = @_;
+  $$output = $options->{data};
+}
+
 sub _detect_handler {
   my ($self, $options) = @_;
 
@@ -201,11 +192,15 @@ sub _detect_handler {
 
 sub _extends {
   my ($self, $c) = @_;
-  my $stash = $c->stash;
-  if (my $layout = delete $stash->{layout}) {
-    $stash->{extends} ||= 'layouts' . '/' . $layout;
-  }
+  my $stash  = $c->stash;
+  my $layout = delete $stash->{layout};
+  $stash->{extends} ||= join('/', 'layouts', $layout) if $layout;
   return delete $stash->{extends};
+}
+
+sub _json {
+  my ($self, $c, $output, $options) = @_;
+  $$output = Mojo::JSON->new->encode($options->{json});
 }
 
 sub _render_template {
@@ -223,6 +218,11 @@ sub _render_template {
   return;
 }
 
+sub _text {
+  my ($self, $c, $output, $options) = @_;
+  $$output = $options->{text};
+}
+
 1;
 
 =head1 NAME
@@ -234,6 +234,8 @@ Mojolicious::Renderer - MIME type based renderer
   use Mojolicious::Renderer;
 
   my $renderer = Mojolicious::Renderer->new;
+  push @{$renderer->classes}, 'MyApp::Foo';
+  push @{renderer->paths}, '/home/sri/templates';
 
 =head1 DESCRIPTION
 

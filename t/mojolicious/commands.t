@@ -3,7 +3,7 @@ use Mojo::Base -strict;
 # Disable libev
 BEGIN { $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll' }
 
-use Test::More tests => 40;
+use Test::More tests => 41;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
@@ -34,7 +34,6 @@ is ref Mojolicious::Commands->run('psgi'), 'CODE', 'right reference';
 # Start application
 {
   local $ENV{MOJO_APP_LOADER} = 1;
-  local $ENV{MOJO_APP};
   is ref Mojolicious::Commands->start_app('MojoliciousTest'),
     'MojoliciousTest', 'right class';
 }
@@ -43,15 +42,19 @@ is ref Mojolicious::Commands->run('psgi'), 'CODE', 'right reference';
   local $ENV{MOJO_APP}        = 'MojoliciousTest';
   is ref Mojolicious::Commands->start, 'MojoliciousTest', 'right class';
 }
+{
+  local $ENV{MOJO_APP_LOADER} = 1;
+  local $ENV{MOJO_APP};
+  is ref Mojolicious::Commands->start, 'Mojolicious::Lite', 'right class';
+}
 
 # Start application with command
 {
-  local $ENV{MOJO_APP};
   is ref Mojolicious::Commands->start_app(MojoliciousTest => 'psgi'), 'CODE',
     'right reference';
 }
 {
-  local $ENV{MOJO_APP} = 'MojoliciousTest';
+  local $ENV{MOJO_APP};
   is ref Mojolicious::Commands->start('psgi'), 'CODE', 'right reference';
 }
 
@@ -63,7 +66,6 @@ my $app;
 }
 is $app->start('test_command'), 'works!', 'right result';
 {
-  local $ENV{MOJO_APP};
   is(Mojolicious::Commands->start_app(MojoliciousTest => 'test_command'),
     'works!', 'right result');
 }

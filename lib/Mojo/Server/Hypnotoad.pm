@@ -270,8 +270,7 @@ sub _reap {
   # Clean up failed upgrade
   if (($self->{new} || '') eq $pid) {
     $self->{log}->info('Zero downtime software upgrade failed.');
-    delete $self->{upgrade};
-    delete $self->{new};
+    delete $self->{$_} for qw(new upgrade);
   }
 
   # Clean up worker
@@ -334,8 +333,7 @@ sub _spawn {
   $SIG{INT} = $SIG{TERM} = $SIG{CHLD} = $SIG{USR2} = $SIG{TTIN} = $SIG{TTOU}
     = 'DEFAULT';
   $SIG{QUIT} = sub { $loop->max_connections(0) };
-  delete $self->{reader};
-  delete $self->{poll};
+  delete $self->{$_} for qw(poll reader);
 
   # Start
   $self->{log}->debug("Worker $$ started.");
@@ -364,10 +362,10 @@ Mojo::Server::Hypnotoad - ALL GLORY TO THE HYPNOTOAD!
 
 =head1 DESCRIPTION
 
-L<Mojo::Server::Hypnotoad> is a full featured UNIX optimized preforking
-non-blocking I/O HTTP 1.1 and WebSocket server built around the very well
-tested and reliable L<Mojo::Server::Daemon> with C<IPv6>, C<TLS>, C<libev> and
-hot deployment support that just works.
+L<Mojo::Server::Hypnotoad> is a full featured, UNIX optimized, preforking
+non-blocking I/O HTTP and WebSocket server, built around the very well tested
+and reliable L<Mojo::Server::Daemon>, with C<IPv6>, C<TLS>, C<libev> and hot
+deployment support that just works.
 
 To start applications with it you can use the L<hypnotoad> script.
 
@@ -383,9 +381,9 @@ For L<Mojolicious> and L<Mojolicious::Lite> applications it will default to
 C<production> mode.
 
 Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
-L<IO::Socket::SSL> (1.75+) are supported transparently and used if installed.
-Individual features can also be disabled with the C<MOJO_NO_IPV6> and
-C<MOJO_NO_TLS> environment variables.
+L<IO::Socket::SSL> (1.75+) are supported transparently through
+L<Mojo::IOLoop>, and used if installed. Individual features can also be
+disabled with the C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for more.
 
@@ -460,9 +458,9 @@ L<Mojolicious::Guides::Cookbook/"Hypnotoad"> for examples.
 
 Maximum number of connections a worker is allowed to accept before stopping
 gracefully, defaults to C<1000>. Setting the value to C<0> will allow workers
-to accept new connections indefinitely. Note that half of this value can be
-subtracted randomly to improve load balancing, and that worker processes will
-stop sending heartbeat messages once the limit has been reached.
+to accept new connections indefinitely. Note that up to half of this value can
+be subtracted randomly to improve load balancing, and that worker processes
+will stop sending heartbeat messages once the limit has been reached.
 
 =head2 C<backlog>
 

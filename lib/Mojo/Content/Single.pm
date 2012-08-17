@@ -9,15 +9,7 @@ has auto_upgrade => 1;
 
 sub new {
   my $self = shift->SUPER::new(@_);
-
-  # Default content parser
-  $self->{read} = $self->on(
-    read => sub {
-      my ($self, $chunk) = @_;
-      $self->asset($self->asset->add_chunk($chunk));
-    }
-  );
-
+  $self->{read} = $self->on(read => \&_read);
   return $self;
 }
 
@@ -49,7 +41,7 @@ sub parse {
   my $self = shift;
 
   # Parse headers
-  $self->parse_until_body(@_);
+  $self->_parse_until_body(@_);
 
   # Parse body
   return $self->SUPER::parse
@@ -62,11 +54,16 @@ sub parse {
   return $multi->parse;
 }
 
+sub _read {
+  my ($self, $chunk) = @_;
+  $self->asset($self->asset->add_chunk($chunk));
+}
+
 1;
 
 =head1 NAME
 
-Mojo::Content::Single - HTTP 1.1 content container
+Mojo::Content::Single - HTTP content
 
 =head1 SYNOPSIS
 
@@ -74,11 +71,12 @@ Mojo::Content::Single - HTTP 1.1 content container
 
   my $single = Mojo::Content::Single->new;
   $single->parse("Content-Length: 12\r\n\r\nHello World!");
+  say $single->headers->content_length;
 
 =head1 DESCRIPTION
 
-L<Mojo::Content::Single> is a container for HTTP 1.1 content as described in
-RFC 2616.
+L<Mojo::Content::Single> is a container for HTTP content as described in RFC
+2616.
 
 =head1 EVENTS
 

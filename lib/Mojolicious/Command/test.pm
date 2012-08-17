@@ -4,7 +4,6 @@ use Mojo::Base 'Mojolicious::Command';
 use Cwd 'realpath';
 use FindBin;
 use File::Spec::Functions qw(abs2rel catdir splitdir);
-use Getopt::Long qw(GetOptions :config no_auto_abbrev no_ignore_case);
 use Mojo::Home;
 
 has description => "Run unit tests.\n";
@@ -18,15 +17,13 @@ EOF
 # "Why, the secret ingredient was...water!
 #  Yes, ordinary water, laced with nothing more than a few spoonfuls of LSD."
 sub run {
-  my $self = shift;
+  my ($self, @args) = @_;
 
   # Options
-  local @ARGV = @_;
-  GetOptions('v|verbose' => sub { $ENV{HARNESS_VERBOSE} = 1 });
-  my @tests = @ARGV;
+  $self->_options(\@args, 'v|verbose' => sub { $ENV{HARNESS_VERBOSE} = 1 });
 
   # Search tests
-  unless (@tests) {
+  unless (@args) {
     my @base = splitdir(abs2rel $FindBin::Bin);
 
     # Test directory in the same directory as "mojo" (t)
@@ -34,20 +31,19 @@ sub run {
 
     # Test dirctory in the directory above "mojo" (../t)
     $path = catdir @base, '..', 't' unless -d $path;
-    return say "Can't find test directory." unless -d $path;
+    die "Can't find test directory.\n" unless -d $path;
 
     # List test files
     my $home = Mojo::Home->new($path);
-    /\.t$/ and push(@tests, $home->rel_file($_)) for @{$home->list_files};
+    /\.t$/ and push(@args, $home->rel_file($_)) for @{$home->list_files};
 
-    $path = realpath $path;
-    say "Running tests from '$path'.";
+    say "Running tests from '", realpath($path), "'.";
   }
 
   # Run tests
   $ENV{HARNESS_OPTIONS} = defined $ENV{HARNESS_OPTIONS} ? $ENV{HARNESS_OPTIONS} : 'c';
   require Test::Harness;
-  Test::Harness::runtests(sort @tests);
+  Test::Harness::runtests(sort @args);
 }
 
 1;

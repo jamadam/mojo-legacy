@@ -24,9 +24,9 @@ sub endpoint {
   my $port   = $url->port || ($scheme eq 'https' ? 443 : 80);
 
   # Proxy for normal HTTP requests
-  return $scheme eq 'http' && lc($req->headers->upgrade || '') ne 'websocket'
-    ? $self->_proxy($tx, $scheme, $host, $port)
-    : ($scheme, $host, $port);
+  return $self->_proxy($tx, $scheme, $host, $port)
+    if $scheme eq 'http' && lc($req->headers->upgrade || '') ne 'websocket';
+  return $scheme, $host, $port;
 }
 
 sub form {
@@ -79,7 +79,7 @@ sub form {
   my $req     = $tx->req;
   my $headers = $req->headers;
   $headers->content_type('multipart/form-data') if $multipart;
-  if (($headers->content_type || '') eq 'multipart/form-data') {
+  if (defined $headers->content_type && $headers->content_type eq 'multipart/form-data') {
     my $parts = $self->_multipart($encoding, $p->to_hash);
     $req->content(
       Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
@@ -185,12 +185,11 @@ sub websocket {
   my $self = shift;
 
   # New WebSocket transaction
-  my $tx  = $self->tx(GET => @_);
-  my $req = $tx->req;
-  my $abs = $req->url->to_abs;
-  if (my $scheme = $abs->scheme) {
-    $req->url($abs->scheme($scheme eq 'wss' ? 'https' : 'http'));
-  }
+  my $tx     = $self->tx(GET => @_);
+  my $req    = $tx->req;
+  my $abs    = $req->url->to_abs;
+  my $scheme = $abs->scheme;
+  $req->url($abs->scheme($scheme eq 'wss' ? 'https' : 'http')) if $scheme;
 
   # Handshake
   Mojo::Transaction::WebSocket->new(handshake => $tx, masked => 1)
@@ -214,7 +213,7 @@ sub _multipart {
     if (ref $values eq 'HASH') {
       $filename = delete $values->{filename} || $name;
       $filename = encode $encoding, $filename if $encoding;
-      $filename = url_escape $filename, "^$Mojo::URL::UNRESERVED";
+      $filename = url_escape $filename, '^A-Za-z0-9\-._~';
       push @parts, $part->asset(delete $values->{file});
       $headers->from_hash($values);
     }
@@ -230,7 +229,7 @@ sub _multipart {
 
     # Content-Disposition
     $name = encode $encoding, $name if $encoding;
-    $name = url_escape $name, "^$Mojo::URL::UNRESERVED";
+    $name = url_escape $name, '^A-Za-z0-9\-._~';
     my $disposition = qq{form-data; name="$name"};
     $disposition .= qq{; filename="$filename"} if $filename;
     $headers->content_disposition($disposition);
@@ -262,8 +261,18 @@ Mojo::UserAgent::Transactor - User agent transactor
 
   use Mojo::UserAgent::Transactor;
 
-  my $t  = Mojo::UserAgent::Transactor->new;
-  my $tx = $t->tx(GET => 'http://mojolicio.us');
+  # Simple GET request
+  my $t = Mojo::UserAgent::Transactor->new;
+  say $t->tx(GET => 'http://mojolicio.us')->req->to_string;
+
+  # PATCH request with "Do Not Track" header and content
+  say $t->tx(PATCH => 'mojolicio.us' => {DNT => 1} => 'Hi!')->req->to_string;
+
+  # POST request with form data
+  say $t->form('http://kraih.com' => {a => [1, 2], b => 3})->req->to_string;
+
+  # POST request with JSON data
+  say $t->json('http://kraih.com' => {a => [1, 2], b => 3})->req->to_string;
 
 =head1 DESCRIPTION
 
@@ -308,9 +317,6 @@ data.
 
   # Multipart upload streamed from file
   my $tx = $t->form('mojolicio.us' => {fun => {file => '/etc/passwd'}});
-
-  # Inspect generated request
-  say $t->form('mojolicio.us' => {a => [1, 2], b => 3})->req->to_string;
 
 While the "multipart/form-data" content type will be automatically used
 instead of "application/x-www-form-urlencoded" when necessary, you can also

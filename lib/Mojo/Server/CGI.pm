@@ -19,8 +19,7 @@ sub run {
   # Request body
   binmode STDIN;
   until ($req->is_finished) {
-    my $size = $ENV{MOJO_CHUNK_SIZE} || 131072;
-    last unless my $read = STDIN->read(my $buffer, $size, 0);
+    last unless my $read = STDIN->read(my $buffer, 131072, 0);
     $req->parse($buffer);
   }
 
@@ -55,18 +54,17 @@ sub _write {
   # Write chunks to STDOUT
   my $offset = 0;
   while (1) {
-    my $chunk = $res->$method($offset);
 
     # No chunk yet, try again
-    sleep 1 and next unless defined $chunk;
+    sleep 1 and next unless defined(my $chunk = $res->$method($offset));
 
     # End of part
-    last unless length $chunk;
+    last unless my $len = length $chunk;
 
     # Part
+    $offset += $len;
     return unless STDOUT->opened;
     print STDOUT $chunk;
-    $offset += length $chunk;
   }
 
   return 1;
@@ -130,7 +128,7 @@ the following new ones.
 
 =head2 C<run>
 
-  $cgi->run;
+  my $status = $cgi->run;
 
 Run CGI.
 

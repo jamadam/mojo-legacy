@@ -15,8 +15,8 @@ has paths   => sub { [] };
 my $MTIME = time;
 
 # Bundled files
-my $PUBLIC
-  = Mojo::Home->new(Mojo::Home->mojo_lib_dir)->rel_dir('Mojolicious/public');
+my $HOME   = Mojo::Home->new;
+my $PUBLIC = $HOME->parse($HOME->mojo_lib_dir)->rel_dir('Mojolicious/public');
 
 # "Valentine's Day's coming? Aw crap! I forgot to get a girlfriend again!"
 sub dispatch {
@@ -32,7 +32,7 @@ sub dispatch {
   # Serve static file and prevent directory traversal
   return if $parts[0] eq '..' || !$self->serve($c, join('/', @parts));
   $stash->{'mojo.static'}++;
-  return $c->rendered;
+  return !!$c->rendered;
 }
 
 sub file {
@@ -56,7 +56,7 @@ sub serve {
   return unless my $asset = $self->file($rel);
   my $type = $rel =~ /\.(\w+)$/ ? $c->app->types->type($1) : undef;
   $c->res->headers->content_type($type || 'text/plain');
-  return $self->serve_asset($c, $asset);
+  return !!$self->serve_asset($c, $asset);
 }
 
 sub serve_asset {
@@ -71,12 +71,8 @@ sub serve_asset {
   # If modified since
   my $headers = $c->req->headers;
   if (my $date = $headers->if_modified_since) {
-
-    # Not modified
     my $since = Mojo::Date->new($date)->epoch;
-    return $res->code(304)->headers->remove('Content-Type')
-      ->remove('Content-Length')->remove('Content-Disposition')
-      if defined $since && $since == $mtime;
+    return $res->code(304) if defined $since && $since == $mtime;
   }
 
   # Range
@@ -140,6 +136,8 @@ Mojolicious::Static - Serve static files
   use Mojolicious::Static;
 
   my $static = Mojolicious::Static->new;
+  push @{$static->classes}, 'MyApp::Foo';
+  push @{$static->paths}, '/home/sri/public';
 
 =head1 DESCRIPTION
 

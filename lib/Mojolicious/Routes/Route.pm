@@ -72,7 +72,7 @@ sub has_conditions {
   return $parent->has_conditions;
 }
 
-sub has_custom_name { shift->{custom} }
+sub has_custom_name { !!shift->{custom} }
 
 sub has_websocket {
   my $self = shift;
@@ -83,25 +83,18 @@ sub has_websocket {
 
 sub is_endpoint {
   my $self = shift;
-
-  # Bridge
-  return if $self->inline;
-
-  # Check number of children
-  return !@{$self->children};
+  return $self->inline ? undef : !@{$self->children};
 }
 
-sub is_websocket { shift->{websocket} }
+sub is_websocket { !!shift->{websocket} }
 
 sub name {
   my $self = shift;
 
   # Custom names have precedence
   return $self->{name} unless @_;
-  if (defined(my $name = shift)) {
-    $self->{name}   = $name;
-    $self->{custom} = 1;
-  }
+  $self->{name}   = shift;
+  $self->{custom} = 1;
 
   return $self;
 }
@@ -123,7 +116,7 @@ sub over {
 
 sub parse {
   my $self = shift;
-  $self->{name} = defined $self->pattern->parse(@_)->pattern ? $self->pattern->parse(@_)->pattern : '';
+  $self->{name} = do {my $tmp = $self->pattern->parse(@_)->pattern; defined $tmp ? $tmp : ''};
   $self->{name} =~ s/\W+//g;
   return $self;
 }
@@ -161,7 +154,7 @@ sub route {
   my $self   = shift;
   my $route  = $self->add_child($self->new(@_))->children->[-1];
   my $format = $self->pattern->constraints->{format};
-  $route->pattern->constraints->{format} = defined $route->pattern->constraints->{format} ? $route->pattern->constraints->{format} : 0 if defined $format && !$format;
+  $route->pattern->constraints->{format} = do {my $tmp = $route->pattern->constraints->{format}; defined $tmp ? $tmp : 0} if defined $format && !$format;
   return $route;
 }
 
@@ -272,21 +265,21 @@ sub _generate_route {
   # Callback
   $defaults{cb} = $cb if $cb;
 
-  # Create bridge
-  return $self->bridge($pattern, @constraints)->over(\@conditions)
-    ->to(\%defaults)->name($name)
-    if !ref $methods && $methods eq 'under';
+  # Create bridge or route
+  my $route
+    = $methods eq 'under'
+    ? $self->bridge($pattern, @constraints)
+    : $self->route($pattern, @constraints)->via($methods);
+  $route->over(\@conditions)->to(\%defaults);
 
-  # Create route
-  return $self->route($pattern, @constraints)->over(\@conditions)
-    ->via($methods)->to(\%defaults)->name($name);
+  return defined $name ? $route->name($name) : $route;
 }
 
 1;
 
 =head1 NAME
 
-Mojolicious::Routes::Route - Route container
+Mojolicious::Routes::Route - Route
 
 =head1 SYNOPSIS
 
@@ -399,9 +392,9 @@ L<Mojolicious::Lite> tutorial for more argument variations.
   $r = $r->detour('controller#action');
   $r = $r->detour('controller#action', foo => 'bar');
   $r = $r->detour('controller#action', {foo => 'bar'});
-  $r = $r->detour($app);
-  $r = $r->detour($app, foo => 'bar');
-  $r = $r->detour($app, {foo => 'bar'});
+  $r = $r->detour(Mojolicious->new);
+  $r = $r->detour(Mojolicious->new, foo => 'bar');
+  $r = $r->detour(Mojolicious->new, {foo => 'bar'});
   $r = $r->detour('MyApp');
   $r = $r->detour('MyApp', foo => 'bar');
   $r = $r->detour('MyApp', {foo => 'bar'});
@@ -480,7 +473,9 @@ L<Mojolicious::Lite> tutorial for more argument variations.
 =head2 C<over>
 
   my $over = $r->over;
-  $r       = $r->over(foo => qr/\w+/);
+  $r       = $r->over(foo => 1);
+  $r       = $r->over(foo => 1, bar => {baz => 'yada'});
+  $r       = $r->over([foo => 1, bar => {baz => 'yada'}]);
 
 Activate conditions for this route. Note that this automatically disables the
 routing cache, since conditions are too complex for caching.
@@ -566,9 +561,9 @@ Generate route matching all HTTP request methods.
   $r           = $r->to('controller#action');
   $r           = $r->to('controller#action', foo => 'bar');
   $r           = $r->to('controller#action', {foo => 'bar'});
-  $r           = $r->to($app);
-  $r           = $r->to($app, foo => 'bar');
-  $r           = $r->to($app, {foo => 'bar'});
+  $r           = $r->to(Mojolicious->new);
+  $r           = $r->to(Mojolicious->new, foo => 'bar');
+  $r           = $r->to(Mojolicious->new, {foo => 'bar'});
   $r           = $r->to('MyApp');
   $r           = $r->to('MyApp', foo => 'bar');
   $r           = $r->to('MyApp', {foo => 'bar'});

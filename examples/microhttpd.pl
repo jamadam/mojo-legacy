@@ -6,10 +6,8 @@ use Mojo::Base -strict;
 #  I'll get the powder, sir."
 use Mojo::IOLoop;
 
-# Buffer for incoming data
-my %buffer;
-
 # Minimal ioloop example demonstrating how to cheat at HTTP benchmarks :)
+my %buffer;
 Mojo::IOLoop->server(
   {port => 3000} => sub {
     my ($loop, $stream, $id) = @_;
@@ -44,7 +42,7 @@ Try something like "ab -c 30 -n 100000 -k http://127.0.0.1:3000/" for testing.
 On a MacBook Pro 13" this results in about 16k req/s.
 EOF
 
-# Start loop
+# Start event loop
 Mojo::IOLoop->start;
 
 1;

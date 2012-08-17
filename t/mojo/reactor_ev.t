@@ -7,7 +7,7 @@ use Test::More;
 plan skip_all => 'set TEST_EV to enable this test (developer only!)'
   unless $ENV{TEST_EV};
 plan skip_all => 'EV 4.0 required for this test!' unless eval 'use EV 4.0; 1';
-plan tests => 68;
+plan tests => 69;
 
 # "Oh well. At least we'll die doing what we love: inhaling molten rock."
 use IO::Socket::INET;
@@ -24,12 +24,14 @@ $reactor = Mojo::IOLoop->singleton->reactor;
 is ref $reactor, 'Mojo::Reactor::EV', 'right object';
 
 # Make sure it stops automatically when not watching for events
-Mojo::IOLoop->one_tick;
 my $triggered;
 Mojo::IOLoop->timer(0.25 => sub { $triggered++ });
 Mojo::IOLoop->start;
 ok $triggered, 'reactor waited for one event';
+my $time = time;
 Mojo::IOLoop->start;
+Mojo::IOLoop->one_tick;
+ok time < ($time + 10), 'stopped automatically';
 
 # Listen
 my $port   = Mojo::IOLoop->generate_port;
@@ -112,7 +114,7 @@ ok $readable,  'handle is readable again';
 ok $writable,  'handle is writable again';
 ok $timer,     'timer was triggered';
 ok $recurring, 'recurring was triggered';
-my $done = 0;
+my $done;
 ($readable, $writable, $timer, $recurring) = undef;
 $reactor->timer(0.025 => sub { $done = shift->is_running });
 $reactor->one_tick while !$done;
@@ -154,26 +156,26 @@ ok !$writable, 'io event was not triggered again';
 my $reactor2 = Mojo::Reactor::EV->new;
 is ref $reactor2, 'Mojo::Reactor::Poll', 'right object';
 
-# Parallel loops
+# Parallel reactors
 $timer = 0;
 $reactor->recurring(0 => sub { $timer++ });
-my $timer2 = 0;
+my $timer2;
 $reactor2->recurring(0 => sub { $timer2++ });
 $reactor->timer(0.025 => sub { shift->stop });
 $reactor->start;
 ok $timer, 'timer was triggered';
 ok !$timer2, 'timer was not triggered';
-($timer, $timer2) = 0;
+$timer = $timer2 = 0;
 $reactor2->timer(0.025 => sub { shift->stop });
 $reactor2->start;
 ok !$timer, 'timer was not triggered';
 ok $timer2, 'timer was triggered';
-($timer, $timer2) = 0;
+$timer = $timer2 = 0;
 $reactor->timer(0.025 => sub { shift->stop });
 $reactor->start;
 ok $timer, 'timer was triggered';
 ok !$timer2, 'timer was not triggered';
-($timer, $timer2) = 0;
+$timer = $timer2 = 0;
 $reactor2->timer(0.025 => sub { shift->stop });
 $reactor2->start;
 ok !$timer, 'timer was not triggered';
@@ -214,7 +216,7 @@ $server = $client = '';
 Mojo::IOLoop->server(
   {address => '127.0.0.1', port => $port} => sub {
     my ($loop, $stream) = @_;
-    $stream->write('test', sub { shift->write('321') });
+    $stream->write('test' => sub { shift->write('321') });
     $stream->on(read => sub { $server .= pop });
     $server_running = Mojo::IOLoop->is_running;
     eval { Mojo::IOLoop->start };
@@ -224,7 +226,7 @@ Mojo::IOLoop->server(
 Mojo::IOLoop->client(
   {port => $port} => sub {
     my ($loop, $err, $stream) = @_;
-    $stream->write('tset', sub { shift->write('123') });
+    $stream->write('tset' => sub { shift->write('123') });
     $stream->on(read => sub { $client .= pop });
     $client_running = Mojo::IOLoop->is_running;
     eval { Mojo::IOLoop->start };

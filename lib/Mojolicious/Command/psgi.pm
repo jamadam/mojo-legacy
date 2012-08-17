@@ -8,7 +8,7 @@ has usage       => "usage: $0 psgi\n";
 
 # "In the end it was not guns or bombs that defeated the aliens,
 #  but that humblest of all God's creatures... the Tyrannosaurus Rex."
-sub run { Mojo::Server::PSGI->new->to_psgi_app }
+sub run { Mojo::Server::PSGI->new(app => shift->app)->to_psgi_app }
 
 1;
 
@@ -21,7 +21,7 @@ Mojolicious::Command::psgi - PSGI command
   use Mojolicious::Command::psgi;
 
   my $psgi = Mojolicious::Command::psgi->new;
-  my $app = $psgi->run;
+  my $app  = $psgi->run;
 
 =head1 DESCRIPTION
 

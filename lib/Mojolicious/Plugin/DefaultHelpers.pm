@@ -1,7 +1,7 @@
 package Mojolicious::Plugin::DefaultHelpers;
 use Mojo::Base 'Mojolicious::Plugin';
 
-require Data::Dumper;
+use Data::Dumper ();
 
 # "You're watching Futurama,
 #  the show that doesn't condone the cool crime of robbery."
@@ -33,89 +33,80 @@ sub register {
   $app->helper(content => sub { shift->render_content(@_) });
 
   # Add "content_for" helper
-  $app->helper(
-    content_for => sub {
-      my ($self, $name) = (shift, shift);
-      $self->render_content($name, $self->render_content($name), @_);
-    }
-  );
+  $app->helper(content_for => \&_content_for);
 
   # Add "current_route" helper
-  $app->helper(
-    current_route => sub {
-      my $self = shift;
-      return '' unless my $endpoint = $self->match->endpoint;
-      return $endpoint->name unless @_;
-      return $endpoint->name eq shift;
-    }
-  );
+  $app->helper(current_route => \&_current_route);
 
   # Add "dumper" helper
-  $app->helper(
-    dumper => sub {
-      shift;
-      Data::Dumper->new([@_])->Indent(1)->Terse(1)->Dump;
-    }
-  );
+  $app->helper(dumper => \&_dumper);
 
   # Add "include" helper
-  $app->helper(
-    include => sub {
-      my $self     = shift;
-      my $template = @_ % 2 ? shift : undef;
-      my $args     = {@_};
-      $args->{template} = $template if defined $template;
-
-      # "layout" and "extends" can't be localized
-      my $layout  = delete $args->{layout};
-      my $extends = delete $args->{extends};
-
-      # Localize arguments
-      my @keys = keys %$args;
-      local @{$self->stash}{@keys} = @{$args}{@keys};
-
-      return $self->render_partial(layout => $layout, extend => $extends);
-    }
-  );
+  $app->helper(include => \&_include);
 
   # Add "memorize" helper
-  my %memorize;
+  my %mem;
   $app->helper(
     memorize => sub {
-      shift;
-      my $cb = pop;
-      return '' unless ref $cb eq 'CODE';
-      my $name = shift;
-      my $args;
-      if (ref $name eq 'HASH') { ($args, $name) = ($name, undef) }
-      else                     { $args = shift || {} }
+      my $self = shift;
+      return '' unless ref(my $cb = pop) eq 'CODE';
+      my ($name, $args)
+        = ref $_[0] eq 'HASH' ? (undef, shift) : (shift, shift || {});
 
       # Default name
       $name ||= join '', map { $_ || '' } (caller(1))[0 .. 3];
 
-      # Expire
+      # Expire old results
       my $expires = $args->{expires} || 0;
-      delete $memorize{$name}
-        if exists $memorize{$name}
-        && $expires > 0
-        && $memorize{$name}{expires} < time;
+      delete $mem{$name}
+        if exists $mem{$name} && $expires > 0 && $mem{$name}{expires} < time;
 
-      # Memorized
-      return $memorize{$name}{content} if exists $memorize{$name};
+      # Memorized result
+      return $mem{$name}{content} if exists $mem{$name};
 
-      # Memorize
-      $memorize{$name}{expires} = $expires;
-      $memorize{$name}{content} = $cb->();
+      # Memorize new result
+      $mem{$name}{expires} = $expires;
+      return $mem{$name}{content} = $cb->();
     }
   );
 
   # Add "url_with" helper
-  $app->helper(
-    url_with => sub {
-      my $self = shift;
-      return $self->url_for(@_)->query($self->req->url->query->clone);
-    }
-  );
+  $app->helper(url_with => \&_url_with);
+}
+
+sub _content_for {
+  my ($self, $name) = (shift, shift);
+  $self->render_content($name, $self->render_content($name), @_);
+}
+
+sub _current_route {
+  return '' unless my $endpoint = shift->match->endpoint;
+  return $endpoint->name unless @_;
+  return $endpoint->name eq shift;
+}
+
+sub _dumper { shift; Data::Dumper->new([@_])->Indent(1)->Terse(1)->Dump }
+
+sub _include {
+  my $self     = shift;
+  my $template = @_ % 2 ? shift : undef;
+  my $args     = {@_};
+  $args->{template} = $template if defined $template;
+
+  # "layout" and "extends" can't be localized
+  my $layout  = delete $args->{layout};
+  my $extends = delete $args->{extends};
+
+  # Localize arguments
+  my @keys = keys %$args;
+  local @{$self->stash}{@keys} = @{$args}{@keys};
+
+  return $self->render_partial(layout => $layout, extend => $extends);
+}
+
+sub _url_with {
+  my $self = shift;
+  return $self->url_for(@_)->query($self->req->url->query->clone);
 }
 
 1;
@@ -295,7 +286,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
 =head2 C<register>
 
-  $plugin->register($app);
+  $plugin->register(Mojolicious->new);
 
 Register helpers in L<Mojolicious> application.
 

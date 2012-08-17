@@ -3,6 +3,7 @@ use Mojo::Base -base;
 
 use Mojo::IOLoop;
 use Mojo::Message::Response;
+use Mojo::Server;
 use Mojo::UserAgent;
 use Mojo::Util qw(decode encode);
 use Test::More ();
@@ -17,7 +18,9 @@ $ENV{MOJO_LOG_LEVEL} ||= $ENV{HARNESS_IS_VERBOSE} ? 'debug' : 'fatal';
 #  How come you guys can go to the moon but can't make my shoes smell good?"
 sub new {
   my $self = shift->SUPER::new;
-  return @_ ? $self->app(shift) : $self;
+  return $self unless my $app = shift;
+  return $self->app(
+    ref $app ? $app : Mojo::Server->new->build_app($ENV{MOJO_APP} = $app));
 }
 
 sub app {
@@ -153,14 +156,14 @@ sub json_has {
   my ($self, $p, $desc) = @_;
   $desc ||= qq{has value for JSON Pointer "$p"};
   return $self->_test('ok',
-    Mojo::JSON::Pointer->contains($self->tx->res->json, $p), $desc);
+    Mojo::JSON::Pointer->new->contains($self->tx->res->json, $p), $desc);
 }
 
 sub json_hasnt {
   my ($self, $p, $desc) = @_;
   $desc ||= qq{has no value for JSON Pointer "$p"};
   return $self->_test('ok',
-    !Mojo::JSON::Pointer->contains($self->tx->res->json, $p), $desc);
+    !Mojo::JSON::Pointer->new->contains($self->tx->res->json, $p), $desc);
 }
 
 sub message_is {
@@ -222,7 +225,7 @@ sub reset_session {
 
 sub send_ok {
   my ($self, $message, $desc) = @_;
-  $self->tx->send($message, sub { Mojo::IOLoop->stop });
+  $self->tx->send($message => sub { Mojo::IOLoop->stop });
   Mojo::IOLoop->start;
   return $self->_test('ok', 1, $desc || 'send message');
 }
@@ -271,18 +274,20 @@ sub text_unlike {
 sub websocket_ok {
   my ($self, $url) = (shift, shift);
 
+  # Establish WebSocket connection
   $self->{messages} = [];
   $self->{finished} = 0;
   $self->ua->websocket(
-    $url, @_,
-    sub {
-      $self->tx(my $tx = pop);
+    $url => @_ => sub {
+      my $tx = pop;
+      $self->tx($tx);
       $tx->on(finish => sub { $self->{finished} = 1 });
       $tx->on(message => sub { push @{$self->{messages}}, pop });
       Mojo::IOLoop->stop;
     }
   );
   Mojo::IOLoop->start;
+
   my $desc = encode 'UTF-8', "websocket $url";
   return $self->_test('ok', $self->tx->res->code eq 101, $desc);
 }
@@ -339,14 +344,17 @@ Test::Mojo - Testing Mojo!
 
   my $t = Test::Mojo->new('MyApp');
 
+  # HTML/XML
   $t->get_ok('/welcome')->status_is(200)->text_is('div#message' => 'Hello!');
 
+  # JSON
   $t->post_form_ok('/search.json' => {q => 'Perl'})
     ->status_is(200)
     ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
     ->header_isnt('X-Bender' => 'Bite my shiny metal ass!');
     ->json_is('/results/4/title' => 'Perl rocks!');
 
+  # WebSocket
   $t->websocket_ok('/echo')
     ->send_ok('hello')
     ->message_is('echo: hello')
@@ -416,7 +424,7 @@ Construct a new L<Test::Mojo> object.
   my $app = $t->app;
   $t      = $t->app(MyApp->new);
 
-Alias for L<Mojo::UserAgent/"app">.
+Access application with L<Mojo::UserAgent/"app">.
 
   # Change log level
   $t->app->log->level('fatal');
@@ -501,8 +509,8 @@ same arguments as L<Mojo::UserAgent/"delete">.
   $t = $t->element_exists('div.foo[x=y]');
   $t = $t->element_exists('html head title', 'has a title');
 
-Checks for existence of the CSS3 selectors first matching XML/HTML element
-with L<Mojo::DOM>.
+Checks for existence of the CSS selectors first matching HTML/XML element with
+L<Mojo::DOM>.
 
 =head2 C<element_exists_not>
 
@@ -723,7 +731,7 @@ Opposite of C<status_is>.
   $t = $t->text_is('div.foo[x=y]' => 'Hello!');
   $t = $t->text_is('html head title' => 'Hello!', 'right title');
 
-Checks text content of the CSS3 selectors first matching XML/HTML element for
+Checks text content of the CSS selectors first matching HTML/XML element for
 exact match with L<Mojo::DOM>.
 
 =head2 C<text_isnt>
@@ -738,7 +746,7 @@ Opposite of C<text_is>.
   $t = $t->text_like('div.foo[x=y]' => qr/Hello/);
   $t = $t->text_like('html head title' => qr/Hello/, 'right title');
 
-Checks text content of the CSS3 selectors first matching XML/HTML element for
+Checks text content of the CSS selectors first matching HTML/XML element for
 similar match with L<Mojo::DOM>.
 
 =head2 C<text_unlike>

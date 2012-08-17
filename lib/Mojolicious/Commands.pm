@@ -3,7 +3,7 @@ use Mojo::Base 'Mojolicious::Command';
 
 use Getopt::Long
   qw(GetOptions :config no_auto_abbrev no_ignore_case pass_through);
-use Mojo::Loader;
+use Mojo::Server;
 
 # "One day a man has everything, the next day he blows up a $400 billion
 #  space station, and the next day he has nothing. It makes you think."
@@ -75,7 +75,8 @@ sub run {
       unless $module;
 
     # Run
-    return $help ? $module->new->help(@args) : $module->new->run(@args);
+    my $command = $module->new(app => $self->app);
+    return $help ? $command->help(@args) : $command->run(@args);
   }
 
   # Test
@@ -92,9 +93,6 @@ sub run {
     }
   }
 
-  # Print overview
-  print $self->message;
-
   # Make list
   my @list;
   my $max = 0;
@@ -105,6 +103,7 @@ sub run {
   }
 
   # Print list
+  print $self->message;
   for my $command (@list) {
     my ($name, $description) = @$command;
     print "  $name" . (' ' x ($max - length $name)) . "   $description";
@@ -114,16 +113,17 @@ sub run {
 
 sub start {
   my $self = shift;
-  my @args = @_ ? @_ : @ARGV;
-  return ref $self ? $self->run(@args) : $self->new->run(@args);
+  return $self->start_app($ENV{MOJO_APP} => @_) if $ENV{MOJO_APP};
+  return $self->new->app->start(@_);
 }
 
 sub start_app {
   my $self = shift;
-  $ENV{MOJO_APP} = shift;
-  $self->new->app->start(@_);
+  return Mojo::Server->new->build_app($ENV{MOJO_APP} = shift)->start(@_);
 }
 
+# "After all this time, somebody else with one eye... who ISN'T a clumsy
+#  carpenter or a kid with a BB gun."
 sub _command {
   my ($module, $fatal) = @_;
   return $module->isa('Mojolicious::Command') ? $module : undef
@@ -141,9 +141,9 @@ Mojolicious::Commands - Command line interface
 
   use Mojolicious::Commands;
 
-  # Command line interface
   my $commands = Mojolicious::Commands->new;
-  $commands->run(@ARGV);
+  push @{$commands->namespaces}, 'MyApp::Command';
+  $commands->run('daemon');
 
 =head1 DESCRIPTION
 
@@ -184,7 +184,7 @@ Upload files to CPAN.
 
   $ ./myapp.pl daemon
 
-Start application with standalone HTTP 1.1 server backend.
+Start application with standalone HTTP server backend.
 
 =head2 C<eval>
 
@@ -327,7 +327,9 @@ disabled with the C<MOJO_NO_DETECT> environment variable.
   Mojolicious::Commands->start;
   Mojolicious::Commands->start(@ARGV);
 
-Start the command line interface.
+Start the command line interface for automatically detected application,
+usually the value of the C<MOJO_APP> environment variable or
+L<Mojo::HelloWorld>.
 
   # Always start daemon and ignore @ARGV
   Mojolicious::Commands->start('daemon', '-l', 'http://*:8080');

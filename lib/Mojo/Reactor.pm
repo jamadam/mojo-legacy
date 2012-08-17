@@ -57,8 +57,6 @@ Mojo::Reactor - Low level event reactor base class
   sub timer      {...}
   sub watch      {...}
 
-  1;
-
 =head1 DESCRIPTION
 
 L<Mojo::Reactor> is an abstract base class for low level event reactors.
@@ -127,9 +125,8 @@ Check if reactor is running. Meant to be overloaded in a subclass.
 
   $reactor->one_tick;
 
-Run reactor until an event occurs or no events are being watched anymore. Note
-that this method can recurse back into the reactor, so you need to be careful.
-Meant to be overloaded in a subclass.
+Run reactor until an event occurs. Note that this method can recurse back into
+the reactor, so you need to be careful. Meant to be overloaded in a subclass.
 
   # Don't block longer than 0.5 seconds
   my $id = $reactor->timer(0.5 => sub {});
@@ -158,8 +155,8 @@ Remove handle or timer. Meant to be overloaded in a subclass.
   $reactor->start;
 
 Start watching for I/O and timer events, this will block until C<stop> is
-called or no events are being watched anymore. Meant to be overloaded in a
-subclass.
+called. Note that some reactors stop automatically if there are no events
+being watched anymore. Meant to be overloaded in a subclass.
 
 =head2 C<stop>
 
@@ -181,7 +178,7 @@ seconds. Meant to be overloaded in a subclass.
 
   $reactor = $reactor->watch($handle, $readable, $writable);
 
-Change I/O events to watch handle for with C<true> and C<false> values, meant
+Change I/O events to watch handle for with C<true> and C<false> values. Meant
 to be overloaded in a subclass. Note that this method requires an active I/O
 watcher.
 

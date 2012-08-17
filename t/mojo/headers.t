@@ -1,6 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 89;
+use Test::More tests => 93;
 
 # "So, have a merry Christmas, a happy Hanukkah, a kwaazy Kwanza,
 #  a tip-top Tet, and a solemn, dignified, Ramadan.
@@ -50,6 +50,8 @@ is $headers->header('Content-Type' => 'text/html')->content_type, 'text/html',
 # Common headers
 $headers = Mojo::Headers->new;
 is $headers->accept('foo')->accept,                   'foo', 'right value';
+is $headers->accept_charset('foo')->accept_charset,   'foo', 'right value';
+is $headers->accept_encoding('foo')->accept_encoding, 'foo', 'right value';
 is $headers->accept_language('foo')->accept_language, 'foo', 'right value';
 is $headers->accept_ranges('foo')->accept_ranges,     'foo', 'right value';
 is $headers->authorization('foo')->authorization,     'foo', 'right value';
@@ -57,10 +59,9 @@ is $headers->connection('foo')->connection,           'foo', 'right value';
 is $headers->cache_control('foo')->cache_control,     'foo', 'right value';
 is $headers->content_disposition('foo')->content_disposition, 'foo',
   'right value';
-is $headers->content_length('foo')->content_length, 'foo', 'right value';
-is $headers->content_range('foo')->content_range,   'foo', 'right value';
-is $headers->content_transfer_encoding('foo')->content_transfer_encoding,
-  'foo', 'right value';
+is $headers->content_encoding('foo')->content_encoding,   'foo', 'right value';
+is $headers->content_length('foo')->content_length,       'foo', 'right value';
+is $headers->content_range('foo')->content_range,         'foo', 'right value';
 is $headers->content_type('foo')->content_type,           'foo', 'right value';
 is $headers->cookie('foo')->cookie,                       'foo', 'right value';
 is $headers->dnt('foo')->dnt,                             'foo', 'right value';
@@ -72,16 +73,17 @@ is $headers->host('foo')->host,                           'foo', 'right value';
 is $headers->if_modified_since('foo')->if_modified_since, 'foo', 'right value';
 is $headers->last_modified('foo')->last_modified,         'foo', 'right value';
 is $headers->location('foo')->location,                   'foo', 'right value';
+is $headers->origin('foo')->origin,                       'foo', 'right value';
 is $headers->proxy_authenticate('foo')->proxy_authenticate, 'foo',
   'right value';
 is $headers->proxy_authorization('foo')->proxy_authorization, 'foo',
   'right value';
 is $headers->range('foo')->range, 'foo', 'right value';
-is $headers->sec_websocket_protocol('foo')->sec_websocket_protocol, 'foo',
+is $headers->sec_websocket_accept('foo')->sec_websocket_accept, 'foo',
+  'right value';
+is $headers->sec_websocket_extensions('foo')->sec_websocket_extensions, 'foo',
   'right value';
 is $headers->sec_websocket_key('foo')->sec_websocket_key, 'foo', 'right value';
-is $headers->sec_websocket_origin('foo')->sec_websocket_origin, 'foo',
-  'right value';
 is $headers->sec_websocket_protocol('foo')->sec_websocket_protocol, 'foo',
   'right value';
 is $headers->sec_websocket_version('foo')->sec_websocket_version, 'foo',
@@ -89,6 +91,7 @@ is $headers->sec_websocket_version('foo')->sec_websocket_version, 'foo',
 is $headers->server('foo')->server,                       'foo', 'right value';
 is $headers->set_cookie('foo')->set_cookie,               'foo', 'right value';
 is $headers->status('foo')->status,                       'foo', 'right value';
+is $headers->te('foo')->te,                               'foo', 'right value';
 is $headers->trailer('foo')->trailer,                     'foo', 'right value';
 is $headers->transfer_encoding('foo')->transfer_encoding, 'foo', 'right value';
 is $headers->upgrade('foo')->upgrade,                     'foo', 'right value';

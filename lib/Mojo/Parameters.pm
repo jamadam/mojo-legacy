@@ -6,7 +6,6 @@ use overload
   fallback => 1;
 
 use Mojo::Util qw(decode encode url_escape url_unescape);
-use Mojo::URL;
 
 has charset        => 'UTF-8';
 has pair_separator => '&';
@@ -168,7 +167,7 @@ sub to_string {
   my $charset = $self->charset;
   if (defined(my $string = $self->{string})) {
     $string = encode $charset, $string if $charset;
-    return url_escape $string, "^$Mojo::URL::UNRESERVED&;=+%";
+    return url_escape $string, '^A-Za-z0-9\-._~!$&\'()*+,;=%:@/?';
   }
 
   # Build pairs
@@ -180,11 +179,11 @@ sub to_string {
 
     # Escape and replace whitespace with "+"
     $name = encode $charset, $name if $charset;
-    $name = url_escape $name, "^$Mojo::URL::UNRESERVED";
+    $name = url_escape $name, '^A-Za-z0-9\-._~!$\'()*,%:@/?';
     $name =~ s/\%20/\+/g;
     if ($value) {
       $value = encode $charset, $value if $charset;
-      $value = url_escape $value, "^$Mojo::URL::UNRESERVED";
+      $value = url_escape $value, '^A-Za-z0-9\-._~!$\'()*,%:@/?';
       $value =~ s/\%20/\+/g;
     }
 
@@ -199,13 +198,19 @@ sub to_string {
 
 =head1 NAME
 
-Mojo::Parameters - Parameter container
+Mojo::Parameters - Parameters
 
 =head1 SYNOPSIS
 
   use Mojo::Parameters;
 
+  # Parse
+  my $p = Mojo::Parameters->new('foo=bar&baz=23');
+  say $p->param('baz');
+
+  # Build
   my $p = Mojo::Parameters->new(foo => 'bar', baz => 23);
+  say "$p";
 
 =head1 DESCRIPTION
 
@@ -271,7 +276,7 @@ Clone parameters.
 
   $p = $p->merge(Mojo::Parameters->new(foo => 'b;ar', baz => 23));
 
-Merge parameters.
+Merge L<Mojo::Parameters> objects.
 
 =head2 C<param>
 
@@ -317,6 +322,7 @@ Turn parameters into a hash reference.
 =head2 C<to_string>
 
   my $string = $p->to_string;
+  my $string = "$p";
 
 Turn parameters into a string.
 

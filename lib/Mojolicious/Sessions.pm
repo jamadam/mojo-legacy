@@ -81,6 +81,8 @@ Mojolicious::Sessions - Signed cookie based sessions
   use Mojolicious::Sessions;
 
   my $sessions = Mojolicious::Sessions->new;
+  $sessions->cookie_name('myapp');
+  $sessions->default_expiration(86400);
 
 =head1 DESCRIPTION
 

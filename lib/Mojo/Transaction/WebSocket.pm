@@ -84,7 +84,7 @@ sub build_frame {
 sub client_challenge {
   my $self = shift;
   return $self->_challenge($self->req->headers->sec_websocket_key) eq
-    $self->res->headers->sec_websocket_accept ? 1 : undef;
+    $self->res->headers->sec_websocket_accept;
 }
 
 sub client_handshake {
@@ -105,7 +105,8 @@ sub client_handshake {
 
 sub client_read  { shift->server_read(@_) }
 sub client_write { shift->server_write(@_) }
-sub connection   { shift->handshake->connection(@_) }
+
+sub connection { shift->handshake->connection }
 
 sub finish {
   my $self = shift;
@@ -184,8 +185,8 @@ sub parse_frame {
 
 sub remote_address { shift->handshake->remote_address }
 sub remote_port    { shift->handshake->remote_port }
-sub req            { shift->handshake->req(@_) }
-sub res            { shift->handshake->res(@_) }
+sub req            { shift->handshake->req }
+sub res            { shift->handshake->res }
 
 sub resume {
   my $self = shift;
@@ -213,7 +214,7 @@ sub send {
   $self->{state} = 'write';
 
   # Resume
-  $self->emit('resume');
+  return $self->emit('resume');
 }
 
 sub server_handshake {
@@ -223,8 +224,8 @@ sub server_handshake {
   my $res_headers = $self->res->code(101)->headers;
   $res_headers->upgrade('websocket')->connection('Upgrade');
   my $req_headers = $self->req->headers;
-  ($req_headers->sec_websocket_protocol || '') =~ /^\s*([^,]+)/;
-  $res_headers->sec_websocket_protocol($1) if $1;
+  ($req_headers->sec_websocket_protocol || '') =~ /^\s*([^,]+)/
+    and $res_headers->sec_websocket_protocol($1);
   $res_headers->sec_websocket_accept(
     $self->_challenge($req_headers->sec_websocket_key));
 }
@@ -301,13 +302,23 @@ sub _xor_mask {
 
 =head1 NAME
 
-Mojo::Transaction::WebSocket - WebSocket transaction container
+Mojo::Transaction::WebSocket - WebSocket transaction
 
 =head1 SYNOPSIS
 
   use Mojo::Transaction::WebSocket;
 
+  # Send and receive WebSocket messages
   my $ws = Mojo::Transaction::WebSocket->new;
+  $ws->send('Hello World!');
+  $ws->on(message => sub {
+    my ($ws, $message) = @_;
+    say "Message: $message";
+  });
+  $ws->on(finish => sub {
+    my $ws = shift;
+    say 'WebSocket closed.';
+  });
 
 =head1 DESCRIPTION
 
@@ -461,7 +472,7 @@ Raw WebSocket data to write.
 
   my $connection = $ws->connection;
 
-Alias for L<Mojo::Transaction/"connection">.
+Connection identifier or socket.
 
 =head2 C<finish>
 
@@ -479,19 +490,19 @@ True.
 
   my $kept_alive = $ws->kept_alive;
 
-Alias for L<Mojo::Transaction/"kept_alive">.
+Connection has been kept alive.
 
 =head2 C<local_address>
 
   my $local_address = $ws->local_address;
 
-Alias for L<Mojo::Transaction/"local_address">.
+Local interface address.
 
 =head2 C<local_port>
 
   my $local_port = $ws->local_port;
 
-Alias for L<Mojo::Transaction/"local_port">.
+Local interface port.
 
 =head2 C<parse_frame>
 
@@ -512,39 +523,39 @@ Parse WebSocket frame.
 
   my $remote_address = $ws->remote_address;
 
-Alias for L<Mojo::Transaction/"remote_address">.
+Remote interface address.
 
 =head2 C<remote_port>
 
   my $remote_port = $ws->remote_port;
 
-Alias for L<Mojo::Transaction/"remote_port">.
+Remote interface port.
 
 =head2 C<req>
 
   my $req = $ws->req;
 
-Alias for L<Mojo::Transaction/"req">.
+Handshake request, usually a L<Mojo::Message::Request> object.
 
 =head2 C<res>
 
   my $res = $ws->res;
 
-Alias for L<Mojo::Transaction/"res">.
+Handshake response, usually a L<Mojo::Message::Response> object.
 
 =head2 C<resume>
 
   $ws = $ws->resume;
 
-Alias for L<Mojo::Transaction/"resume">.
+Resume C<handshake> transaction.
 
 =head2 C<send>
 
-  $ws->send({binary => $bytes});
-  $ws->send({text   => $bytes});
-  $ws->send([$fin, $rsv1, $rsv2, $rsv3, $op, $payload]);
-  $ws->send('Hi there!');
-  $ws->send('Hi there!' => sub {...});
+  $ws = $ws->send({binary => $bytes});
+  $ws = $ws->send({text   => $bytes});
+  $ws = $ws->send([$fin, $rsv1, $rsv2, $rsv3, $op, $payload]);
+  $ws = $ws->send('Hi there!');
+  $ws = $ws->send('Hi there!' => sub {...});
 
 Send message or frame non-blocking via WebSocket, the optional drain callback
 will be invoked once all data has been written.

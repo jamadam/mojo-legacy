@@ -2,8 +2,8 @@ package Mojo::Asset::File;
 use Mojo::Base 'Mojo::Asset';
 
 use Carp 'croak';
-use Errno;
-use Fcntl;
+use Errno 'EEXIST';
+use Fcntl qw(O_CREAT O_EXCL O_RDWR);
 use File::Copy 'move';
 use File::Spec;
 use IO::File;
@@ -102,14 +102,12 @@ sub get_chunk {
 
   # Range support
   my $buffer;
-  my $size = $ENV{MOJO_CHUNK_SIZE} || 131072;
   if (defined(my $end = $self->end_range)) {
     my $chunk = $end + 1 - $start;
     return '' if $chunk <= 0;
-    $chunk = $size if $chunk > $size;
-    $handle->sysread($buffer, $chunk);
+    $handle->sysread($buffer, $chunk > 131072 ? 131072 : $chunk);
   }
-  else { $handle->sysread($buffer, $size) }
+  else { $handle->sysread($buffer, 131072) }
 
   return $buffer;
 }
@@ -146,7 +144,7 @@ sub slurp {
 
 =head1 NAME
 
-Mojo::Asset::File - File storage for HTTP 1.1 content
+Mojo::Asset::File - File storage for HTTP content
 
 =head1 SYNOPSIS
 
@@ -165,7 +163,7 @@ Mojo::Asset::File - File storage for HTTP 1.1 content
 
 =head1 DESCRIPTION
 
-L<Mojo::Asset::File> is a file storage backend for HTTP 1.1 content.
+L<Mojo::Asset::File> is a file storage backend for HTTP content.
 
 =head1 ATTRIBUTES
 

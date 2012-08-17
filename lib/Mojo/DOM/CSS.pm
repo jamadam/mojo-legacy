@@ -293,27 +293,6 @@ sub _pc {
   return;
 }
 
-sub _sibling {
-  my ($self, $selectors, $current, $tree, $immediate) = @_;
-
-  # Find preceding elements
-  my $parent = $current->[3];
-  my $found;
-  my $start = $parent->[0] eq 'root' ? 1 : 4;
-  for my $e (@$parent[$start .. $#$parent]) {
-    return $found if $e eq $current;
-    next unless $e->[0] eq 'tag';
-
-    # "+" (immediately preceding sibling)
-    if ($immediate) { $found = $self->_combinator($selectors, $e, $tree) }
-
-    # "~" (preceding sibling)
-    else { return 1 if $self->_combinator($selectors, $e, $tree) }
-  }
-
-  return;
-}
-
 sub _regex {
   my ($self, $op, $value) = @_;
   return unless defined $value;
@@ -335,9 +314,6 @@ sub _regex {
   return qr/^$value$/;
 }
 
-# "All right, brain.
-#  You don't like me and I don't like you,
-#  but let's just do this and I can get back to killing you with beer."
 sub _selector {
   my ($self, $selector, $current) = @_;
 
@@ -363,6 +339,30 @@ sub _selector {
   return 1;
 }
 
+sub _sibling {
+  my ($self, $selectors, $current, $tree, $immediate) = @_;
+
+  # Find preceding elements
+  my $parent = $current->[3];
+  my $found;
+  my $start = $parent->[0] eq 'root' ? 1 : 4;
+  for my $e (@$parent[$start .. $#$parent]) {
+    return $found if $e eq $current;
+    next unless $e->[0] eq 'tag';
+
+    # "+" (immediately preceding sibling)
+    if ($immediate) { $found = $self->_combinator($selectors, $e, $tree) }
+
+    # "~" (preceding sibling)
+    else { return 1 if $self->_combinator($selectors, $e, $tree) }
+  }
+
+  return;
+}
+
+# "All right, brain.
+#  You don't like me and I don't like you,
+#  but let's just do this and I can get back to killing you with beer."
 sub _unescape {
   my ($self, $value) = @_;
 
@@ -382,7 +382,7 @@ sub _unescape {
 
 =head1 NAME
 
-Mojo::DOM::CSS - CSS3 selector engine
+Mojo::DOM::CSS - CSS selector engine
 
 =head1 SYNOPSIS
 
@@ -394,11 +394,11 @@ Mojo::DOM::CSS - CSS3 selector engine
 
 =head1 DESCRIPTION
 
-L<Mojo::DOM::CSS> is the CSS3 selector engine used by L<Mojo::DOM>.
+L<Mojo::DOM::CSS> is the CSS selector engine used by L<Mojo::DOM>.
 
 =head1 SELECTORS
 
-All CSS3 selectors that make sense for a standalone parser are supported.
+All CSS selectors that make sense for a standalone parser are supported.
 
 =head2 C<*>
 
@@ -616,7 +616,7 @@ following new ones.
 
   my $results = $css->select('head > title');
 
-Run CSS3 selector against C<tree>.
+Run CSS selector against C<tree>.
 
 =head1 SEE ALSO
 

@@ -3,8 +3,8 @@ use Mojo::Base 'Mojo::EventEmitter';
 
 use Carp 'croak';
 use Fcntl ':flock';
-use IO::Handle;
 
+# "Would you kindly shut your noise-hole?"
 has handle => sub {
   my $self = shift;
 
@@ -27,19 +27,7 @@ my $LEVEL = {debug => 1, info => 2, warn => 3, error => 4, fatal => 5};
 
 sub new {
   my $self = shift->SUPER::new(@_);
-
-  # Default logger
-  $self->on(
-    message => sub {
-      my $self = shift;
-      return unless my $handle = $self->handle;
-      flock $handle, LOCK_EX;
-      croak "Can't write to log: $!"
-        unless defined $handle->syswrite($self->format(@_));
-      flock $handle, LOCK_UN;
-    }
-  );
-
+  $self->on(message => \&_message);
   return $self;
 }
 
@@ -49,8 +37,8 @@ sub error { shift->log(error => @_) }
 sub fatal { shift->log(fatal => @_) }
 
 sub format {
-  my ($self, $level, @msgs) = @_;
-  return '[' . localtime(time) . "] [$level] " . join("\n", @msgs) . "\n";
+  my ($self, $level, @lines) = @_;
+  return '[' . localtime(time) . "] [$level] " . join("\n", @lines) . "\n";
 }
 
 sub info { shift->log(info => @_) }
@@ -78,6 +66,15 @@ sub log {
 }
 
 sub warn { shift->log(warn => @_) }
+
+sub _message {
+  my $self = shift;
+  return unless my $handle = $self->handle;
+  flock $handle, LOCK_EX;
+  croak "Can't write to log: $!"
+    unless defined $handle->syswrite($self->format(@_));
+  flock $handle, LOCK_UN;
+}
 
 1;
 
@@ -113,7 +110,7 @@ L<Mojo::Log> can emit the following events.
 =head2 C<message>
 
   $log->on(message => sub {
-    my ($log, $level, @messages) = @_;
+    my ($log, $level, @lines) = @_;
     ...
   });
 
@@ -121,8 +118,8 @@ Emitted when a new message gets logged.
 
   $log->unsubscribe('message');
   $log->on(message => sub {
-    my ($log, $level, @messages) = @_;
-    say "$level: ", @messages;
+    my ($log, $level, @lines) = @_;
+    say "$level: ", @lines;
   });
 
 =head1 ATTRIBUTES

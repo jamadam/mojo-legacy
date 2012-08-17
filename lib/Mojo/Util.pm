@@ -7,7 +7,6 @@ BEGIN {eval {require Digest::SHA; import Digest::SHA qw(sha1 sha1_hex)}}
 use Encode ();
 use File::Basename 'dirname';
 use File::Spec::Functions 'catfile';
-use IO::Handle;
 use MIME::Base64 qw(decode_base64 encode_base64);
 
 # Punycode bootstring parameters
@@ -258,7 +257,7 @@ sub secure_compare {
   return if length $a != length $b;
   my $r = 0;
   $r |= ord(substr $a, $_) ^ ord(substr $b, $_) for 0 .. length($a) - 1;
-  return $r == 0 ? 1 : undef;
+  return $r == 0;
 }
 
 sub sha1_bytes { sha1(@_) }
@@ -506,14 +505,14 @@ Generate HMAC-SHA1 checksum for string.
   my $escaped = html_escape $string;
   my $escaped = html_escape $string, '^\n\r\t !#$%(-;=?-~';
 
-Escape unsafe characters in string with HTML5 entities, the pattern used
+Escape unsafe characters in string with HTML entities, the pattern used
 defaults to C<^\n\r\t !#$%(-;=?-~>.
 
 =head2 C<html_unescape>
 
   my $string = html_unescape $escaped;
 
-Unescape all HTML5 entities in string.
+Unescape all HTML entities in string.
 
 =head2 C<md5_bytes>
 
@@ -592,14 +591,14 @@ Unquote string.
   my $escaped = url_escape $string;
   my $escaped = url_escape $string, '^A-Za-z0-9\-._~';
 
-Percent-encode unsafe characters in string, the pattern used defaults to
+Percent encode unsafe characters in string, the pattern used defaults to
 C<^A-Za-z0-9\-._~>.
 
 =head2 C<url_unescape>
 
   my $string = url_unescape $escaped;
 
-Decode percent-encoded characters in string.
+Decode percent encoded characters in string.
 
 =head2 C<xml_escape>
 

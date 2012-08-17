@@ -11,6 +11,7 @@ has res => sub { Mojo::Message::Response->new };
 
 # "Please don't eat me! I have a wife and kids. Eat them!"
 sub client_close { shift->server_close(@_) }
+
 sub client_read  { croak 'Method "client_read" not implemented by subclass' }
 sub client_write { croak 'Method "client_write" not implemented by subclass' }
 
@@ -28,7 +29,7 @@ sub error {
   return $res->error ? $res->error : undef;
 }
 
-sub is_finished { (shift->{state} || '') eq 'finished' }
+sub is_finished { defined $_[0]->{state} && $_[0]->{state} eq 'finished' }
 
 sub is_websocket {undef}
 
@@ -49,8 +50,8 @@ sub remote_address {
   # Reverse proxy
   if ($ENV{MOJO_REVERSE_PROXY}) {
     return $self->{forwarded_for} if $self->{forwarded_for};
-    ($self->req->headers->header('X-Forwarded-For') || '') =~ /([^,\s]+)$/
-      and return $self->{forwarded_for} = $1;
+    my $forwarded = $self->req->headers->header('X-Forwarded-For') || '';
+    $forwarded =~ /([^,\s]+)$/ and return $self->{forwarded_for} = $1;
   }
 
   return $self->{remote_address};
@@ -58,12 +59,13 @@ sub remote_address {
 
 sub resume {
   my $self = shift;
-  if (($self->{state} || '') eq 'paused') { $self->{state} = 'write_body' }
+  if (defined $self->{state} && $self->{state} eq 'paused') { $self->{state} = 'write_body' }
   elsif (!$self->is_writing) { $self->{state} = 'write' }
   return $self->emit('resume');
 }
 
 sub server_close { shift->emit('finish') }
+
 sub server_read  { croak 'Method "server_read" not implemented by subclass' }
 sub server_write { croak 'Method "server_write" not implemented by subclass' }
 
@@ -80,7 +82,13 @@ Mojo::Transaction - Transaction base class
 
 =head1 SYNOPSIS
 
+  package Mojo::Transaction::MyTransaction;
   use Mojo::Base 'Mojo::Transaction';
+
+  sub client_read  {...}
+  sub client_write {...}
+  sub server_read  {...}
+  sub server_write {...}
 
 =head1 DESCRIPTION
 
@@ -171,14 +179,14 @@ Remote interface port.
   my $req = $tx->req;
   $tx     = $tx->req(Mojo::Message::Request->new);
 
-HTTP 1.1 request, defaults to a L<Mojo::Message::Request> object.
+HTTP request, defaults to a L<Mojo::Message::Request> object.
 
 =head2 C<res>
 
   my $res = $tx->res;
   $tx     = $tx->res(Mojo::Message::Response->new);
 
-HTTP 1.1 response, defaults to a L<Mojo::Message::Response> object.
+HTTP response, defaults to a L<Mojo::Message::Response> object.
 
 =head1 METHODS
 

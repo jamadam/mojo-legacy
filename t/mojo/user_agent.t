@@ -6,7 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 92;
+use Test::More tests => 109;
 
 # "The strong must protect the sweet."
 use Mojo::IOLoop;
@@ -35,6 +35,9 @@ get '/no_length' => sub {
   $self->finish('works too!');
   $self->rendered(200);
 };
+
+# GET /no_content
+get '/no_content' => {text => 'fail!', status => 204};
 
 # GET /echo
 get '/echo' => sub {
@@ -106,8 +109,37 @@ post '/echo' => sub {
   is(Mojo::UserAgent->new->request_timeout, 0, 'right value');
 }
 
+# Default application
+is(Mojo::UserAgent->app,      app, 'applications are equal');
+is(Mojo::UserAgent->new->app, app, 'applications are equal');
+Mojo::UserAgent->app(app);
+is(Mojo::UserAgent->app, app, 'applications are equal');
+my $dummy = Mojolicious::Lite->new;
+isnt(Mojo::UserAgent->new->app($dummy)->app, app,
+  'applications are not equal');
+is(Mojo::UserAgent->app, app, 'applications are still equal');
+Mojo::UserAgent->app($dummy);
+isnt(Mojo::UserAgent->app, app, 'applications are not equal');
+is(Mojo::UserAgent->app, $dummy, 'application are equal');
+Mojo::UserAgent->app(app);
+is(Mojo::UserAgent->app, app, 'applications are equal again');
+
+# GET / (clean up non-blocking requests)
+my $ua = Mojo::UserAgent->new;
+my $get = my $post = '';
+$ua->get('/' => sub { $get = pop->error });
+$ua->post('/' => sub { $post = pop->error });
+undef $ua;
+is $get,  'Premature connection close', 'right error';
+is $post, 'Premature connection close', 'right error';
+
+# The poll reactor stops when there are no events being watched anymore
+my $time = time;
+Mojo::IOLoop->start;
+ok time < ($time + 10), 'stopped automatically';
+
 # GET / (non-blocking)
-my $ua = Mojo::UserAgent->new(ioloop => Mojo::IOLoop->singleton);
+$ua = Mojo::UserAgent->new(ioloop => Mojo::IOLoop->singleton);
 my ($success, $code, $body);
 $ua->get(
   '/' => sub {
@@ -185,9 +217,18 @@ ok !$tx->keep_alive, 'keep connection not alive';
 is $tx->res->code, 200,          'right status';
 is $tx->res->body, 'works too!', 'right content';
 
-# GET / (built-in web server)
-$tx = $ua->get('/');
+# GET /no_content (204 No Content)
+$tx = $ua->get('/no_content');
 ok $tx->success, 'successful';
+ok !$tx->kept_alive, 'kept connection not alive';
+ok $tx->keep_alive, 'keep connection alive';
+is $tx->res->code, 204, 'right status';
+is $tx->res->body, '',  'no content';
+
+# GET / (connection was kept alive)
+$tx = $ua->get('/');
+ok $tx->success,    'successful';
+ok $tx->kept_alive, 'kept connection alive';
 is $tx->res->code, 200,      'right status';
 is $tx->res->body, 'works!', 'right content';
 
@@ -229,7 +270,7 @@ $message = app->log->subscribers('message')->[0];
 app->log->unsubscribe(message => $message);
 app->log->level('debug');
 app->log->on(message => sub { $log .= pop });
-$tx = $ua->get('/timeout?timeout=0.5');
+$tx = $ua->get('/timeout?timeout=0.25');
 app->log->level('fatal');
 app->log->on(message => $message);
 ok !$tx->success, 'not successful';
@@ -244,7 +285,7 @@ $ua->once(
     $tx->on(
       connection => sub {
         my ($tx, $connection) = @_;
-        Mojo::IOLoop->stream($connection)->timeout(0.5);
+        Mojo::IOLoop->stream($connection)->timeout(0.25);
       }
     );
   }
@@ -298,14 +339,13 @@ $ua->unsubscribe(start => $start);
 ok !$ua->has_subscribers('start'), 'unsubscribed successfully';
 
 # GET /echo (stream with drain callback)
-my $stream = 0;
 $tx = $ua->build_tx(GET => '/echo');
 my $i = 0;
-my $drain;
+my ($stream, $drain);
 $drain = sub {
   my $req = shift;
   return $ua->ioloop->timer(
-    0.5 => sub {
+    0.25 => sub {
       $req->write_chunk('');
       $tx->resume;
       $stream
@@ -357,11 +397,11 @@ $ua->get(
   '/' => sub {
     push @kept_alive, pop->kept_alive;
     Mojo::IOLoop->timer(
-      0.25 => sub {
+      0 => sub {
         $ua->get(
           '/' => sub {
             push @kept_alive, pop->kept_alive;
-            Mojo::IOLoop->timer(0.25 => sub { Mojo::IOLoop->stop });
+            Mojo::IOLoop->timer(0 => sub { Mojo::IOLoop->stop });
           }
         );
       }

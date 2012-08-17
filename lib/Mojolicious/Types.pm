@@ -5,29 +5,32 @@ use Mojo::Base -base;
 #  hungry investor."
 has types => sub {
   {
-    atom => 'application/atom+xml',
-    bin  => 'application/octet-stream',
-    css  => 'text/css',
-    gif  => 'image/gif',
-    gz   => 'application/gzip',
-    htm  => 'text/html',
-    html => 'text/html;charset=UTF-8',
-    ico  => 'image/x-icon',
-    jpeg => 'image/jpeg',
-    jpg  => 'image/jpeg',
-    js   => 'application/x-javascript',
-    json => 'application/json',
-    mp3  => 'audio/mpeg',
-    pdf  => 'application/pdf',
-    png  => 'image/png',
-    rss  => 'application/rss+xml',
-    svg  => 'image/svg+xml',
-    tar  => 'application/x-tar',
-    txt  => 'text/plain',
-    woff => 'application/x-font-woff',
-    xml  => 'text/xml',
-    xsl  => 'text/xml',
-    zip  => 'application/zip'
+    appcache => 'text/cache-manifest',
+    atom     => 'application/atom+xml',
+    bin      => 'application/octet-stream',
+    css      => 'text/css',
+    gif      => 'image/gif',
+    gz       => 'application/x-gzip',
+    htm      => 'text/html',
+    html     => 'text/html;charset=UTF-8',
+    ico      => 'image/x-icon',
+    jpeg     => 'image/jpeg',
+    jpg      => 'image/jpeg',
+    js       => 'application/javascript',
+    json     => 'application/json',
+    mp3      => 'audio/mpeg',
+    mp4      => 'video/mp4',
+    ogg      => 'audio/ogg',
+    ogv      => 'video/ogg',
+    pdf      => 'application/pdf',
+    png      => 'image/png',
+    rss      => 'application/rss+xml',
+    svg      => 'image/svg+xml',
+    txt      => 'text/plain',
+    webm     => 'video/webm',
+    woff     => 'application/font-woff',
+    xml      => ['application/xml', 'text/xml'],
+    zip      => 'application/zip'
   };
 };
 
@@ -67,10 +70,41 @@ Mojolicious::Types - MIME types
   use Mojolicious::Types;
 
   my $types = Mojolicious::Types->new;
+  $types->type(foo => 'text/foo');
+  say $types->type('foo');
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Types> is a container for MIME types.
+L<Mojolicious::Types> manages MIME types for L<Mojolicious>.
+
+  appcache -> text/cache-manifest
+  atom     -> application/atom+xml
+  bin      -> application/octet-stream
+  css      -> text/css
+  gif      -> image/gif
+  gz       -> application/x-gzip
+  htm      -> text/html
+  html     -> text/html;charset=UTF-8
+  ico      -> image/x-icon
+  jpeg     -> image/jpeg
+  jpg      -> image/jpeg
+  js       -> application/javascript
+  json     -> application/json
+  mp3      -> audio/mpeg
+  mp4      -> video/mp4
+  ogg      -> audio/ogg
+  ogv      -> video/ogg
+  pdf      -> application/pdf
+  png      -> image/png
+  rss      -> application/rss+xml
+  svg      -> image/svg+xml
+  txt      -> text/plain
+  webm     -> video/webm
+  woff     -> application/font-woff
+  xml      -> application/xml,text/xml
+  zip      -> application/zip
+
+The most common ones are already defined.
 
 =head1 ATTRIBUTES
 
@@ -90,11 +124,14 @@ the following ones.
 
 =head2 C<detect>
 
-  my $ext = $types->detect('application/json;q=9');
+  my $exts = $types->detect('application/json;q=9');
 
 Detect file extensions from C<Accept> header value. Unspecific values that
 contain more than one MIME type are currently ignored, since browsers often
 don't really know what they actually want.
+
+  # List detected extensions
+  say for @{$types->detect('application/json')};
 
 =head2 C<type>
 

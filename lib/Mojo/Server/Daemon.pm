@@ -19,7 +19,7 @@ has max_requests => 25;
 sub DESTROY {
   my $self = shift;
   return unless my $loop = $self->ioloop;
-  $loop->remove($_) for keys %{$self->{connections} || {}};
+  $self->_remove($_) for keys %{$self->{connections} || {}};
   $loop->remove($_) for @{$self->{listening} || []};
 }
 
@@ -28,14 +28,11 @@ sub DESTROY {
 sub run {
   my $self = shift;
 
-  # Start accepting connections
-  $self->start;
-
   # Signals
   $SIG{INT} = $SIG{TERM} = sub { exit 0 };
 
-  # Change user/group and start loop
-  $self->setuidgid->ioloop->start;
+  # Change user/group and start accepting connections
+  $self->start->setuidgid->ioloop->start;
 }
 
 sub setuidgid {
@@ -49,6 +46,7 @@ sub start {
   my $self = shift;
   $self->_listen($_) for @{$self->listen};
   $self->ioloop->max_connections($self->max_clients);
+  return $self;
 }
 
 sub _build_tx {
@@ -91,14 +89,21 @@ sub _build_tx {
   return $tx;
 }
 
+sub _close {
+  my ($self, $id) = @_;
+
+  # Finish gracefully
+  if (my $tx = $self->{connections}{$id}{tx}) { $tx->server_close }
+
+  # Remove connection
+  delete $self->{connections}{$id};
+}
+
 sub _finish {
   my ($self, $id, $tx) = @_;
 
   # Always remove connection for WebSockets
-  if ($tx->is_websocket) {
-    $self->_remove($id);
-    return $self->ioloop->remove($id);
-  }
+  return $self->_remove($id) if $tx->is_websocket;
 
   # Finish transaction
   $tx->server_close;
@@ -121,21 +126,16 @@ sub _finish {
   }
 
   # Close connection if necessary
-  if ($tx->req->error || !$tx->keep_alive) {
-    $self->_remove($id);
-    $self->ioloop->remove($id);
-  }
+  return $self->_remove($id) if $tx->req->error || !$tx->keep_alive;
 
   # Build new transaction for leftovers
-  elsif (defined(my $leftovers = $tx->server_leftovers)) {
-    $tx = $c->{tx} = $self->_build_tx($id, $c);
-    $tx->server_read($leftovers);
-  }
+  return unless defined(my $leftovers = $tx->server_leftovers);
+  $tx = $c->{tx} = $self->_build_tx($id, $c);
+  $tx->server_read($leftovers);
 }
 
 sub _group {
-  my $self = shift;
-  return unless my $group = $self->group;
+  return unless my $group = shift->group;
   croak qq{Group "$group" does not exist}
     unless defined(my $gid = (getgrnam($group))[2]);
   POSIX::setgid($gid) or croak qq{Can't switch to group "$group": $!};
@@ -174,11 +174,11 @@ sub _listen {
       $stream->timeout($self->inactivity_timeout);
 
       # Events
-      $stream->on(close => sub { $self->_remove($id) });
+      $stream->on(close => sub { $self->_close($id) });
       $stream->on(
         error => sub {
           $self->app->log->error(pop);
-          $self->_remove($id);
+          $self->_close($id);
         }
       );
       $stream->on(read => sub { $self->_read($id => pop) });
@@ -217,12 +217,8 @@ sub _read {
 
 sub _remove {
   my ($self, $id) = @_;
-
-  # Finish gracefully
-  if (my $tx = $self->{connections}{$id}{tx}) { $tx->server_close }
-
-  # Remove connection
-  delete $self->{connections}{$id};
+  $self->ioloop->remove($id);
+  $self->_close($id);
 }
 
 sub _user {
@@ -270,7 +266,7 @@ sub _write {
 
 =head1 NAME
 
-Mojo::Server::Daemon - Non-blocking I/O HTTP 1.1 and WebSocket server
+Mojo::Server::Daemon - Non-blocking I/O HTTP and WebSocket server
 
 =head1 SYNOPSIS
 
@@ -297,13 +293,13 @@ Mojo::Server::Daemon - Non-blocking I/O HTTP 1.1 and WebSocket server
 
 =head1 DESCRIPTION
 
-L<Mojo::Server::Daemon> is a full featured non-blocking I/O HTTP 1.1 and
-WebSocket server with C<IPv6>, C<TLS> and C<libev> support.
+L<Mojo::Server::Daemon> is a full featured, highly portable non-blocking I/O
+HTTP and WebSocket server, with C<IPv6>, C<TLS> and C<libev> support.
 
 Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
-L<IO::Socket::SSL> (1.75+) are supported transparently and used if installed.
-Individual features can also be disabled with the C<MOJO_NO_IPV6> and
-C<MOJO_NO_TLS> environment variables.
+L<IO::Socket::SSL> (1.75+) are supported transparently through
+L<Mojo::IOLoop>, and used if installed. Individual features can also be
+disabled with the C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for more.
 
@@ -345,8 +341,8 @@ inactive indefinitely.
   my $loop = $daemon->ioloop;
   $daemon  = $daemon->ioloop(Mojo::IOLoop->new);
 
-Loop object to use for I/O operations, defaults to the global L<Mojo::IOLoop>
-singleton.
+Event loop object to use for I/O operations, defaults to the global
+L<Mojo::IOLoop> singleton.
 
 =head2 C<listen>
 
@@ -438,7 +434,7 @@ Set user and group for process.
 
 =head2 C<start>
 
-  $daemon->start;
+  $daemon = $daemon->start;
 
 Start accepting connections.
 

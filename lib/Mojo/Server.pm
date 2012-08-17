@@ -6,21 +6,19 @@ use Mojo::Loader;
 use Mojo::Util 'md5_sum';
 use Scalar::Util 'blessed';
 
-has app => sub {
-
-  # Try to detect application
-  return $ENV{MOJO_APP} if ref $ENV{MOJO_APP};
-
-  # Load and initialize application
-  my $class = $ENV{MOJO_APP} ||= 'Mojo::HelloWorld';
-  if (my $e = Mojo::Loader->new->load($class)) { die $e if ref $e }
-  return $ENV{MOJO_APP} = $class->new;
-};
+has app => sub { shift->build_app('Mojo::HelloWorld') };
 
 sub new {
   my $self = shift->SUPER::new(@_);
   $self->on(request => sub { shift->app->handler(shift) });
   return $self;
+}
+
+sub build_app {
+  my ($self, $app) = @_;
+  local $ENV{MOJO_EXE};
+  if (my $e = Mojo::Loader->new->load($app)) { die $e if ref $e }
+  return $app->new;
 }
 
 sub build_tx { shift->app->build_tx }
@@ -30,7 +28,7 @@ sub load_app {
 
   # Clean up environment
   local $ENV{MOJO_APP_LOADER} = 1;
-  local ($ENV{MOJO_APP}, $ENV{MOJO_EXE});
+  local $ENV{MOJO_EXE};
 
   # Try to load application from script into sandbox
   my $app = eval <<EOF;
@@ -63,6 +61,7 @@ Mojo::Server - HTTP server base class
 
 =head1 SYNOPSIS
 
+  package Mojo::Server::MyServer;
   use Mojo::Base 'Mojo::Server';
 
   sub run {
@@ -110,8 +109,7 @@ L<Mojo::Server> implements the following attributes.
   my $app = $server->app;
   $server = $server->app(MojoSubclass->new);
 
-Application this server handles, defaults to the value of the C<MOJO_APP>
-environment variable or a L<Mojo::HelloWorld> object.
+Application this server handles, defaults to a L<Mojo::HelloWorld> object.
 
 =head1 METHODS
 
@@ -124,6 +122,12 @@ the following new ones.
 
 Construct a new L<Mojo::Server> object and subscribe to C<request> event with
 default request handling.
+
+=head2 C<build_app>
+
+  my $app = $server->build_app('Mojo::HelloWorld');
+
+Build application.
 
 =head2 C<build_tx>
 

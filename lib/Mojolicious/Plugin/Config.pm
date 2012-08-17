@@ -41,8 +41,8 @@ sub register {
   unless ($file) {
 
     # Class or executable
-    $file = $ENV{MOJO_APP};
-    $file = $file && !ref $file ? decamelize($file) : basename($ENV{MOJO_EXE});
+    $file
+      = $ENV{MOJO_APP} ? decamelize($ENV{MOJO_APP}) : basename($ENV{MOJO_EXE});
 
     # Replace ".pl" and ".t" with default extension
     $file =~ s/\.(?:pl|t)$//i;
@@ -50,13 +50,12 @@ sub register {
   }
 
   # Mode specific config file
-  my $mode;
-  if ($file =~ /^(.*)\.([^.]+)$/) { $mode = join '.', $1, $app->mode, $2 }
+  my $mode = $file =~ /^(.*)\.([^.]+)$/ ? join('.', $1, $app->mode, $2) : '';
 
-  # Absolute path
-  $file = $app->home->rel_file($file) unless file_name_is_absolute $file;
-  $mode = $app->home->rel_file($mode)
-    if defined $mode && !file_name_is_absolute $mode;
+  # Absolute paths
+  my $home = $app->home;
+  $file = $home->rel_file($file) unless file_name_is_absolute $file;
+  $mode = $home->rel_file($mode) if $mode && !file_name_is_absolute $mode;
 
   # Read config file
   my $config = {};
@@ -64,13 +63,13 @@ sub register {
 
   # Check for default
   elsif ($conf->{default}) {
-    $app->log->debug(qq{Config file "$file" missing, using default config.});
+    $app->log->debug(qq{Config file "$file" not found, using default config.});
   }
   else { die qq{Config file "$file" missing, maybe you need to create it?\n} }
 
   # Merge everything
   $config = {%$config, %{$self->load($mode, $conf, $app)}}
-    if defined $mode && -e $mode;
+    if $mode && -e $mode;
   $config = {%{$conf->{default}}, %$config} if $conf->{default};
   my $current = $app->defaults(config => $app->config)->config;
   %$current = (%$current, %$config);
@@ -179,7 +178,8 @@ Parse configuration file.
 
 =head2 C<register>
 
-  my $config = $plugin->register($app, $conf);
+  my $config = $plugin->register(Mojolicious->new);
+  my $config = $plugin->register(Mojolicious->new, {file => '/etc/app.conf'});
 
 Register plugin in L<Mojolicious> application.
 

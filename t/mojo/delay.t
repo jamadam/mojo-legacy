@@ -6,7 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 6;
+use Test::More tests => 8;
 
 # "And now to create an unstoppable army of between one million and two
 #  million zombies!"
@@ -20,6 +20,10 @@ for my $i (0, 0) {
   $delay->begin;
   Mojo::IOLoop->timer(0 => sub { push @results, $i; $delay->end });
 }
+my $end = $delay->begin;
+$delay->begin;
+is $end->(), 3, 'three remaining';
+is $delay->end, 2, 'two remaining';
 $delay->wait;
 is_deeply \@results, [0, 0], 'right results';
 

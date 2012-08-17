@@ -35,12 +35,10 @@ get '/proxy' => sub {
 # WebSocket /test
 websocket '/test' => sub {
   my $self = shift;
-  my $flag = 0;
   $self->on(
     message => sub {
       my ($self, $message) = @_;
       $self->send("${message}test2");
-      $flag = 24;
     }
   );
 };
@@ -54,8 +52,7 @@ $daemon->listen(["http://127.0.0.1:$port"])->start;
 
 # Connect proxy server for testing
 my $proxy = Mojo::IOLoop->generate_port;
-my (%buffer, $connected);
-my ($read, $sent, $fail) = 0;
+my (%buffer, $connected, $read, $sent, $fail);
 my $nf
   = "HTTP/1.1 404 NOT FOUND\x0d\x0a"
   . "Content-Length: 0\x0d\x0a"
@@ -64,28 +61,37 @@ my $ok = "HTTP/1.1 200 OK\x0d\x0aConnection: keep-alive\x0d\x0a\x0d\x0a";
 Mojo::IOLoop->server(
   {address => '127.0.0.1', port => $proxy} => sub {
     my ($loop, $stream, $client) = @_;
+
+    # Connection to client
     $stream->on(
       read => sub {
         my ($stream, $chunk) = @_;
-        if (my $server = $buffer{$client}{connection}) {
-          return Mojo::IOLoop->stream($server)->write($chunk);
-        }
-        $buffer{$client}{client} .= $chunk;
-        if ($buffer{$client}{client} =~ /\x0d?\x0a\x0d?\x0a$/) {
-          my $buffer = $buffer{$client}{client};
+
+        # Write chunk from client to server
+        my $server = $buffer{$client}{connection};
+        return Mojo::IOLoop->stream($server)->write($chunk) if $server;
+
+        # Read connect request from client
+        my $buffer = $buffer{$client}{client} .= $chunk;
+        if ($buffer =~ /\x0d?\x0a\x0d?\x0a$/) {
           $buffer{$client}{client} = '';
           if ($buffer =~ /CONNECT (\S+):(\d+)?/) {
             $connected = "$1:$2";
             $fail = 1 if $2 == $port + 1;
-            my $server;
-            $server = Mojo::IOLoop->client(
+
+            # Connection to server
+            $buffer{$client}{connection} = Mojo::IOLoop->client(
               {address => $1, port => $fail ? $port : $2} => sub {
                 my ($loop, $err, $stream) = @_;
+
+                # Connection to server failed
                 if ($err) {
                   Mojo::IOLoop->remove($client);
                   return delete $buffer{$client};
                 }
-                $buffer{$client}{connection} = $server;
+
+                # Start forwarding data in both directions
+                Mojo::IOLoop->stream($client)->write($fail ? $nf : $ok);
                 $stream->on(
                   read => sub {
                     my ($stream, $chunk) = @_;
@@ -94,25 +100,29 @@ Mojo::IOLoop->server(
                     Mojo::IOLoop->stream($client)->write($chunk);
                   }
                 );
+
+                # Server closed connection
                 $stream->on(
                   close => sub {
                     Mojo::IOLoop->remove($client);
                     delete $buffer{$client};
                   }
                 );
-                Mojo::IOLoop->stream($client)->write($fail ? $nf : $ok);
               }
             );
           }
         }
+
+        # Invalid request from client
         else { Mojo::IOLoop->remove($client) }
       }
     );
+
+    # Client closed connection
     $stream->on(
       close => sub {
-        Mojo::IOLoop->remove($buffer{$client}{connection})
-          if $buffer{$client}{connection};
-        delete $buffer{$client};
+        my $buffer = delete $buffer{$client};
+        Mojo::IOLoop->remove($buffer->{connection}) if $buffer->{connection};
       }
     );
   }

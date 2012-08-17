@@ -25,7 +25,7 @@ my %ESCAPE = (
   'u2029' => "\x{2029}"
 );
 my %REVERSE = map { $ESCAPE{$_} => "\\$_" } keys %ESCAPE;
-for (0x00 .. 0x1F, 0x7F) { $REVERSE{pack 'C', $_} = defined $REVERSE{pack 'C', $_} ? $REVERSE{pack 'C', $_} : sprintf '\u%.4X', $_ }
+for (0x00 .. 0x1F, 0x7F) { $REVERSE{pack 'C', $_} = do {my $tmp = $REVERSE{pack 'C', $_}; defined $tmp ? $tmp : sprintf '\u%.4X', $_} }
 
 # Unicode encoding detection
 my $UTF_PATTERNS = {

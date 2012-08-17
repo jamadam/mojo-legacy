@@ -6,7 +6,6 @@ use overload
   fallback => 1;
 
 use Mojo::Util qw(encode url_escape url_unescape);
-use Mojo::URL;
 
 has [qw(leading_slash trailing_slash)];
 has parts => sub { [] };
@@ -58,7 +57,7 @@ sub contains {
     return unless $part eq $try;
   }
 
-  return @$parts ? undef : 1;
+  return !@$parts;
 }
 
 sub merge {
@@ -99,7 +98,7 @@ sub to_string {
   my $self = shift;
 
   # Escape
-  my $chars = "^$Mojo::URL::UNRESERVED$Mojo::URL::SUBDELIM:@";
+  my $chars = '^A-Za-z0-9\-._~!$&\'()*+,;=:@';
   my @parts = map { url_escape(encode('UTF-8', $_), $chars) } @{$self->parts};
 
   # Format
@@ -122,7 +121,7 @@ Mojo::Path - Path
 
   my $path = Mojo::Path->new('/foo%2Fbar%3B/baz.html');
   shift @{$path->parts};
-  say $path;
+  say "$path";
 
 =head1 DESCRIPTION
 
@@ -231,6 +230,7 @@ Turn path into an absolute string.
 =head2 C<to_string>
 
   my $string = $path->to_string;
+  my $string = "$path";
 
 Turn path into a string.
 

@@ -1,16 +1,14 @@
 package Mojolicious::Command::get;
 use Mojo::Base 'Mojolicious::Command';
 
-use Getopt::Long qw(GetOptions :config no_auto_abbrev no_ignore_case);
 use Mojo::DOM;
 use Mojo::IOLoop;
 use Mojo::JSON;
 use Mojo::JSON::Pointer;
-use Mojo::Transaction::HTTP;
 use Mojo::UserAgent;
 use Mojo::Util qw(decode encode);
 
-has description => "Perform HTTP 1.1 request.\n";
+has description => "Perform HTTP request.\n";
 has usage       => <<"EOF";
 usage: $0 get [OPTIONS] URL [SELECTOR|JSON-POINTER] [COMMANDS]
 
@@ -27,7 +25,7 @@ usage: $0 get [OPTIONS] URL [SELECTOR|JSON-POINTER] [COMMANDS]
   mojo get http://search.twitter.com/search.json /error
 
 These options are available:
-  -C, --charset <charset>     Charset of HTML5/XML content, defaults to auto
+  -C, --charset <charset>     Charset of HTML/XML content, defaults to auto
                               detection or "UTF-8".
   -c, --content <content>     Content to send with request.
   -H, --header <name:value>   Additional HTTP header.
@@ -40,34 +38,27 @@ EOF
 #  In the absence of pants, defense's suspenders serve no purpose.
 #  I'm going to allow them... for now."
 sub run {
-  my $self = shift;
+  my ($self, @args) = @_;
 
   # Options
-  local @ARGV = @_;
-  my ($method, $content, @headers) = ('GET', '');
-  my ($charset, $redirect, $verbose) = 0;
-  GetOptions(
-    'C|charset=s' => sub { $charset  = $_[1] },
-    'c|content=s' => sub { $content  = $_[1] },
-    'H|header=s'  => \@headers,
-    'M|method=s'  => sub { $method   = $_[1] },
-    'r|redirect'  => sub { $redirect = 1 },
-    'v|verbose'   => sub { $verbose  = 1 }
+  $self->_options(
+    \@args,
+    'C|charset=s' => \my $charset,
+    'c|content=s' => \(my $content = ''),
+    'H|header=s'  => \my @headers,
+    'M|method=s'  => \(my $method = 'GET'),
+    'r|redirect'  => \my $redirect,
+    'v|verbose'   => \my $verbose
   );
   $verbose = 1 if $method eq 'HEAD';
 
   # Headers
   my %headers;
-  for my $header (@headers) {
-    next unless $header =~ /^\s*([^:]+)\s*:\s*([^:]+)\s*$/;
-    $headers{$1} = $2;
-  }
+  /^\s*([^:]+)\s*:\s*([^:]+)\s*$/ and $headers{$1} = $2 for @headers;
 
   # URL and selector
-  my $url = shift @ARGV;
-  die $self->usage unless $url;
-  $url = decode 'UTF-8', $url;
-  my $selector = shift @ARGV;
+  die $self->usage unless my $url = decode 'UTF-8', do {my $tmp = shift @args; defined $tmp ? $tmp : ''};
+  my $selector = shift @args;
 
   # Fresh user agent
   my $ua = Mojo::UserAgent->new(ioloop => Mojo::IOLoop->singleton);
@@ -77,11 +68,10 @@ sub run {
   if ($url !~ m!/!) { $ua->detect_proxy }
 
   # Application
-  else { $ua->app($ENV{MOJO_APP} || 'Mojo::HelloWorld') }
+  else { $ua->app($self->app) }
 
   # Start
-  my $v;
-  my $buffer = '';
+  my $v = my $buffer = '';
   $ua->on(
     start => sub {
       my $tx = pop;
@@ -110,17 +100,16 @@ sub run {
         warn "HTTP/$version $code $message\n$res_headers\n\n";
 
         # Finished
-        $v = 0;
+        $v = undef;
       };
 
       # Progress
-      $tx->res->on(progress => sub { $cb->(shift) });
+      $tx->res->on(progress => $cb);
 
       # Stream content
       $tx->res->body(
         sub {
-          my $res = shift;
-          $cb->($res);
+          $cb->(my $res = shift);
 
           # Ignore intermediate content
           return if $redirect && $res->is_status_class(300);
@@ -133,9 +122,8 @@ sub run {
   );
 
   # Get
-  my $tx = $ua->build_tx($method, $url, \%headers, $content);
   STDOUT->autoflush(1);
-  $tx = $ua->start($tx);
+  my $tx = $ua->start($ua->build_tx($method, $url, \%headers, $content));
 
   # Error
   my ($message, $code) = $tx->error;
@@ -144,18 +132,18 @@ sub run {
 
   # JSON Pointer
   return unless $selector;
-  return _json($buffer, $selector)
-    if ($tx->res->headers->content_type || '') =~ /JSON/i;
+  my $type = $tx->res->headers->content_type || '';
+  return _json($buffer, $selector) if $type =~ /json/i;
 
   # Selector
-  _select($buffer, defined $charset ? $charset : $tx->res->content->charset, $selector);
+  _select($buffer, $selector, defined $charset ? $charset : $tx->res->content->charset, @args);
 }
 
 sub _json {
   my $json = Mojo::JSON->new;
   return unless my $data = $json->decode(shift);
-  return unless defined($data = Mojo::JSON::Pointer->get($data, shift));
-  (ref $data eq 'HASH' || ref $data eq 'ARRAY') ? say($json->encode($data)) : _say($data);
+  return unless defined($data = Mojo::JSON::Pointer->new->get($data, shift));
+  ref $data eq 'HASH' || ref $data eq 'ARRAY' ? say($json->encode($data)) : _say($data);
 }
 
 sub _say {
@@ -164,7 +152,7 @@ sub _say {
 }
 
 sub _select {
-  my ($buffer, $charset, $selector) = @_;
+  my ($buffer, $selector, $charset, @args) = @_;
 
   # Find
   my $dom     = Mojo::DOM->new->charset($charset)->parse($buffer);
@@ -172,7 +160,7 @@ sub _select {
 
   # Commands
   my $finished;
-  while (defined(my $command = shift @ARGV)) {
+  while (defined(my $command = shift @args)) {
 
     # Number
     if ($command =~ /^\d+$/) {
@@ -188,7 +176,7 @@ sub _select {
 
     # Attribute
     elsif ($command eq 'attr') {
-      next unless my $name = shift @ARGV;
+      next unless my $name = shift @args;
       _say($_->attrs->{$name}) for @$results;
     }
 

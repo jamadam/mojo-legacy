@@ -90,8 +90,7 @@ sub build {
         }
 
         # Multiline
-        $multi = ($line->[$j + 2] || '') eq 'text'
-          && ($line->[$j + 3] || '') eq '' ? 0 : 1;
+        $multi = !(defined $line->[$j + 2] && $line->[$j + 2] eq 'text' && defined $line->[$j + 3] && $line->[$j + 3] eq '');
 
         # Append semicolon
         $lines[-1] .= ';' if !$multi && !$cpst;
@@ -124,13 +123,11 @@ sub compile {
   # Compile
   return unless my $code = $self->code;
   my $compiled = eval $code;
+  $self->compiled($compiled) and return unless $@;
 
   # Use local stacktrace for compile exceptions
   return Mojo::Exception->new($@, [$self->template, $code], $self->name)
-    ->trace->verbose(1)
-    if $@;
-
-  $self->compiled($compiled) and return;
+    ->trace->verbose(1);
 }
 
 sub interpret {
@@ -145,9 +142,10 @@ sub interpret {
   # Interpret
   return unless my $compiled = $self->compiled;
   my $output = eval { $compiled->(@_) };
-  return $@
-    ? Mojo::Exception->new($@, [$self->template], $self->name)->verbose(1)
-    : $output;
+  return $output unless $@;
+
+  # Exception
+  return Mojo::Exception->new($@, [$self->template], $self->name)->verbose(1);
 }
 
 # "I am so smart! I am so smart! S-M-R-T! I mean S-M-A-R-T..."
@@ -299,10 +297,9 @@ sub render_file {
   my $tmpl = slurp $path;
 
   # Decode and render
-  if (my $encoding = $self->encoding) {
-    croak qq{Template "$path" has invalid encoding.}
-      unless defined($tmpl = decode $encoding, $tmpl);
-  }
+  my $encoding = $self->encoding;
+  croak qq{Template "$path" has invalid encoding.}
+    if $encoding && !defined($tmpl = decode $encoding, $tmpl);
   return $self->render($tmpl, @_);
 }
 
@@ -508,7 +505,7 @@ Keyword indicating the start of a capture block, defaults to C<begin>.
   my $code = $mt->code;
   $mt      = $mt->code($code);
 
-Compiled template code.
+Template code.
 
 =head2 C<comment_mark>
 
@@ -518,6 +515,13 @@ Compiled template code.
 Character indicating the start of a comment, defaults to C<#>.
 
   <%# This is a comment %>
+
+=head2 C<compiled>
+
+  my $compiled = $mt->compiled;
+  $mt          = $mt->compiled($compiled);
+
+Compiled template code.
 
 =head2 C<encoding>
 

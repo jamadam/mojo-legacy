@@ -4,7 +4,7 @@ use Mojo::Base 'Mojo::EventEmitter';
 use Carp 'croak';
 use Mojo::Headers;
 
-has [qw(auto_relax relaxed)] => 0;
+has [qw(auto_relax relaxed skip_body)];
 has headers => sub { Mojo::Headers->new };
 has max_leftover_size => sub { $ENV{MOJO_MAX_LEFTOVER_SIZE} || 262144 };
 
@@ -15,20 +15,18 @@ sub body_contains {
 sub body_size { croak 'Method "body_size" not implemented by subclass' }
 
 sub boundary {
-  (shift->headers->content_type || '')
-    =~ m!multipart.*boundary="*([a-zA-Z0-9'(),.:?\-_+/]+)!i
-    and return $1;
+  my $type = shift->headers->content_type || '';
+  $type =~ m!multipart.*boundary="*([a-zA-Z0-9'(),.:?\-_+/]+)!i and return $1;
   return;
 }
 
 # "Operator! Give me the number for 911!"
-sub build_body    { shift->_build('body') }
-sub build_headers { shift->_build('header') }
+sub build_body    { shift->_build('get_body_chunk') }
+sub build_headers { shift->_build('get_header_chunk') }
 
 sub charset {
-  (shift->headers->content_type || '') =~ /charset="?([^"\s;]+)"?/i
-    and return $1;
-  return;
+  my $type = shift->headers->content_type || '';
+  return $type =~ /charset="?([^"\s;]+)"?/i ? $1 : undef;
 }
 
 sub clone {
@@ -67,11 +65,10 @@ sub get_header_chunk {
       = $headers ? "$headers\x0d\x0a\x0d\x0a" : "\x0d\x0a";
   }
 
-  return substr $self->{header_buffer}, $offset,
-    $ENV{MOJO_CHUNK_SIZE} || 131072;
+  return substr $self->{header_buffer}, $offset, 131072;
 }
 
-sub has_leftovers { length(shift->{buffer} || '') }
+sub has_leftovers { !!length(shift->{buffer} || '') }
 
 sub header_size { length shift->build_headers }
 
@@ -82,11 +79,11 @@ sub is_dynamic {
   return $self->{dynamic} && !defined $self->headers->content_length;
 }
 
-sub is_finished { (shift->{state} || '') eq 'finished' }
+sub is_finished { my $tmp = shift->{state}; defined $tmp && $tmp eq 'finished' }
 
 sub is_multipart {undef}
 
-sub is_parsing_body { (shift->{state} || '') eq 'body' }
+sub is_parsing_body { my $tmp = shift->{state}; defined $tmp && $tmp eq 'body' }
 
 sub leftovers { shift->{buffer} }
 
@@ -94,32 +91,38 @@ sub parse {
   my $self = shift;
 
   # Parse headers
-  $self->parse_until_body(@_);
+  $self->_parse_until_body(@_);
   return $self if $self->{state} eq 'headers';
   $self->_body;
 
-  # Relaxed parsing for wonky web servers
+  # No content
+  if ($self->skip_body) {
+    $self->{state} = 'finished';
+    return $self;
+  }
+
+  # Relaxed parsing
+  my $headers = $self->headers;
   if ($self->auto_relax) {
-    my $headers    = $self->headers;
     my $connection = $headers->connection || '';
-    my $len        = defined $headers->content_length ? $headers->content_length : '';
+    my $len = defined $headers->content_length ? $headers->content_length : '';
     $self->relaxed(1)
       if !length $len && ($connection =~ /close/i || $headers->content_type);
   }
 
   # Parse chunked content
-  $self->{real_size} = 0 unless exists $self->{real_size};
-  if ($self->is_chunked && ($self->{state} || '') ne 'headers') {
+  $self->{real_size} = defined $self->{real_size} ? $self->{real_size} : 0;
+  if ($self->is_chunked && $self->{state} ne 'headers') {
     $self->_parse_chunked;
-    $self->{state} = 'finished' if ($self->{chunked} || '') eq 'finished';
+    $self->{state} = 'finished' if defined $self->{chunked_state} && $self->{chunked_state} eq 'finished';
   }
 
   # Not chunked, pass through to second buffer
   else {
     $self->{real_size} += length $self->{pre_buffer};
-    $self->{buffer} .= $self->{pre_buffer}
-      unless $self->is_finished
+    my $limit = $self->is_finished
       && length($self->{buffer}) > $self->max_leftover_size;
+    $self->{buffer} .= $self->{pre_buffer} unless $limit;
     $self->{pre_buffer} = '';
   }
 
@@ -131,15 +134,11 @@ sub parse {
 
   # Normal content
   else {
-    my $len = $self->headers->content_length || 0;
+    my $len = $headers->content_length || 0;
     $self->{size} ||= 0;
-    my $need = $len - $self->{size};
-
-    # Slurp
-    if ($need > 0) {
+    if ((my $need = $len - $self->{size}) > 0) {
       my $chunk = substr $self->{buffer}, 0, $need, '';
-      $self->{size} += length $chunk;
-      $self->emit(read => $chunk);
+      $self->emit(read => $chunk)->{size} += length $chunk;
     }
 
     # Finished
@@ -155,40 +154,9 @@ sub parse_body {
   return $self->parse(@_);
 }
 
-sub parse_body_once {
-  my $self = shift;
-  $self->parse_body(@_);
-  $self->{state} = 'finished';
-  return $self;
-}
-
-sub parse_until_body {
-  my ($self, $chunk) = @_;
-
-  # Add chunk
-  $chunk = defined $chunk ? $chunk : '';
-  $self->{raw_size} += length $chunk;
-  $self->{pre_buffer} .= $chunk;
-
-  # Parser started
-  unless ($self->{state}) {
-
-    # Update size
-    $self->{header_size} = $self->{raw_size} - length $self->{pre_buffer};
-
-    # Headers
-    $self->{state} = 'headers';
-  }
-
-  # Parse headers
-  $self->_parse_headers if ($self->{state} || '') eq 'headers';
-
-  return $self;
-}
-
 sub progress {
   my $self = shift;
-  return 0 unless grep {$_ eq ($self->{state} || '')} qw(body finished);
+  return 0 unless defined $self->{state} && ($self->{state} eq 'body' || $self->{state} eq 'finished');
   return $self->{raw_size} - ($self->{header_size} || 0);
 }
 
@@ -209,6 +177,8 @@ sub write {
 
   # Finish
   $self->{eof} = 1 if defined $chunk && $chunk eq '';
+
+  return $self;
 }
 
 # "Here's to alcohol, the cause of-and solution to-all life's problems."
@@ -223,6 +193,8 @@ sub write_chunk {
 
   # Finish
   $self->{eof} = 1 if defined $chunk && $chunk eq '';
+
+  return $self;
 }
 
 sub _body {
@@ -231,23 +203,21 @@ sub _body {
 }
 
 sub _build {
-  my ($self, $part) = @_;
+  my ($self, $method) = @_;
 
   # Build part from chunks
-  my $method = "get_${part}_chunk";
   my $buffer = '';
   my $offset = 0;
   while (1) {
-    my $chunk = $self->$method($offset);
 
     # No chunk yet, try again
-    next unless defined $chunk;
+    next unless defined(my $chunk = $self->$method($offset));
 
     # End of part
-    last unless length $chunk;
+    last unless my $len = length $chunk;
 
     # Part
-    $offset += length $chunk;
+    $offset += $len;
     $buffer .= $chunk;
   }
 
@@ -258,21 +228,11 @@ sub _build_chunk {
   my ($self, $chunk) = @_;
 
   # End
-  my $formatted = '';
-  if (length $chunk == 0) { $formatted = "\x0d\x0a0\x0d\x0a\x0d\x0a" }
+  return "\x0d\x0a0\x0d\x0a\x0d\x0a" if length $chunk == 0;
 
-  # Separator
-  else {
-
-    # First chunk has no leading CRLF
-    $formatted = "\x0d\x0a" if $self->{chunks};
-    $self->{chunks} = 1;
-
-    # Chunk
-    $formatted .= sprintf('%x', length $chunk) . "\x0d\x0a$chunk";
-  }
-
-  return $formatted;
+  # First chunk has no leading CRLF
+  my $crlf = $self->{chunks}++ ? "\x0d\x0a" : '';
+  return $crlf . sprintf('%x', length $chunk) . "\x0d\x0a$chunk";
 }
 
 sub _parse_chunked {
@@ -280,116 +240,119 @@ sub _parse_chunked {
 
   # Trailing headers
   return $self->_parse_chunked_trailing_headers
-    if ($self->{chunked} || '') eq 'trailing_headers';
+    if defined $self->{chunked_state} && $self->{chunked_state} eq 'trailing_headers';
 
   # New chunk (ignore the chunk extension)
   while ($self->{pre_buffer} =~ /^((?:\x0d?\x0a)?([\da-fA-F]+).*\x0d?\x0a)/) {
     my $header = $1;
-    my $len    = hex($2);
+    my $len    = hex $2;
 
-    # Whole chunk
-    if (length($self->{pre_buffer}) >= (length($header) + $len)) {
+    # Check if we have a whole chunk yet
+    last unless length($self->{pre_buffer}) >= (length($header) + $len);
 
-      # Remove header
-      substr $self->{pre_buffer}, 0, length $header, '';
+    # Remove header
+    substr $self->{pre_buffer}, 0, length $header, '';
 
-      # Last chunk
-      if ($len == 0) {
-        $self->{chunked} = 'trailing_headers';
-        last;
-      }
-
-      # Remove payload
-      $self->{real_size} += $len;
-      $self->{buffer} .= substr $self->{pre_buffer}, 0, $len, '';
-
-      # Remove newline at end of chunk
-      $self->{pre_buffer} =~ s/^(\x0d?\x0a)//;
+    # Last chunk
+    if ($len == 0) {
+      $self->{chunked_state} = 'trailing_headers';
+      last;
     }
 
-    # Not a whole chunk, wait for more data
-    else {last}
+    # Remove payload
+    $self->{real_size} += $len;
+    $self->{buffer} .= substr $self->{pre_buffer}, 0, $len, '';
+
+    # Remove newline at end of chunk
+    $self->{pre_buffer} =~ s/^(\x0d?\x0a)//;
   }
 
   # Trailing headers
   $self->_parse_chunked_trailing_headers
-    if ($self->{chunked} || '') eq 'trailing_headers';
+    if defined $self->{chunked_state} && $self->{chunked_state} eq 'trailing_headers';
 }
 
 sub _parse_chunked_trailing_headers {
   my $self = shift;
 
   # Parse
-  my $headers = $self->headers;
-  $headers->parse($self->{pre_buffer});
+  my $headers = $self->headers->parse($self->{pre_buffer});
   $self->{pre_buffer} = '';
 
-  # Finished
-  if ($headers->is_finished) {
+  # Check if we are finished
+  return unless $headers->is_finished;
+  $self->{chunked_state} = 'finished';
 
-    # Remove Transfer-Encoding
-    my $headers  = $self->headers;
-    my $encoding = $headers->transfer_encoding;
-    $encoding =~ s/,?\s*chunked//ig;
-    $encoding
-      ? $headers->transfer_encoding($encoding)
-      : $headers->remove('Transfer-Encoding');
-    $headers->content_length($self->{real_size});
-
-    $self->{chunked} = 'finished';
-  }
+  # Replace Transfer-Encoding with Content-Length
+  my $encoding = $headers->transfer_encoding;
+  $encoding =~ s/,?\s*chunked//ig;
+  $encoding
+    ? $headers->transfer_encoding($encoding)
+    : $headers->remove('Transfer-Encoding');
+  $headers->content_length($self->{real_size});
 }
 
 sub _parse_headers {
   my $self = shift;
 
   # Parse
-  my $headers = $self->headers;
-  $headers->parse($self->{pre_buffer});
+  my $headers = $self->headers->parse($self->{pre_buffer});
   $self->{pre_buffer} = '';
 
-  # Finished
-  if ($headers->is_finished) {
-    my $leftovers = $headers->leftovers;
-    $self->{header_size} = $self->{raw_size} - length $leftovers;
-    $self->{pre_buffer}  = $leftovers;
-    $self->{state}       = 'body';
-    $self->_body;
+  # Check if we are finished
+  return unless $headers->is_finished;
+  $self->{state} = 'body';
+
+  # Take care of leftovers
+  my $leftovers = $self->{pre_buffer} = $headers->leftovers;
+  $self->{header_size} = $self->{raw_size} - length $leftovers;
+  $self->_body;
+}
+
+sub _parse_until_body {
+  my ($self, $chunk) = @_;
+
+  # Add chunk
+  $self->{raw_size} += length($chunk = defined $chunk ? $chunk : '');
+  $self->{pre_buffer} .= $chunk;
+
+  # Parser started
+  unless ($self->{state}) {
+
+    # Update size
+    $self->{header_size} = $self->{raw_size} - length $self->{pre_buffer};
+
+    # Headers
+    $self->{state} = 'headers';
   }
+
+  # Parse headers
+  $self->_parse_headers if defined $self->{state} && $self->{state} eq 'headers';
 }
 
 1;
 
 =head1 NAME
 
-Mojo::Content - HTTP 1.1 content base class
+Mojo::Content - HTTP content base class
 
 =head1 SYNOPSIS
 
+  package Mojo::Content::MyContent;
   use Mojo::Base 'Mojo::Content';
+
+  sub body_contains  {...}
+  sub body_size      {...}
+  sub get_body_chunk {...}
 
 =head1 DESCRIPTION
 
-L<Mojo::Content> is an abstract base class for HTTP 1.1 content as described
-in RFC 2616.
+L<Mojo::Content> is an abstract base class for HTTP content as described in
+RFC 2616.
 
 =head1 EVENTS
 
 L<Mojo::Content> can emit the following events.
-
-=head2 C<drain>
-
-  $content->on(drain => sub {
-    my ($content, $offset) = @_;
-    ...
-  });
-
-Emitted once all data has been written.
-
-  $content->on(drain => sub {
-    my $content = shift;
-    $content->write_chunk(time);
-  });
 
 =head2 C<body>
 
@@ -403,6 +366,20 @@ Emitted once all headers have been parsed and the body starts.
   $content->on(body => sub {
     my $content = shift;
     $content->auto_upgrade(0) if $content->headers->header('X-No-MultiPart');
+  });
+
+=head2 C<drain>
+
+  $content->on(drain => sub {
+    my ($content, $offset) = @_;
+    ...
+  });
+
+Emitted once all data has been written.
+
+  $content->on(drain => sub {
+    my $content = shift;
+    $content->write_chunk(time);
   });
 
 =head2 C<read>
@@ -429,7 +406,7 @@ L<Mojo::Content> implements the following attributes.
   my $relax = $content->auto_relax;
   $content  = $content->auto_relax(1);
 
-Try to detect broken web servers and turn on relaxed parsing automatically.
+Try to detect when relaxed parsing is necessary.
 
 =head2 C<headers>
 
@@ -451,8 +428,15 @@ value of the C<MOJO_MAX_LEFTOVER_SIZE> environment variable or C<262144>.
   my $relaxed = $content->relaxed;
   $content    = $content->relaxed(1);
 
-Activate relaxed parsing for HTTP 0.9 and responses that are terminated with a
-connection close.
+Activate relaxed parsing for responses that are terminated with a connection
+close.
+
+=head2 C<skip_body>
+
+  my $skip = $content->skip_body;
+  $content = $content->skip_body(1);
+
+Skip body parsing and finish after headers.
 
 =head1 METHODS
 
@@ -580,20 +564,7 @@ Parse content chunk.
 
   $content = $content->parse_body('Hi!');
 
-Parse body chunk.
-
-=head2 C<parse_body_once>
-
-  $content = $content->parse_body_once('Hi!');
-
-Parse body chunk once.
-
-=head2 C<parse_until_body>
-
-  $content
-    = $content->parse_until_body("Content-Length: 12\r\n\r\nHello World!");
-
-Parse chunk and stop after headers.
+Parse body chunk and skip headers.
 
 =head2 C<progress>
 
@@ -603,16 +574,16 @@ Size of content already received from message in bytes.
 
 =head2 C<write>
 
-  $content->write('Hello!');
-  $content->write('Hello!', sub {...});
+  $content = $content->write('Hello!');
+  $content = $content->write('Hello!' => sub {...});
 
 Write dynamic content non-blocking, the optional drain callback will be
 invoked once all data has been written.
 
 =head2 C<write_chunk>
 
-  $content->write_chunk('Hello!');
-  $content->write_chunk('Hello!', sub {...});
+  $content = $content->write_chunk('Hello!');
+  $content = $content->write_chunk('Hello!' => sub {...});
 
 Write dynamic content non-blocking with C<chunked> transfer encoding, the
 optional drain callback will be invoked once all data has been written.

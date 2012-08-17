@@ -83,13 +83,26 @@ sub cookies {
   # Add cookies
   for my $cookie (@_) {
     $cookie = Mojo::Cookie::Response->new($cookie) if ref $cookie eq 'HASH';
-    $headers->add('Set-Cookie', "$cookie");
+    $headers->add('Set-Cookie' => "$cookie");
   }
 
   return $self;
 }
 
 sub default_message { $MESSAGES{$_[1] || $_[0]->code || 404} || '' }
+
+# "Weaseling out of things is important to learn.
+#  It's what separates us from the animals... except the weasel."
+sub extract_start_line {
+  my ($self, $bufferref) = @_;
+
+  # We have a full response line
+  return unless defined(my $line = get_line $bufferref);
+  $self->error('Bad response start line') and return
+    unless $line =~ m!^\s*HTTP/(\d\.\d)\s+(\d\d\d)\s*(.+)?$!;
+  $self->content->skip_body(1) if $self->code($2)->is_empty;
+  return !!$self->version($1)->message($3)->content->auto_relax(1);
+}
 
 sub fix_headers {
   my $self = shift;
@@ -102,51 +115,39 @@ sub fix_headers {
   return $self;
 }
 
+sub get_start_line_chunk {
+  my ($self, $offset) = @_;
+
+  # Status line
+  unless (defined $self->{start_buffer}) {
+    my $code    = $self->code    || 404;
+    my $message = $self->message || $self->default_message;
+    $self->{start_buffer} = "HTTP/@{[$self->version]} $code $message\x0d\x0a";
+  }
+
+  # Progress
+  $self->emit(progress => 'start_line', $offset);
+
+  # Chunk
+  return substr $self->{start_buffer}, $offset, 131072;
+}
+
+sub is_empty {
+  my $self = shift;
+  return $self->is_status_class(100) || (defined $self->code && ($self->code == 204 || $self->code == 304));
+}
+
 sub is_status_class {
   my ($self, $class) = @_;
   return unless my $code = $self->code;
   return $code >= $class && $code < ($class + 100);
 }
 
-sub _build_start_line {
-  my $self = shift;
-
-  # HTTP 0.9 has no start line
-  my $version = $self->version;
-  return '' if $version eq '0.9';
-
-  # HTTP 1.0 and above
-  my $code    = $self->code    || 404;
-  my $message = $self->message || $self->default_message;
-  return "HTTP/$version $code $message\x0d\x0a";
-}
-
-# "Weaseling out of things is important to learn.
-#  It's what separates us from the animals... except the weasel."
-sub _parse_start_line {
-  my $self = shift;
-
-  # Try to detect HTTP 0.9
-  if ($self->{buffer} =~ /^\s*(\S.{4})/ && $1 !~ m!^HTTP/!) {
-    $self->version('0.9');
-    $self->content->relaxed(1);
-    return $self->{state} = 'content';
-  }
-
-  # We have a full HTTP 1.0+ response line
-  return unless defined(my $line = get_line \$self->{buffer});
-  return $self->error('Bad response start line')
-    unless $line =~ m!^\s*HTTP/(\d\.\d)\s+(\d\d\d)\s*(.+)?$!;
-  $self->version($1)->code($2)->message($3);
-  $self->content->auto_relax(1);
-  $self->{state} = 'content';
-}
-
 1;
 
 =head1 NAME
 
-Mojo::Message::Response - HTTP 1.1 response container
+Mojo::Message::Response - HTTP response
 
 =head1 SYNOPSIS
 
@@ -158,6 +159,8 @@ Mojo::Message::Response - HTTP 1.1 response container
   $res->parse("Content-Length: 12\x0a\x0d\x0a\x0d");
   $res->parse("Content-Type: text/plain\x0a\x0d\x0a\x0d");
   $res->parse('Hello World!');
+  say $res->code;
+  say $res->headers->content_type;
   say $res->body;
 
   # Build
@@ -169,8 +172,8 @@ Mojo::Message::Response - HTTP 1.1 response container
 
 =head1 DESCRIPTION
 
-L<Mojo::Message::Response> is a container for HTTP 1.1 responses as described
-in RFC 2616.
+L<Mojo::Message::Response> is a container for HTTP responses as described in
+RFC 2616.
 
 =head1 EVENTS
 
@@ -208,19 +211,35 @@ implements the following new ones.
 
 Access response cookies, usually L<Mojo::Cookie::Response> objects.
 
-  say $res->cookies->[1]->value;
-
 =head2 C<default_message>
 
   my $message = $res->default_message;
 
 Generate default response message for code.
 
+=head2 C<extract_start_line>
+
+  my $success = $req->extract_start_line(\$string);
+
+Extract status line from string.
+
 =head2 C<fix_headers>
 
   $res = $res->fix_headers;
 
 Make sure response has all required headers for the current HTTP version.
+
+=head2 C<get_start_line_chunk>
+
+  my $string = $res->get_start_line_chunk($offset);
+
+Get a chunk of status line data starting from a specific position.
+
+=head2 C<is_empty>
+
+  my $success = $res->is_empty;
+
+Check if this is a C<1xx>, C<204> or C<304> response.
 
 =head2 C<is_status_class>
 

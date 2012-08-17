@@ -7,14 +7,14 @@ has max_line_size => sub { $ENV{MOJO_MAX_LINE_SIZE} || 10240 };
 
 # Common headers
 my @HEADERS = (
-  qw(Accept Accept-Language Accept-Ranges Authorization Connection),
-  qw(Cache-Control Content-Disposition Content-Length Content-Range),
-  qw(Content-Transfer-Encoding Content-Type Cookie DNT Date ETag Expect),
-  qw(Expires Host If-Modified-Since Last-Modified Location),
-  qw(Proxy-Authenticate Proxy-Authorization Range Sec-WebSocket-Accept),
-  qw(Sec-WebSocket-Key Sec-WebSocket-Origin Sec-WebSocket-Protocol),
-  qw(Sec-WebSocket-Version Server Set-Cookie Status Trailer),
-  qw(Transfer-Encoding Upgrade User-Agent WWW-Authenticate)
+  qw(Accept Accept-Charset Accept-Encoding Accept-Language Accept-Ranges),
+  qw(Authorization Cache-Control Connection Content-Disposition),
+  qw(Content-Encoding Content-Length Content-Range Content-Type Cookie DNT),
+  qw(Date ETag Expect Expires Host If-Modified-Since Last-Modified Location),
+  qw(Origin Proxy-Authenticate Proxy-Authorization Range),
+  qw(Sec-WebSocket-Accept Sec-WebSocket-Extensions Sec-WebSocket-Key),
+  qw(Sec-WebSocket-Protocol Sec-WebSocket-Version Server Set-Cookie Status),
+  qw(TE Trailer Transfer-Encoding Upgrade User-Agent WWW-Authenticate)
 );
 {
   no strict 'refs';
@@ -78,9 +78,9 @@ sub header {
   return @$headers;
 }
 
-sub is_finished { (shift->{state} || '') eq 'finished' }
+sub is_finished { defined $_[0]->{state} && $_[0]->{state} eq 'finished' }
 
-sub is_limit_exceeded { shift->{limit} }
+sub is_limit_exceeded { !!shift->{limit} }
 
 sub leftovers { delete shift->{buffer} }
 
@@ -183,13 +183,22 @@ Mojo::Headers - Headers
 
   use Mojo::Headers;
 
+  # Parse
   my $headers = Mojo::Headers->new;
+  $headers->parse("Content-Length: 42\r\n");
+  $headers->parse("Content-Type: text/html\r\n\r\n");
+  say $headers->content_length;
+  say $headers->content_type;
+
+  # Build
+  my $headers = Mojo::Headers->new;
+  $headers->content_length(42);
   $headers->content_type('text/plain');
-  $headers->parse("Content-Type: text/html\n\n");
+  say $headers->to_string;
 
 =head1 DESCRIPTION
 
-L<Mojo::Headers> is a container and parser for HTTP headers.
+L<Mojo::Headers> is a container for HTTP headers as described in RFC 2616.
 
 =head1 ATTRIBUTES
 
@@ -200,7 +209,7 @@ L<Mojo::Headers> implements the following attributes.
   my $size = $headers->max_line_size;
   $headers = $headers->max_line_size(1024);
 
-Maximum line size in bytes, defaults to the value of the
+Maximum header line size in bytes, defaults to the value of the
 C<MOJO_MAX_LINE_SIZE> environment variable or C<10240>.
 
 =head1 METHODS
@@ -215,10 +224,24 @@ following new ones.
 
 Shortcut for the C<Accept> header.
 
+=head2 C<accept_charset>
+
+  my $charset = $headers->accept_charset;
+  $headers    = $headers->accept_charset('UTF-8');
+
+Shortcut for the C<Accept-Charset> header.
+
+=head2 C<accept_encoding>
+
+  my $encoding = $headers->accept_encoding;
+  $headers     = $headers->accept_encoding('gzip');
+
+Shortcut for the C<Accept-Encoding> header.
+
 =head2 C<accept_language>
 
-  my $accept_language = $headers->accept_language;
-  $headers            = $headers->accept_language('de, en');
+  my $language = $headers->accept_language;
+  $headers     = $headers->accept_language('de, en');
 
 Shortcut for the C<Accept-Language> header.
 
@@ -264,15 +287,22 @@ Shortcut for the C<Connection> header.
 
 =head2 C<content_disposition>
 
-  my $content_disposition = $headers->content_disposition;
-  $headers                = $headers->content_disposition('foo');
+  my $disposition = $headers->content_disposition;
+  $headers        = $headers->content_disposition('foo');
 
 Shortcut for the C<Content-Disposition> header.
 
+=head2 C<content_encoding>
+
+  my $encoding = $headers->content_encoding;
+  $headers     = $headers->content_encoding('gzip');
+
+Shortcut for the C<Content-Encoding> header.
+
 =head2 C<content_length>
 
-  my $content_length = $headers->content_length;
-  $headers           = $headers->content_length(4000);
+  my $length = $headers->content_length;
+  $headers   = $headers->content_length(4000);
 
 Shortcut for the C<Content-Length> header.
 
@@ -283,17 +313,10 @@ Shortcut for the C<Content-Length> header.
 
 Shortcut for the C<Content-Range> header.
 
-=head2 C<content_transfer_encoding>
-
-  my $encoding = $headers->content_transfer_encoding;
-  $headers     = $headers->content_transfer_encoding('foo');
-
-Shortcut for the C<Content-Transfer-Encoding> header.
-
 =head2 C<content_type>
 
-  my $content_type = $headers->content_type;
-  $headers         = $headers->content_type('text/plain');
+  my $type = $headers->content_type;
+  $headers = $headers->content_type('text/plain');
 
 Shortcut for the C<Content-Type> header.
 
@@ -302,7 +325,7 @@ Shortcut for the C<Content-Type> header.
   my $cookie = $headers->cookie;
   $headers   = $headers->cookie('f=b');
 
-Shortcut for the C<Cookie> header.
+Shortcut for the C<Cookie> header from RFC 6265.
 
 =head2 C<date>
 
@@ -316,7 +339,8 @@ Shortcut for the C<Date> header.
   my $dnt  = $headers->dnt;
   $headers = $headers->dnt(1);
 
-Shortcut for the C<DNT> (Do Not Track) header.
+Shortcut for the C<DNT> (Do Not Track) header, which has no specification yet,
+but is very commonly used.
 
 =head2 C<etag>
 
@@ -342,6 +366,7 @@ Shortcut for the C<Expires> header.
 =head2 C<from_hash>
 
   $headers = $headers->from_hash({'Content-Type' => 'text/html'});
+  $headers = $headers->from_hash({});
 
 Parse headers from a hash reference.
 
@@ -370,7 +395,7 @@ Shortcut for the C<Host> header.
 
 =head2 C<if_modified_since>
 
-  my $m    = $headers->if_modified_since;
+  my $date = $headers->if_modified_since;
   $headers = $headers->if_modified_since('Sun, 17 Aug 2008 16:27:35 GMT');
 
 Shortcut for the C<If-Modified-Since> header.
@@ -389,7 +414,7 @@ Check if a header has exceeded C<max_line_size>.
 
 =head2 C<last_modified>
 
-  my $m    = $headers->last_modified;
+  my $date = $headers->last_modified;
   $headers = $headers->last_modified('Sun, 17 Aug 2008 16:27:35 GMT');
 
 Shortcut for the C<Last-Modified> header.
@@ -413,9 +438,16 @@ Shortcut for the C<Location> header.
 
 Generate a list of all currently defined headers.
 
+=head2 C<origin>
+
+  my $origin = $headers->origin;
+  $headers   = $headers->origin('http://example.com');
+
+Shortcut for the C<Origin> header from RFC 6454.
+
 =head2 C<parse>
 
-  $headers = $headers->parse("Content-Type: text/foo\n\n");
+  $headers = $headers->parse("Content-Type: text/plain\r\n\r\n");
 
 Parse formatted headers.
 
@@ -428,8 +460,8 @@ Shortcut for the C<Proxy-Authenticate> header.
 
 =head2 C<proxy_authorization>
 
-  my $proxy_authorization = $headers->proxy_authorization;
-  $headers = $headers->proxy_authorization('Basic Zm9vOmJhcg==');
+  my $authorization = $headers->proxy_authorization;
+  $headers          = $headers->proxy_authorization('Basic Zm9vOmJhcg==');
 
 Shortcut for the C<Proxy-Authorization> header.
 
@@ -459,35 +491,35 @@ Remove a header.
   my $accept = $headers->sec_websocket_accept;
   $headers   = $headers->sec_websocket_accept('s3pPLMBiTxaQ9kYGzzhZRbK+xOo=');
 
-Shortcut for the C<Sec-WebSocket-Accept> header.
+Shortcut for the C<Sec-WebSocket-Accept> header from RFC 6455.
+
+=head2 C<sec_websocket_extensions>
+
+  my $extensions = $headers->sec_websocket_extensions;
+  $headers       = $headers->sec_websocket_extensions('foo');
+
+Shortcut for the C<Sec-WebSocket-Extensions> header from RFC 6455.
 
 =head2 C<sec_websocket_key>
 
   my $key  = $headers->sec_websocket_key;
   $headers = $headers->sec_websocket_key('dGhlIHNhbXBsZSBub25jZQ==');
 
-Shortcut for the C<Sec-WebSocket-Key> header.
-
-=head2 C<sec_websocket_origin>
-
-  my $origin = $headers->sec_websocket_origin;
-  $headers   = $headers->sec_websocket_origin('http://example.com');
-
-Shortcut for the C<Sec-WebSocket-Origin> header.
+Shortcut for the C<Sec-WebSocket-Key> header from RFC 6455.
 
 =head2 C<sec_websocket_protocol>
 
   my $protocol = $headers->sec_websocket_protocol;
   $headers     = $headers->sec_websocket_protocol('sample');
 
-Shortcut for the C<Sec-WebSocket-Protocol> header.
+Shortcut for the C<Sec-WebSocket-Protocol> header from RFC 6455.
 
 =head2 C<sec_websocket_version>
 
   my $version = $headers->sec_websocket_version;
   $headers    = $headers->sec_websocket_version(13);
 
-Shortcut for the C<Sec-WebSocket-Version> header.
+Shortcut for the C<Sec-WebSocket-Version> header from RFC 6455.
 
 =head2 C<server>
 
@@ -501,14 +533,21 @@ Shortcut for the C<Server> header.
   my $set_cookie = $headers->set_cookie;
   $headers       = $headers->set_cookie('f=b; path=/');
 
-Shortcut for the C<Set-Cookie> header.
+Shortcut for the C<Set-Cookie> header from RFC 6265.
 
 =head2 C<status>
 
   my $status = $headers->status;
   $headers   = $headers->status('200 OK');
 
-Shortcut for the C<Status> header.
+Shortcut for the C<Status> header from RFC 3875.
+
+=head2 C<te>
+
+  my $te   = $headers->te;
+  $headers = $headers->te('chunked');
+
+Shortcut for the C<TE> header.
 
 =head2 C<to_hash>
 
@@ -522,7 +561,7 @@ line values are disabled by default.
 
   my $string = $headers->to_string;
 
-Turn headers into a string, suitable for HTTP 1.1 messages.
+Turn headers into a string, suitable for HTTP messages.
 
 =head2 C<trailer>
 
@@ -533,8 +572,8 @@ Shortcut for the C<Trailer> header.
 
 =head2 C<transfer_encoding>
 
-  my $transfer_encoding = $headers->transfer_encoding;
-  $headers              = $headers->transfer_encoding('chunked');
+  my $encoding = $headers->transfer_encoding;
+  $headers     = $headers->transfer_encoding('chunked');
 
 Shortcut for the C<Transfer-Encoding> header.
 
@@ -547,8 +586,8 @@ Shortcut for the C<Upgrade> header.
 
 =head2 C<user_agent>
 
-  my $user_agent = $headers->user_agent;
-  $headers       = $headers->user_agent('Mojo/1.0');
+  my $agent = $headers->user_agent;
+  $headers  = $headers->user_agent('Mojo/1.0');
 
 Shortcut for the C<User-Agent> header.
 

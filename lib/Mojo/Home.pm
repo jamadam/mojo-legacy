@@ -16,12 +16,6 @@ use Mojo::Util qw(class_to_path slurp);
 #  please save me Superman."
 sub new { shift->SUPER::new->parse(@_) }
 
-# DEPRECATED in Rainbow!
-sub app_class {
-  warn "Mojo::Home->app_class is DEPRECATED!\n";
-  return @_ > 1 ? shift : 'Mojo::HelloWorld';
-}
-
 sub detect {
   my $self = shift;
 
@@ -53,8 +47,7 @@ sub detect {
 }
 
 sub lib_dir {
-  my $self = shift;
-  my $path = catdir @{$self->{parts} || []}, 'lib';
+  my $path = catdir @{shift->{parts} || []}, 'lib';
   return -d $path ? $path : undef;
 }
 
@@ -91,7 +84,6 @@ sub parse {
 }
 
 sub rel_dir { catdir(@{shift->{parts} || []}, split '/', shift) }
-
 sub rel_file { catfile(@{shift->{parts} || []}, split '/', shift) }
 
 sub slurp_rel_file { slurp shift->rel_file(@_) }
@@ -102,14 +94,18 @@ sub to_string { catdir(@{shift->{parts} || []}) }
 
 =head1 NAME
 
-Mojo::Home - Detect and access the project root directory in Mojo
+Mojo::Home - Home sweet home!
 
 =head1 SYNOPSIS
 
   use Mojo::Home;
 
+  # Find and manage the project root directory
   my $home = Mojo::Home->new;
   $home->detect;
+  say $home->lib_dir;
+  say $home->rel_file('templates/layouts/default.html.ep');
+  say "$home";
 
 =head1 DESCRIPTION
 

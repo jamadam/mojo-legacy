@@ -44,7 +44,7 @@ sub is_readable {
 sub is_writing {
   my $self = shift;
   return unless exists $self->{handle};
-  return length($self->{buffer}) || $self->has_subscribers('drain');
+  return !!length($self->{buffer}) || $self->has_subscribers('drain');
 }
 
 sub start {
@@ -76,19 +76,20 @@ sub write {
 
   # Write with roundtrip
   if ($cb) { $self->once(drain => $cb) }
-  else     { return unless length $self->{buffer} }
+  else     { return $self unless length $self->{buffer} }
 
   # Start writing
   $self->reactor->watch($self->{handle}, !$self->{paused}, 1)
     if $self->{handle};
+
+  return $self;
 }
 
 sub _read {
   my $self = shift;
 
   # Read
-  my $read
-    = $self->{handle}->sysread(my $buffer, $ENV{MOJO_CHUNK_SIZE} || 131072, 0);
+  my $read = $self->{handle}->sysread(my $buffer, 131072, 0);
 
   # Error
   unless (defined $read) {
@@ -107,8 +108,7 @@ sub _read {
   return $self->close if $read == 0;
 
   # Handle read
-  $self->emit_safe(read => $buffer);
-  $self->{active} = time;
+  $self->emit_safe(read => $buffer)->{active} = time;
 }
 
 sub _startup {
@@ -334,8 +334,8 @@ Steal handle from stream and prevent it from getting closed automatically.
 
 =head2 C<write>
 
-  $stream->write('Hello!');
-  $stream->write('Hello!', sub {...});
+  $stream = $stream->write('Hello!');
+  $stream = $stream->write('Hello!' => sub {...});
 
 Write data to stream, the optional drain callback will be invoked once all
 data has been written.

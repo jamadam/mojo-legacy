@@ -10,6 +10,8 @@ use warnings;
 use Carp ();
 
 sub say(@) {print @_, "\n"}
+# Only Perl 5.14+ requires it on demand
+use IO::Handle ();
 
 # "Kids, you tried your best and you failed miserably.
 #  The lesson is, never try."
@@ -19,7 +21,6 @@ sub import {
 
   # No limits!
   no strict 'refs';
-  no warnings 'redefine';
 
   # Base
   if ($flag eq '-base') { $flag = $class }
@@ -74,7 +75,7 @@ sub attr {
       unless $attr =~ /^[a-zA-Z_]\w*$/;
 
     # Header (check arguments)
-    my $code = "sub {\n  if (\@_ == 1) {\n";
+    my $code = "package $class;\nsub $attr {\n  if (\@_ == 1) {\n";
 
     # No default value (return value)
     unless (defined $default) { $code .= "    return \$_[0]{'$attr'};" }
@@ -86,6 +87,7 @@ sub attr {
       $code .= "    return \$_[0]{'$attr'} if exists \$_[0]{'$attr'};\n";
 
       # Return default value
+      $code .= "    no warnings 'closure';\n";
       $code .= "    return \$_[0]{'$attr'} = ";
       $code .= ref $default eq 'CODE' ? '$default->($_[0]);' : '$default;';
     }
@@ -94,13 +96,12 @@ sub attr {
     $code .= "\n  }\n  \$_[0]{'$attr'} = \$_[1];\n";
 
     # Footer (return invocant)
-    $code .= "  \$_[0];\n};";
+    $code .= "  \$_[0];\n}";
 
     # We compile custom attribute code for speed
     no strict 'refs';
-    no warnings 'redefine';
-    *{"${class}::$attr"} = eval $code or Carp::croak("Mojo::Base error: $@");
     warn "-- Attribute $attr in $class\n$code\n\n" if $ENV{MOJO_BASE_DEBUG};
+    Carp::croak("Mojo::Base error: $@") unless eval "$code;1";
   }
 }
 
@@ -149,11 +150,13 @@ All three forms save a lot of typing.
   use strict;
   use warnings;
   use feature ':5.10';
+  use IO::Handle ();
 
   # use Mojo::Base -base;
   use strict;
   use warnings;
   use feature ':5.10';
+  use IO::Handle ();
   use Mojo::Base;
   push @ISA, 'Mojo::Base';
   sub has { Mojo::Base::attr(__PACKAGE__, @_) }
@@ -162,6 +165,7 @@ All three forms save a lot of typing.
   use strict;
   use warnings;
   use feature ':5.10';
+  use IO::Handle ();
   require SomeBaseClass;
   push @ISA, 'SomeBaseClass';
   use Mojo::Base;

@@ -15,7 +15,7 @@ my $START_LINE_RE = qr|
   ([a-zA-Z]+)                                  # Method
   \s+
   ([0-9a-zA-Z\-._~:/?#[\]\@!\$&'()*+,;=\%]+)   # Path
-  (?:\s+HTTP/(\d+\.\d+))?                      # Version
+  (?:\s+HTTP/(\d\.\d))?                        # Version
   $
 |x;
 
@@ -54,6 +54,20 @@ sub cookies {
   return $self;
 }
 
+sub extract_start_line {
+  my ($self, $bufferref) = @_;
+
+  # Ignore any leading empty lines
+  $$bufferref =~ s/^\s+//;
+  return unless defined(my $line = get_line $bufferref);
+
+  # We have a (hopefully) full request line
+  $self->error('Bad request start line', 400) and return
+    unless $line =~ $START_LINE_RE;
+  my $url = $self->method($1)->version($3)->url;
+  return !!($1 eq 'CONNECT' ? $url->authority($2) : $url->parse($2));
+}
+
 sub fix_headers {
   my $self = shift;
   $self->{fix} ? return $self : $self->SUPER::fix_headers(@_);
@@ -61,96 +75,121 @@ sub fix_headers {
   # Basic authentication
   my $url     = $self->url;
   my $headers = $self->headers;
-  if ((my $userinfo = $url->userinfo) && !$headers->authorization) {
-    $headers->authorization('Basic ' . b64_encode($userinfo, ''));
-  }
+  my $auth    = $url->userinfo;
+  $headers->authorization('Basic ' . b64_encode($auth, ''))
+    if $auth && !$headers->authorization;
 
   # Proxy
   if (my $proxy = $self->proxy) {
     $url = $proxy if $self->method eq 'CONNECT';
 
     # Basic proxy authentication
-    my $userinfo = $proxy->userinfo;
-    $headers->proxy_authorization('Basic ' . b64_encode($userinfo, ''))
-      if $userinfo && !$headers->proxy_authorization;
+    my $proxy_auth = $proxy->userinfo;
+    $headers->proxy_authorization('Basic ' . b64_encode($proxy_auth, ''))
+      if $proxy_auth && !$headers->proxy_authorization;
   }
 
   # Host
   my $host = $url->ihost;
   my $port = $url->port;
-  $host .= ":$port" if $port;
-  $headers->host($host) unless $headers->host;
+  $headers->host($port ? "$host:$port" : $host) unless $headers->host;
 
   return $self;
 }
 
+sub get_start_line_chunk {
+  my ($self, $offset) = @_;
+
+  # Request line
+  unless (defined $self->{start_buffer}) {
+
+    # Path
+    my $url   = $self->url;
+    my $path  = $url->path->to_string;
+    my $query = $url->query->to_string;
+    $path .= "?$query" if $query;
+    $path = "/$path" unless $path =~ m!^/!;
+
+    # CONNECT
+    my $method = uc $self->method;
+    if ($method eq 'CONNECT') {
+      my $port = $url->port || ($url->scheme eq 'https' ? '443' : '80');
+      $path = $url->host . ":$port";
+    }
+
+    # Proxy
+    elsif ($self->proxy) {
+      my $clone = $url = $url->clone->userinfo(undef);
+      my $upgrade = lc($self->headers->upgrade || '');
+      my $scheme = $url->scheme || '';
+      $path = $clone unless $upgrade eq 'websocket' || $scheme eq 'https';
+    }
+
+    $self->{start_buffer} = "$method $path HTTP/@{[$self->version]}\x0d\x0a";
+  }
+
+  # Progress
+  $self->emit(progress => 'start_line', $offset);
+
+  # Chunk
+  return substr $self->{start_buffer}, $offset, 131072;
+}
+
 sub is_secure {
   my $url = shift->url;
-  return ($url->scheme || $url->base->scheme || '') eq 'https';
+  return do {my $tmp = ($url->scheme || $url->base->scheme); defined $tmp && $tmp eq 'https'};
 }
 
 sub is_xhr {
   (shift->headers->header('X-Requested-With') || '') =~ /XMLHttpRequest/i;
 }
 
-sub param {
-  my $self = shift;
-  return ($self->{params} ||= $self->params)->param(@_);
-}
+sub param { shift->params->param(@_) }
 
 sub params {
   my $self = shift;
-  my $p    = Mojo::Parameters->new;
-  return $p->merge($self->body_params, $self->query_params);
+  return $self->{params}
+    ||= Mojo::Parameters->new->merge($self->body_params, $self->query_params);
 }
 
 sub parse {
   my $self = shift;
+  my $env  = @_ > 1 ? {@_} : ref $_[0] eq 'HASH' ? $_[0] : undef;
+  my @args = $env ? undef : @_;
 
   # CGI like environment
-  my $env;
-  if   (@_ > 1) { $env = {@_} }
-  else          { $env = $_[0] if ref $_[0] eq 'HASH' }
-
-  # Parse CGI like environment
-  my $chunk;
-  if ($env) { $self->_parse_env($env) }
-
-  # Parse chunk
-  else { $chunk = shift }
+  $self->env($env)->_parse_env($env) if $env;
+  $self->content($self->content->parse_body(@args)) if defined $self->{state} && $self->{state} eq 'cgi';
 
   # Pass through
-  $self->SUPER::parse($chunk);
+  $self->SUPER::parse(@args);
 
-  # Fix things we only know after parsing headers
-  if (!$self->{state} || $self->{state} ne 'headers') {
+  # Check if we can fix things that require all headers
+  return $self unless $self->is_finished;
 
-    # Base URL
-    my $base = $self->url->base;
-    $base->scheme('http') unless $base->scheme;
-    my $headers = $self->headers;
-    if (!$base->host && (my $host = $headers->host)) {
-      $base->authority($host);
-    }
+  # Base URL
+  my $base = $self->url->base;
+  $base->scheme('http') unless $base->scheme;
+  my $headers = $self->headers;
+  if (!$base->host && (my $host = $headers->host)) { $base->authority($host) }
 
-    # Basic authentication
-    if (my $userinfo = _parse_basic_auth($headers->authorization)) {
-      $base->userinfo($userinfo);
-    }
+  # Basic authentication
+  my $auth = _parse_basic_auth($headers->authorization);
+  $base->userinfo($auth) if $auth;
 
-    # Basic proxy authentication
-    if (my $userinfo = _parse_basic_auth($headers->proxy_authorization)) {
-      $self->proxy(Mojo::URL->new->userinfo($userinfo));
-    }
+  # Basic proxy authentication
+  my $proxy_auth = _parse_basic_auth($headers->proxy_authorization);
+  $self->proxy(Mojo::URL->new->userinfo($proxy_auth)) if $proxy_auth;
 
-    # "X-Forwarded-HTTPS"
-    $base->scheme('https')
-      if $ENV{MOJO_REVERSE_PROXY} && $headers->header('X-Forwarded-HTTPS');
-  }
+  # "X-Forwarded-HTTPS"
+  $base->scheme('https')
+    if $ENV{MOJO_REVERSE_PROXY} && $headers->header('X-Forwarded-HTTPS');
 
   return $self;
 }
 
+# "Bart, with $10,000, we'd be millionaires!
+#  We could buy all kinds of useful things like...love!"
 sub proxy {
   my $self = shift;
   return $self->{proxy} unless @_;
@@ -160,41 +199,6 @@ sub proxy {
 
 sub query_params { shift->url->query }
 
-sub _build_start_line {
-  my $self = shift;
-
-  # Path
-  my $url   = $self->url;
-  my $path  = $url->path->to_string;
-  my $query = $url->query->to_string;
-  $path .= "?$query" if $query;
-  $path = "/$path" unless $path =~ m!^/!;
-
-  # CONNECT
-  my $method = uc $self->method;
-  if ($method eq 'CONNECT') {
-    my $host = $url->host;
-    my $port = $url->port || ($url->scheme eq 'https' ? '443' : '80');
-    $path = "$host:$port";
-  }
-
-  # Proxy
-  elsif ($self->proxy) {
-    my $clone = $url = $url->clone;
-    $clone->userinfo(undef);
-    $path = $clone
-      unless lc($self->headers->upgrade || '') eq 'websocket'
-      || ($url->scheme || '') eq 'https';
-  }
-
-  # HTTP 0.9
-  my $version = $self->version;
-  return "$method $path\x0d\x0a" if $version eq '0.9';
-
-  # HTTP 1.0 and above
-  return "$method $path HTTP/$version\x0d\x0a";
-}
-
 sub _parse_basic_auth {
   return unless my $header = shift;
   return $header =~ /Basic (.+)$/ ? b64_decode($1) : undef;
@@ -202,26 +206,20 @@ sub _parse_basic_auth {
 
 sub _parse_env {
   my ($self, $env) = @_;
-  $env ||= \%ENV;
-
-  # Make environment accessible
-  $self->env($env);
 
   # Extract headers
   my $headers = $self->headers;
   my $url     = $self->url;
   my $base    = $url->base;
-  for my $name (keys %$env) {
+  while (my ($name, $value) = each %$env) {
     next unless $name =~ /^HTTP_/i;
-    my $value = $env->{$name};
     $name =~ s/^HTTP_//i;
     $name =~ s/_/-/g;
     $headers->header($name, $value);
 
     # Host/Port
     if ($name eq 'HOST') {
-      my $host = $value;
-      my $port;
+      my ($host, $port) = ($value, undef);
       ($host, $port) = ($1, $2) if $host =~ /^([^\:]*)\:?(.*)$/;
       $base->host($host)->port($port);
     }
@@ -249,9 +247,7 @@ sub _parse_env {
   $base->scheme('https') if $env->{HTTPS};
 
   # Path
-  my $path = $url->path;
-  if   (my $value = $env->{PATH_INFO}) { $path->parse($value) }
-  else                                 { $path->parse('') }
+  my $path = $url->path->parse($env->{PATH_INFO} ? $env->{PATH_INFO} : '');
 
   # Base path
   if (my $value = $env->{SCRIPT_NAME}) {
@@ -268,41 +264,15 @@ sub _parse_env {
     $path->parse($buffer);
   }
 
-  # There won't be a start line or headers
-  $self->{state} = 'body';
-}
-
-# "Bart, with $10,000, we'd be millionaires!
-#  We could buy all kinds of useful things like...love!"
-sub _parse_start_line {
-  my $self = shift;
-
-  # Ignore any leading empty lines
-  my $line = get_line \$self->{buffer};
-  $line = get_line \$self->{buffer}
-    while ((defined $line) && ($line =~ m/^\s*$/));
-  return unless defined $line;
-
-  # We have a (hopefully) full request line
-  return $self->error('Bad request start line', 400)
-    unless $line =~ $START_LINE_RE;
-  $self->method($1);
-  my $url = $self->url;
-  $1 eq 'CONNECT' ? $url->authority($2) : $url->parse($2);
-
-  # HTTP 0.9 is identified by the missing version
-  $self->{state} = 'content';
-  return $self->version($3) if defined $3;
-  $self->version('0.9');
-  $self->{state}  = 'finished';
-  $self->{buffer} = '';
+  # Bypass normal content parser
+  $self->{state} = 'cgi';
 }
 
 1;
 
 =head1 NAME
 
-Mojo::Message::Request - HTTP 1.1 request container
+Mojo::Message::Request - HTTP request
 
 =head1 SYNOPSIS
 
@@ -314,6 +284,8 @@ Mojo::Message::Request - HTTP 1.1 request container
   $req->parse("Content-Length: 12\x0a\x0d\x0a\x0d");
   $req->parse("Content-Type: text/plain\x0a\x0d\x0a\x0d");
   $req->parse('Hello World!');
+  say $req->method;
+  say $req->headers->content_type;
   say $req->body;
 
   # Build
@@ -324,8 +296,8 @@ Mojo::Message::Request - HTTP 1.1 request container
 
 =head1 DESCRIPTION
 
-L<Mojo::Message::Request> is a container for HTTP 1.1 requests as described
-in RFC 2616.
+L<Mojo::Message::Request> is a container for HTTP requests as described in RFC
+2616.
 
 =head1 EVENTS
 
@@ -363,7 +335,8 @@ HTTP request method, defaults to C<GET>.
 
 HTTP request URL, defaults to a L<Mojo::URL> object.
 
-  my $foo = $req->url->query->to_hash->{foo};
+  # Get request path
+  say $req->url->path;
 
 =head1 METHODS
 
@@ -384,13 +357,23 @@ Clone request if possible, otherwise return C<undef>.
 
 Access request cookies, usually L<Mojo::Cookie::Request> objects.
 
-  say $req->cookies->[1]->value;
+=head2 C<extract_start_line>
+
+  my $success = $req->extract_start_line(\$string);
+
+Extract request line from string.
 
 =head2 C<fix_headers>
 
   $req = $req->fix_headers;
 
 Make sure request has all required headers for the current HTTP version.
+
+=head2 C<get_start_line_chunk>
+
+  my $string = $req->get_start_line_chunk($offset);
+
+Get a chunk of request line data starting from a specific position.
 
 =head2 C<is_secure>
 
@@ -417,8 +400,11 @@ so it should not be called before the entire request body has been received.
 
   my $p = $req->params;
 
-All C<GET> and C<POST> parameters, usually a L<Mojo::Parameters> object.
+All C<GET> and C<POST> parameters, usually a L<Mojo::Parameters> object. Note
+that this method caches all data, so it should not be called before the entire
+request body has been received.
 
+  # Get parameter value
   say $req->params->param('foo');
 
 =head2 C<parse>
@@ -446,7 +432,8 @@ Proxy URL for request.
 
 All C<GET> parameters, usually a L<Mojo::Parameters> object.
 
-  say $req->query_params->to_hash->{'foo'};
+  # Turn GET parameters to hash and extract value
+  say $req->query_params->to_hash->{foo};
 
 =head1 SEE ALSO
 

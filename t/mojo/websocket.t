@@ -35,16 +35,16 @@ get '/link' => sub {
 };
 
 # WebSocket /
-my $server_flag;
+my $server;
 websocket '/' => sub {
   my $self = shift;
-  $self->on(finish => sub { $server_flag += 4 });
+  $self->on(finish => sub { $server += 2 });
   $self->on(
     message => sub {
       my ($self, $message) = @_;
       my $url = $self->url_for->to_abs;
       $self->send("${message}test2$url");
-      $server_flag = 20;
+      $server = 1;
     }
   );
 } => 'index';
@@ -61,8 +61,7 @@ get '/something/else' => sub {
 websocket '/socket' => sub {
   my $self = shift;
   $self->send(
-    $self->req->headers->host,
-    sub {
+    $self->req->headers->host => sub {
       my $self = shift;
       $self->send(Mojo::IOLoop->stream($self->tx->connection)->timeout);
       $self->finish;
@@ -84,16 +83,16 @@ websocket '/early_start' => sub {
 };
 
 # WebSocket /denied
-my ($handshake, $denied) = 0;
+my ($handshake, $denied);
 websocket '/denied' => sub {
   my $self = shift;
-  $self->tx->handshake->on(finish => sub { $handshake += 2 });
+  $self->tx->handshake->on(finish => sub { $handshake += 1 });
   $self->on(finish => sub { $denied += 1 });
   $self->render(text => 'denied', status => 403);
 };
 
 # WebSocket /subreq
-my $subreq = 0;
+my $subreq;
 websocket '/subreq' => sub {
   my $self = shift;
   $self->ua->websocket(
@@ -111,7 +110,7 @@ websocket '/subreq' => sub {
     }
   );
   $self->send('test0');
-  $self->on(finish => sub { $subreq += 3 });
+  $self->on(finish => sub { $subreq += 1 });
 };
 
 # WebSocket /echo
@@ -131,7 +130,7 @@ websocket '/double_echo' => sub {
   shift->on(
     message => sub {
       my ($self, $message) = @_;
-      $self->send($message, sub { shift->send($message) });
+      $self->send($message => sub { shift->send($message) });
     }
   );
 };
@@ -153,7 +152,7 @@ websocket '/deadcallback' => sub {
 my $timeout;
 websocket '/timeout' => sub {
   my $self = shift;
-  Mojo::IOLoop->stream($self->tx->connection)->timeout(0.5);
+  Mojo::IOLoop->stream($self->tx->connection)->timeout(0.25);
   $self->on(finish => sub { $timeout = 'works!' });
 };
 
@@ -206,9 +205,9 @@ ok $body =~ /^(\d+)failed!$/, 'right content';
 is $1, 15, 'right timeout';
 
 # WebSocket /socket (using an already prepared socket)
-my $port     = $ua->app_url->port;
-my $tx       = $ua->build_websocket_tx('ws://lalala/socket');
-my $finished = 0;
+my $port = $ua->app_url->port;
+my $tx   = $ua->build_websocket_tx('ws://lalala/socket');
+my $finished;
 $tx->on(finish => sub { $finished++ });
 my $sock = IO::Socket::INET->new(PeerAddr => '127.0.0.1', PeerPort => $port);
 $sock->blocking(0);
@@ -239,14 +238,14 @@ ok $local, 'local port';
 is $loop->stream($tx->connection)->handle, $sock, 'right connection id';
 
 # WebSocket /early_start (server directly sends a message)
-my $client_flag;
 $result = undef;
+my $client;
 $ua->websocket(
   '/early_start' => sub {
     my $tx = pop;
     $tx->on(
       finish => sub {
-        $client_flag += 5;
+        $client += 2;
         $loop->stop;
       }
     );
@@ -255,14 +254,14 @@ $ua->websocket(
         my ($tx, $message) = @_;
         $result = $message;
         $tx->send('test3');
-        $client_flag = 18;
+        $client = 1;
       }
     );
   }
 );
 $loop->start;
-is $result,      'test3test2', 'right result';
-is $client_flag, 23,           'finish event has been emitted';
+is $result, 'test3test2', 'right result';
+is $client, 3,            'finish event has been emitted';
 
 # WebSocket /denied (connection denied)
 $code = undef;
@@ -274,7 +273,7 @@ $ua->websocket(
 );
 $loop->start;
 is $code,      403, 'right status';
-is $handshake, 2,   'finished handshake';
+is $handshake, 1,   'finished handshake';
 is $denied,    1,   'finished websocket';
 
 # WebSocket /subreq
@@ -295,7 +294,7 @@ $ua->websocket(
     $tx->on(
       finish => sub {
         $finished += 4;
-        $loop->timer(0.5 => sub { shift->stop });
+        $loop->stop;
       }
     );
   }
@@ -304,12 +303,14 @@ $loop->start;
 is $code,     101,          'right status';
 is $result,   'test0test1', 'right result';
 is $finished, 4,            'finished client websocket';
-is $subreq,   3,            'finished server websocket';
+is $subreq,   1,            'finished server websocket';
 
-# WebSocket /subreq (non-blocking)
-my $running = 2;
-my ($code2, $result2);
+# WebSocket /subreq (parallel)
+my $delay = Mojo::IOLoop->delay;
+$finished = 0;
 ($code, $result) = undef;
+my ($code2, $result2);
+$delay->begin;
 $ua->websocket(
   '/subreq' => sub {
     my $tx = pop;
@@ -319,13 +320,18 @@ $ua->websocket(
       message => sub {
         my ($tx, $message) = @_;
         $result .= $message;
-        $tx->finish and $running-- if $message eq 'test1';
-        $loop->timer(0.5 => sub { $loop->stop }) unless $running;
+        $tx->finish if $message eq 'test1';
       }
     );
-    $tx->on(finish => sub { $finished += 1 });
+    $tx->on(
+      finish => sub {
+        $finished += 1;
+        $delay->end;
+      }
+    );
   }
 );
+$delay->begin;
 $ua->websocket(
   '/subreq' => sub {
     my $tx = pop;
@@ -335,31 +341,35 @@ $ua->websocket(
       message => sub {
         my ($tx, $message) = @_;
         $result2 .= $message;
-        $tx->finish and $running-- if $message eq 'test1';
-        $loop->timer(0.5 => sub { $loop->stop }) unless $running;
+        $tx->finish if $message eq 'test1';
       }
     );
-    $tx->on(finish => sub { $finished += 2 });
+    $tx->on(
+      finish => sub {
+        $finished += 2;
+        $delay->end;
+      }
+    );
   }
 );
-$loop->start;
+$delay->wait;
 is $code,     101,          'right status';
 is $result,   'test0test1', 'right result';
 is $code2,    101,          'right status';
 is $result2,  'test0test1', 'right result';
-is $finished, 7,            'finished client websocket';
-is $subreq,   9,            'finished server websocket';
+is $finished, 3,            'finished client websocket';
+is $subreq,   3,            'finished server websocket';
 
 # WebSocket /echo (client-side drain callback)
-$client_flag = undef;
-$result      = '';
-my $drain = my $counter = 0;
+$result = '';
+$client = 0;
+my ($drain, $counter);
 $ua->websocket(
   '/echo' => sub {
     my $tx = pop;
     $tx->on(
       finish => sub {
-        $client_flag += 5;
+        $client += 2;
         $loop->stop;
       }
     );
@@ -370,10 +380,9 @@ $ua->websocket(
         $tx->finish if ++$counter == 2;
       }
     );
-    $client_flag = 20;
+    $client = 1;
     $tx->send(
-      'hi!',
-      sub {
+      'hi!' => sub {
         shift->send('there!');
         $drain
           += @{Mojo::IOLoop->stream($tx->connection)->subscribers('drain')};
@@ -382,20 +391,19 @@ $ua->websocket(
   }
 );
 $loop->start;
-is $result,      'hi!there!', 'right result';
-is $client_flag, 25,          'finish event has been emitted';
-is $drain,       1,           'no leaking subscribers';
+is $result, 'hi!there!', 'right result';
+is $client, 3,           'finish event has been emitted';
+is $drain,  1,           'no leaking subscribers';
 
 # WebSocket /double_echo (server-side drain callback)
-$client_flag = undef;
-$result      = '';
-$counter     = 0;
+$result = '';
+$counter = $client = 0;
 $ua->websocket(
   '/double_echo' => sub {
     my $tx = pop;
     $tx->on(
       finish => sub {
-        $client_flag += 5;
+        $client += 2;
         $loop->stop;
       }
     );
@@ -406,13 +414,13 @@ $ua->websocket(
         $tx->finish if ++$counter == 2;
       }
     );
-    $client_flag = 19;
+    $client = 1;
     $tx->send('hi!');
   }
 );
 $loop->start;
-is $result,      'hi!hi!', 'right result';
-is $client_flag, 24,       'finish event has been emitted';
+is $result, 'hi!hi!', 'right result';
+is $client, 3,        'finish event has been emitted';
 
 # WebSocket /dead (dies)
 $finished = $code = undef;
@@ -457,9 +465,6 @@ $ua->websocket(
   }
 );
 $loop->start;
-
-# Server-side "finished" callback
-is $server_flag, 24, 'finish event has been emitted';
 
 # WebSocket /echo (16bit length)
 $result = undef;
@@ -514,3 +519,6 @@ $ua->websocket(
 );
 Mojo::IOLoop->start;
 is $pong, 'test', 'received pong with payload';
+
+# The "finish" event has been emitted on the server side too
+is $server, 3, 'finish event has been emitted';

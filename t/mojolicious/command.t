@@ -3,7 +3,7 @@ use Mojo::Base -strict;
 # Disable libev
 BEGIN { $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll' }
 
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 # "Robot 1-X, save my friends! And Zoidberg!"
 use Cwd 'cwd';
@@ -13,7 +13,8 @@ use Mojolicious::Command;
 
 # Application
 my $command = Mojolicious::Command->new;
-isa_ok $command->app, 'Mojo', 'right application';
+isa_ok $command->app, 'Mojo',        'right application';
+isa_ok $command->app, 'Mojolicious', 'right application';
 
 # Generating files
 my $cwd = cwd;

@@ -179,6 +179,8 @@ sub prepend_content {
   return $self;
 }
 
+sub remove { shift->replace('') }
+
 sub replace {
   my ($self, $new) = @_;
 
@@ -402,7 +404,7 @@ sub _trim {
 
 =head1 NAME
 
-Mojo::DOM - Minimalistic HTML5/XML DOM parser with CSS3 selectors
+Mojo::DOM - Minimalistic HTML/XML DOM parser with CSS selectors
 
 =head1 SYNOPSIS
 
@@ -412,8 +414,8 @@ Mojo::DOM - Minimalistic HTML5/XML DOM parser with CSS3 selectors
   my $dom = Mojo::DOM->new('<div><p id="a">A</p><p id="b">B</p></div>');
 
   # Find
-  my $b = $dom->at('#b');
-  say $b->text;
+  say $dom->at('#b')->text;
+  say $dom->find('p')->pluck('text');
 
   # Walk
   say $dom->div->p->[0]->text;
@@ -435,13 +437,13 @@ Mojo::DOM - Minimalistic HTML5/XML DOM parser with CSS3 selectors
 
 =head1 DESCRIPTION
 
-L<Mojo::DOM> is a minimalistic and relaxed HTML5/XML DOM parser with CSS3
+L<Mojo::DOM> is a minimalistic and relaxed HTML/XML DOM parser with CSS
 selector support. It will even try to interpret broken XML, so you should not
 use it for validation.
 
 =head1 CASE SENSITIVITY
 
-L<Mojo::DOM> defaults to HTML5 semantics, that means all tags and attributes
+L<Mojo::DOM> defaults to HTML semantics, that means all tags and attributes
 are lowercased and selectors need to be lowercase as well.
 
   my $dom = Mojo::DOM->new('<P ID="greeting">Hi!</P>');
@@ -460,7 +462,7 @@ XML detection can also be disabled with the C<xml> method.
   # Force XML semantics
   $dom->xml(1);
 
-  # Force HTML5 semantics
+  # Force HTML semantics
   $dom->xml(0);
 
 =head1 METHODS
@@ -510,8 +512,8 @@ Append to element content.
 
   my $result = $dom->at('html title');
 
-Find a single element with CSS3 selectors. All selectors from
-L<Mojo::DOM::CSS> are supported.
+Find a single element with CSS selectors. All selectors from L<Mojo::DOM::CSS>
+are supported.
 
   # Find first element with "svg" namespace definition
   my $namespace = $dom->at('[xmlns\:svg]')->{'xmlns:svg'};
@@ -530,7 +532,7 @@ Element attributes.
   my $charset = $dom->charset;
   $dom        = $dom->charset('UTF-8');
 
-Alias for L<Mojo::DOM::HTML/"charset">.
+Charset used for decoding and encoding HTML/XML.
 
 =head2 C<children>
 
@@ -557,7 +559,7 @@ C<charset> has been defined.
 
   my $collection = $dom->find('html title');
 
-Find elements with CSS3 selectors and return a L<Mojo::Collection> object. All
+Find elements with CSS selectors and return a L<Mojo::Collection> object. All
 selectors from L<Mojo::DOM::CSS> are supported.
 
   # Find a specific element and extract information
@@ -572,11 +574,11 @@ selectors from L<Mojo::DOM::CSS> are supported.
 
 Find element namespace.
 
-   # Find namespace for an element with namespace prefix
-   my $namespace = $dom->at('svg > svg\:circle')->namespace;
+  # Find namespace for an element with namespace prefix
+  my $namespace = $dom->at('svg > svg\:circle')->namespace;
 
-   # Find namespace for an element that may or may not have a namespace prefix
-   my $namespace = $dom->at('svg > circle')->namespace;
+  # Find namespace for an element that may or may not have a namespace prefix
+  my $namespace = $dom->at('svg > circle')->namespace;
 
 =head2 C<parent>
 
@@ -588,7 +590,7 @@ Parent of element.
 
   $dom = $dom->parse('<foo bar="baz">test</foo>');
 
-Alias for L<Mojo::DOM::HTML/"parse">.
+Parse HTML/XML document with L<Mojo::DOM::HTML>.
 
   # Parse UTF-8 encoded XML
   my $dom = Mojo::DOM->new->charset('UTF-8')->xml(1)->parse($xml);
@@ -610,6 +612,15 @@ Prepend to element content.
 
   # "<div><h2>AB</h2></div>"
   $dom->parse('<div><h2>B</h2></div>')->at('h2')->prepend_content('A')->root;
+
+=head2 C<remove>
+
+  my $old = $dom->remove;
+
+Remove element.
+
+  # "<div></div>"
+  $dom->parse('<div><h1>A</h1></div>')->at('h1')->remove->root;
 
 =head2 C<replace>
 
@@ -686,6 +697,7 @@ is enabled by default.
 =head2 C<to_xml>
 
   my $xml = $dom->to_xml;
+  my $xml = "$dom";
 
 Render this element and its content to XML. Note that the XML will be encoded
 if a C<charset> has been defined.
@@ -698,7 +710,7 @@ if a C<charset> has been defined.
   my $tree = $dom->tree;
   $dom     = $dom->tree(['root', [qw(text lalala)]]);
 
-Alias for L<Mojo::DOM::HTML/"tree">.
+Document Object Model.
 
 =head2 C<type>
 
@@ -715,7 +727,8 @@ Element type.
   my $xml = $dom->xml;
   $dom    = $dom->xml(1);
 
-Alias for L<Mojo::DOM::HTML/"xml">.
+Disable HTML semantics in parser and activate case sensitivity, defaults to
+auto detection based on processing instructions.
 
 =head1 CHILD ELEMENTS
 

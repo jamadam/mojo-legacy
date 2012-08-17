@@ -53,15 +53,19 @@ sub _tokenize {
 
 =head1 NAME
 
-Mojo::Cookie - HTTP 1.1 cookie base class
+Mojo::Cookie - HTTP cookie base class
 
 =head1 SYNOPSIS
 
+  package Mojo::Cookie::MyCookie;
   use Mojo::Base 'Mojo::Cookie';
+
+  sub parse     {...}
+  sub to_string {...}
 
 =head1 DESCRIPTION
 
-L<Mojo::Cookie> is an abstract base class for HTTP 1.1 cookies.
+L<Mojo::Cookie> is an abstract base class for HTTP cookies.
 
 =head1 ATTRIBUTES
 
@@ -95,6 +99,7 @@ Parse cookies. Meant to be overloaded in a subclass.
 =head2 C<to_string>
 
   my $string = $cookie->to_string;
+  my $string = "$cookie";
 
 Render cookie. Meant to be overloaded in a subclass.
 

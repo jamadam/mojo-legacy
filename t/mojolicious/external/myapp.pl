@@ -32,9 +32,8 @@ get '/echo' => sub {
 # GET /stream
 get '/stream' => sub {
   shift->write_chunk(
-    'he',
-    sub {
-      shift->write_chunk('ll', sub { shift->finish('o!') });
+    'he' => sub {
+      shift->write_chunk('ll' => sub { shift->finish('o!') });
     }
   );
 };

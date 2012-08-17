@@ -12,10 +12,6 @@ use Mojo::Util qw(punycode_decode punycode_encode url_escape url_unescape);
 has [qw(fragment host port scheme userinfo)];
 has base => sub { Mojo::URL->new };
 
-# Characters (RFC 3986)
-our $UNRESERVED = 'A-Za-z0-9\-._~';
-our $SUBDELIM   = '!$&\'()*+,;=';
-
 # "Homer, it's easy to criticize.
 #  Fun, too."
 sub new { shift->SUPER::new->parse(@_) }
@@ -38,9 +34,9 @@ sub authority {
   }
 
   # Format
-  if (my $userinfo = $self->userinfo) {
-    $authority .= url_escape($userinfo, "^$UNRESERVED$SUBDELIM\:") . '@';
-  }
+  my $userinfo = $self->userinfo;
+  $authority .= url_escape($userinfo, '^A-Za-z0-9\-._~!$&\'()*+,;=\:') . '@'
+    if $userinfo;
   $authority .= lc($self->ihost || '');
   if (my $port = $self->port) { $authority .= ":$port" }
 
@@ -79,7 +75,7 @@ sub ihost {
     $host;
 }
 
-sub is_abs { shift->scheme }
+sub is_abs { !!shift->scheme }
 
 sub parse {
   my ($self, $url) = @_;
@@ -224,9 +220,9 @@ sub to_string {
   $url .= "?$query" if length $query;
 
   # Fragment
-  if (my $fragment = $self->fragment) {
-    $url .= '#' . url_escape $fragment, "^$UNRESERVED$SUBDELIM%:@/?";
-  }
+  my $fragment = $self->fragment;
+  $url .= '#' . url_escape $fragment, '^A-Za-z0-9\-._~!$&\'()*+,;=%:@/?'
+    if $fragment;
 
   return $url;
 }
@@ -264,7 +260,7 @@ Mojo::URL - Uniform Resource Locator
   $url->path('baz');
   $url->query->param(foo => 'bar');
   $url->fragment(23);
-  say $url;
+  say "$url";
 
 =head1 DESCRIPTION
 
@@ -428,6 +424,7 @@ Clone absolute URL and turn it into a relative one.
 =head2 C<to_string>
 
   my $string = $url->to_string;
+  my $string = "$url";
 
 Turn URL into a string.
 

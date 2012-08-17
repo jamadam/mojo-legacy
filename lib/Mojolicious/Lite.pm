@@ -5,6 +5,7 @@ use Mojo::Base 'Mojolicious';
 #  August 6, 1991."
 use File::Basename 'dirname';
 use File::Spec::Functions 'catdir';
+use Mojo::UserAgent;
 
 # "It's the future, my parents, my co-workers, my girlfriend,
 #  I'll never see any of them ever again... YAHOOO!"
@@ -21,15 +22,14 @@ sub import {
   # Initialize app
   no strict 'refs';
   my $caller = caller;
-  push @{"${caller}::ISA"}, $class;
+  push @{"${caller}::ISA"}, 'Mojo';
   my $app = $class->new;
 
   # Initialize routes
   my $routes = $app->routes->namespace('');
 
   # Default static and template class
-  $app->static->classes->[0]   = $caller;
-  $app->renderer->classes->[0] = $caller;
+  $app->static->classes->[0] = $app->renderer->classes->[0] = $caller;
 
   # Export
   no warnings 'redefine';
@@ -49,8 +49,8 @@ sub import {
   *{"${caller}::plugin"} = sub { $app->plugin(@_) };
   *{"${caller}::under"}  = sub { $routes = $root->under(@_) };
 
-  # We are most likely the app in a lite environment
-  $ENV{MOJO_APP} ||= $app;
+  # Make sure there's a default application for testing
+  Mojo::UserAgent->app($app) unless Mojo::UserAgent->app;
 
   # Lite apps are strict!
   Mojo::Base->import(-strict);
@@ -673,7 +673,7 @@ content negotiation you can also use L<Mojolicious::Controller/"respond_to">.
   use Mojolicious::Lite;
 
   # /hello (Accept: application/json)
-  # /hello (Accept: text/xml)
+  # /hello (Accept: application/xml)
   # /hello.json
   # /hello.xml
   # /hello?format=json
@@ -802,7 +802,7 @@ variable.
 
 =head2 User agent
 
-With L<Mojolicious::Controller/"ua"> there's a full featured HTTP 1.1 and
+With L<Mojolicious::Controller/"ua"> there's a full featured HTTP and
 WebSocket user agent built right in. Especially in combination with
 L<Mojo::JSON> and L<Mojo::DOM> this can be a very powerful tool.
 
@@ -891,10 +891,14 @@ change the application log level directly in your test files.
 
 =head2 Mode
 
-To disable debug messages later in a production setup you can change the
-L<Mojolicious> mode, default will be C<development>.
+To disable debug messages later in a production setup, you can change the
+L<Mojolicious> operating mode with command line options or the C<MOJO_MODE>
+environment variable, the default will usually be C<development>.
 
-  $ ./myapp.pl -m production
+  $ ./myapp.pl daemon -m production
+
+This also affects many other aspects of the framework, such as mode specific
+C<exception> and C<not_found> templates.
 
 =head2 Logging
 
@@ -964,13 +968,13 @@ Start a new route group.
 
   helper foo => sub {...};
 
-Alias for L<Mojolicious/"helper">.
+Add a new helper with L<Mojolicious/"helper">.
 
 =head2 C<hook>
 
   hook after_dispatch => sub {...};
 
-Alias for L<Mojolicious/"hook">.
+Share code with L<Mojolicious/"hook">.
 
 =head2 C<options>
 
@@ -989,9 +993,9 @@ C<PATCH> requests. See also the tutorial above for more argument variations.
 
 =head2 C<plugin>
 
-  plugin 'SomeThing';
+  plugin SomePlugin => {foo => 23};
 
-Alias for L<Mojolicious/"plugin">.
+Load a plugin with L<Mojolicious/"plugin">.
 
 =head2 C<post>
 

@@ -37,7 +37,7 @@ sub get_chunk {
   my ($self, $start) = @_;
 
   $start += $self->start_range;
-  my $size = $ENV{MOJO_CHUNK_SIZE} || 131072;
+  my $size = 131072;
   if (my $end = $self->end_range) {
     $size = $end + 1 - $start if ($start + $size) > $end;
   }
@@ -59,7 +59,7 @@ sub slurp { shift->{content} }
 
 =head1 NAME
 
-Mojo::Asset::Memory - In-memory storage for HTTP 1.1 content
+Mojo::Asset::Memory - In-memory storage for HTTP content
 
 =head1 SYNOPSIS
 
@@ -71,7 +71,7 @@ Mojo::Asset::Memory - In-memory storage for HTTP 1.1 content
 
 =head1 DESCRIPTION
 
-L<Mojo::Asset::Memory> is an in-memory storage backend for HTTP 1.1 content.
+L<Mojo::Asset::Memory> is an in-memory storage backend for HTTP content.
 
 =head1 EVENTS
 

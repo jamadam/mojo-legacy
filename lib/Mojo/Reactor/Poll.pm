@@ -17,7 +17,7 @@ sub io {
   return $self->watch($handle, 1, 1);
 }
 
-sub is_running { shift->{running} }
+sub is_running { !!shift->{running} }
 
 sub one_tick {
   my $self = shift;
@@ -27,7 +27,7 @@ sub one_tick {
   $self->{running} = 1;
 
   # Wait for one event
-  my $i    = 0;
+  my $i;
   my $poll = $self->_poll;
   until ($i) {
 
@@ -74,9 +74,9 @@ sub recurring { shift->_timer(1, @_) }
 
 sub remove {
   my ($self, $remove) = @_;
-  return delete shift->{timers}{shift()} unless ref $remove;
+  return !!delete shift->{timers}{shift()} unless ref $remove;
   $self->_poll->remove($remove);
-  return delete $self->{io}{fileno $remove};
+  return !!delete $self->{io}{fileno $remove};
 }
 
 sub start {
