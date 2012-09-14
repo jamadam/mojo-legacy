@@ -10,22 +10,7 @@ use Mojo::Util qw(decode encode url_escape url_unescape);
 has charset        => 'UTF-8';
 has pair_separator => '&';
 
-# "Yeah, Moe, that team sure did suck last night. They just plain sucked!
-#  I've seen teams suck before,
-#  but they were the suckiest bunch of sucks that ever sucked!
-#  HOMER!
-#  I gotta go Moe my damn weiner kids are listening."
-sub new {
-  my $self = shift->SUPER::new;
-
-  # Pairs
-  if (@_ > 1) { $self->append(@_) }
-
-  # String
-  else { $self->{string} = $_[0] }
-
-  return $self;
-}
+sub new { shift->SUPER::new->parse(@_) }
 
 sub append {
   my ($self, @pairs) = @_;
@@ -47,8 +32,7 @@ sub append {
 
 sub clone {
   my $self  = shift;
-  my $clone = Mojo::Parameters->new;
-  $clone->pair_separator($self->pair_separator);
+  my $clone = Mojo::Parameters->new->pair_separator($self->pair_separator);
   if (defined $self->{string}) { $clone->{string} = $self->{string} }
   else                         { $clone->params([@{$self->params}]) }
   return $clone;
@@ -81,49 +65,59 @@ sub param {
 }
 
 sub params {
-  my ($self, $params) = @_;
-  if ($params) { $self->{params} = $params and return $self }
-  elsif (defined $self->{string}) { $self->parse }
+  my $self = shift;
+
+  # Replace parameters
+  if (@_) {
+    $self->{params} = shift;
+    return $self;
+  }
+
+  # Parse string
+  if (defined(my $string = delete $self->{string})) {
+    my $params = $self->{params} = [];
+
+    # Detect pair separator for reconstruction
+    return $params unless length(defined $string ? $string : '');
+    $self->pair_separator(';') if $string =~ /;/ && $string !~ /\&/;
+
+    # W3C suggests to also accept ";" as a separator
+    my $charset = $self->charset;
+    for my $pair (split /[\&\;]+/, $string) {
+
+      # Parse
+      $pair =~ /^([^=]*)(?:=(.*))?$/;
+      my $name  = defined $1 ? $1 : '';
+      my $value = defined $2 ? $2 : '';
+
+      # Replace "+" with whitespace
+      s/\+/ /g for $name, $value;
+
+      # Unescape
+      $name  = url_unescape $name;
+      $name  = do { my $tmp = decode($charset, $name); defined $tmp ? $tmp : $name } if $charset;
+      $value = url_unescape $value;
+      $value = do { my $tmp = decode($charset, $value); defined $tmp ? $tmp : $value } if $charset;
+
+      push @$params, $name, $value;
+    }
+  }
+
   return $self->{params} ||= [];
 }
 
 sub parse {
   my $self = shift;
-  my $string = do {my $tmp = shift; defined $tmp ? $tmp : $self->{string}};
 
-  # Clear
-  delete $self->params([])->{string};
+  # Pairs
+  if (@_ > 1) { $self->append(@_) }
 
-  # Detect pair separator for reconstruction
-  return $self unless length(defined $string ? $string : '');
-  $self->pair_separator(';') if $string =~ /;/ && $string !~ /\&/;
-
-  # W3C suggests to also accept ";" as a separator
-  my $charset = $self->charset;
-  for my $pair (split /[\&\;]+/, $string) {
-
-    # Parse
-    $pair =~ /^([^=]*)(?:=(.*))?$/;
-    my $name  = defined $1 ? $1 : '';
-    my $value = defined $2 ? $2 : '';
-
-    # Replace "+" with whitespace
-    s/\+/\ /g for $name, $value;
-
-    # Unescape
-    $name  = url_unescape $name;
-    $name  = do {my $tmp = decode($charset, $name); defined $tmp ? $tmp : $name} if $charset;
-    $value = url_unescape $value;
-    $value = do {my $tmp = decode($charset, $value); defined $tmp ? $tmp : $value} if $charset;
-
-    push @{$self->params}, $name, $value;
-  }
+  # String
+  else { $self->{string} = $_[0] }
 
   return $self;
 }
 
-# "Don't kid yourself, Jimmy. If a cow ever got the chance,
-#  he'd eat you and everyone you care about!"
 sub remove {
   my $self = shift;
   my $name = do {my $tmp = shift; defined $tmp ? $tmp : ''};

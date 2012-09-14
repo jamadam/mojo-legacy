@@ -1,6 +1,8 @@
 package Mojo;
 use Mojo::Base -base;
 
+# "Professor: These old Doomsday devices are dangerously unstable. I'll rest
+#             easier not knowing where they are."
 use Carp 'croak';
 use Mojo::Home;
 use Mojo::Log;
@@ -22,7 +24,6 @@ has ua   => sub {
   return $ua;
 };
 
-# "Oh, so they have internet on computers now!"
 sub new {
   my $self = shift->SUPER::new(@_);
 
@@ -40,7 +41,6 @@ sub build_tx { Mojo::Transaction::HTTP->new }
 
 sub config { shift->_dict(config => @_) }
 
-# "D'oh."
 sub handler { croak 'Method "handler" not implemented in subclass' }
 
 sub _dict {

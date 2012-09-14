@@ -35,13 +35,12 @@ my %ENTITIES;
 my %REVERSE = ("\x{0027}" => '#39;');
 $REVERSE{$ENTITIES{$_}} = defined $REVERSE{$ENTITIES{$_}} ? $REVERSE{$ENTITIES{$_}} : $_ for sort grep {/;/} keys %ENTITIES;
 
-# "Bart, stop pestering Satan!"
 our @EXPORT_OK = (
   qw(b64_decode b64_encode camelize class_to_file class_to_path decamelize),
   qw(decode encode get_line hmac_md5_sum hmac_sha1_sum html_escape),
   qw(html_unescape md5_bytes md5_sum punycode_decode punycode_encode quote),
-  qw(secure_compare sha1_bytes sha1_sum slurp spurt trim unquote url_escape),
-  qw(url_unescape xml_escape)
+  qw(secure_compare sha1_bytes sha1_sum slurp spurt squish trim unquote),
+  qw(url_escape url_unescape xml_escape xor_encode)
 );
 
 sub b64_decode { decode_base64(shift) }
@@ -60,7 +59,7 @@ sub camelize {
 
 sub class_to_file {
   my $class = shift;
-  $class =~ s/:://g;
+  $class =~ s/::|'//g;
   $class =~ s/([A-Z])([A-Z]*)/$1.lc($2)/ge;
   return decamelize($class);
 }
@@ -73,7 +72,7 @@ sub decamelize {
 
   # Module parts
   my @parts;
-  for my $part (split /\:\:/, $string) {
+  for my $part (split /::/, $string) {
 
     # Snake case words
     my @words;
@@ -104,8 +103,8 @@ sub get_line {
   return $line;
 }
 
-sub hmac_md5_sum  { _hmac(0, @_) }
-sub hmac_sha1_sum { _hmac(1, @_) }
+sub hmac_md5_sum  { _hmac(\&md5,  @_) }
+sub hmac_sha1_sum { _hmac(\&sha1, @_) }
 
 sub html_escape {
   my ($string, $pattern) = @_;
@@ -115,12 +114,10 @@ sub html_escape {
   return $string;
 }
 
-# "Daddy, I'm scared. Too scared to even wet my pants.
-#  Just relax and it'll come, son."
 sub html_unescape {
   my $string = shift;
   $string
-    =~ s/&(?:\#((?:\d{1,7}|x[0-9A-Fa-f]{1,6}));|(\w+;?))/_decode($1, $2)/ge;
+    =~ s/&(?:\#((?:\d{1,7}|x[[:xdigit:]]{1,6}));|(\w+;?))/_decode($1, $2)/ge;
   return $string;
 }
 
@@ -279,59 +276,63 @@ sub spurt {
   return $content;
 }
 
+sub squish {
+  my $string = trim(@_);
+  $string =~ s/\s+/ /g;
+  return $string;
+}
+
 sub trim {
   my $string = shift;
-  for ($string) {
-    s/^\s*//;
-    s/\s*$//;
-  }
+  $string =~ s/^\s+|\s+$//g;
   return $string;
 }
 
 sub unquote {
   my $string = shift;
-  return $string unless $string =~ /^".*"$/g;
-
-  # Unquote
-  for ($string) {
-    s/^"//g;
-    s/"$//g;
-    s/\\\\/\\/g;
-    s/\\"/"/g;
-  }
-
+  return $string unless $string =~ s/^"(.*)"$/$1/g;
+  $string =~ s/\\\\/\\/g;
+  $string =~ s/\\"/"/g;
   return $string;
 }
 
 sub url_escape {
   my ($string, $pattern) = @_;
   $pattern ||= '^A-Za-z0-9\-._~';
-  return $string unless $string =~ /[$pattern]/;
   $string =~ s/([$pattern])/sprintf('%%%02X',ord($1))/ge;
   return $string;
 }
 
-# "I've gone back in time to when dinosaurs weren't just confined to zoos."
 sub url_unescape {
   my $string = shift;
   return $string if index($string, '%') == -1;
-  $string =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/ge;
+  $string =~ s/%([[:xdigit:]]{2})/chr(hex($1))/ge;
   return $string;
 }
 
 sub xml_escape {
   my $string = shift;
-  for ($string) {
-    s/&/&amp;/g;
-    s/</&lt;/g;
-    s/>/&gt;/g;
-    s/"/&quot;/g;
-    s/'/&#39;/g;
-  }
+
+  $string =~ s/&/&amp;/g;
+  $string =~ s/</&lt;/g;
+  $string =~ s/>/&gt;/g;
+  $string =~ s/"/&quot;/g;
+  $string =~ s/'/&#39;/g;
+
   return $string;
 }
 
-# Helper for punycode
+sub xor_encode {
+  my ($input, $key) = @_;
+
+  # Encode with variable key length
+  my $len = length $key;
+  my $buffer = my $output = '';
+  $output .= $buffer ^ $key
+    while length($buffer = substr($input, 0, $len, '')) == $len;
+  return $output .= $buffer ^ substr($key, 0, length $buffer, '');
+}
+
 sub _adapt {
   my ($delta, $numpoints, $firsttime) = @_;
 
@@ -347,7 +348,6 @@ sub _adapt {
   return $k + (((PC_BASE - PC_TMIN + 1) * $delta) / ($delta + PC_SKEW));
 }
 
-# Helper for html_unescape
 sub _decode {
 
   # Numeric
@@ -363,16 +363,12 @@ sub _decode {
   return "&$_[1]";
 }
 
-# Helper for html_escape
 sub _encode {
   return exists $REVERSE{$_[0]} ? "&$REVERSE{$_[0]}" : "&#@{[ord($_[0])]};";
 }
 
 sub _hmac {
-  my ($sha, $string, $secret) = @_;
-
-  # Hash function
-  my $hash = $sha ? sub { sha1(@_) } : sub { md5(@_) };
+  my ($hash, $string, $secret) = @_;
 
   # Secret
   $secret = $secret ? "$secret" : 'Very insecure!';
@@ -453,6 +449,7 @@ Convert a class name to a file.
 Convert class name to path.
 
   Foo::Bar -> Foo/Bar.pm
+  FooBar   -> FooBar.pm
 
 =head2 C<decamelize>
 
@@ -574,6 +571,13 @@ Read all data at once from file.
 
 Write all data at once to file.
 
+=head2 C<squish>
+
+  my $squished = squish $string;
+
+Trim whitespace characters from both ends of string and then change all
+consecutive groups of whitespace into one space each.
+
 =head2 C<trim>
 
   my $trimmed = trim $string;
@@ -606,6 +610,12 @@ Decode percent encoded characters in string.
 
 Escape only the characters C<&>, C<E<lt>>, C<E<gt>>, C<"> and C<'> in string,
 this is a much faster version of C<html_escape>.
+
+=head2 C<xor_encode>
+
+  my $encoded = xor_encode $string, $key;
+
+XOR encode string.
 
 =head1 SEE ALSO
 

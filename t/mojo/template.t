@@ -17,10 +17,8 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 200;
+use Test::More tests => 199;
 
-# "When I held that gun in my hand, I felt a surge of power...
-#  like God must feel when he's holding a gun."
 use File::Spec::Functions qw(catfile splitdir);
 use FindBin;
 use Mojo::Template;
@@ -612,9 +610,7 @@ test
 test
 EOF
 isa_ok $output, 'Mojo::Exception', 'right exception';
-like $output->message, qr/^Missing right curly or square bracket/,
-  'right message';
-like $output->message, qr/syntax error at template line 5.$/, 'right message';
+like $output->message, qr/Missing right curly/, 'right message';
 is $output->lines_before->[0][0], 1,          'right number';
 is $output->lines_before->[0][1], 'test',     'right line';
 is $output->lines_before->[1][0], 2,          'right number';
@@ -625,7 +621,7 @@ is $output->lines_before->[3][0], 4,          'right number';
 is $output->lines_before->[3][1], '%= 1 + 1', 'right line';
 is $output->line->[0], 5,      'right number';
 is $output->line->[1], 'test', 'right line';
-like "$output", qr/^Missing right curly or square bracket/, 'right result';
+like "$output", qr/Missing right curly/, 'right result';
 like $output->frames->[0][1], qr/Template\.pm$/, 'right file';
 
 # Exception in module
@@ -667,7 +663,7 @@ test
 test
 EOF
 isa_ok $output, 'Mojo::Exception', 'right exception';
-like $output->message, qr/oops\!/, 'right message';
+like $output->message, qr/oops!/, 'right message';
 is $output->lines_before->[0][0], 1,      'right number';
 is $output->lines_before->[0][1], 'test', 'right line';
 is $output->lines_before->[1][0], 2,      'right number';
@@ -678,7 +674,7 @@ is $output->lines_after->[0][0], 4,          'right number';
 is $output->lines_after->[0][1], '%= 1 + 1', 'right line';
 is $output->lines_after->[1][0], 5,          'right number';
 is $output->lines_after->[1][1], 'test',     'right line';
-like "$output", qr/oops\! at template line 3, near "%= 1 \+ 1"./,
+like "$output", qr/oops! at template line 3, near "%= 1 \+ 1"./,
   'right result';
 
 # Exception in template (empty perl lines)
@@ -695,7 +691,7 @@ test
 test
 EOF
 isa_ok $output, 'Mojo::Exception', 'right exception';
-like $output->message, qr/oops\!/, 'right message';
+like $output->message, qr/oops!/, 'right message';
 is $output->lines_before->[0][0], 1,      'right number';
 is $output->lines_before->[0][1], 'test', 'right line';
 ok $output->lines_before->[0][2], 'contains code';
@@ -716,7 +712,7 @@ is $output->lines_after->[1][2], ' ',   'right code';
 is $output->lines_after->[2][0], 7,     'right number';
 is $output->lines_after->[2][1], '%',   'right line';
 is $output->lines_after->[2][2], ' ',   'right code';
-like "$output", qr/oops\! at template line 4, near "%"./, 'right result';
+like "$output", qr/oops! at template line 4, near "%"./, 'right result';
 
 # Exception in nested template
 $mt = Mojo::Template->new;
@@ -781,9 +777,9 @@ is $output, "<html foo=\"bar\">\n3 test 4 lala \n4\n\</html>\n", 'all tags';
 # Arguments
 $mt = Mojo::Template->new;
 $output = $mt->render(<<'EOF', 'test', {foo => 'bar'});
-% my $message = shift;
+% my $msg = shift;
 <html><% my $hash = $_[0]; %>
-%= $message . ' ' . $hash->{foo}
+%= $msg . ' ' . $hash->{foo}
 </html>
 EOF
 is $output, "<html>\ntest bar\n</html>\n", 'arguments';
@@ -1003,9 +999,9 @@ $mt->tag_start('[$-');
 $mt->tag_end('-$]');
 $mt->line_start('$-');
 $output = $mt->render(<<'EOF', 'test', {foo => 'bar'});
-$- my $message = shift;
+$- my $msg = shift;
 <html>[$- my $hash = $_[0]; -$]
-$-= $message . ' ' . $hash->{foo}
+$-= $msg . ' ' . $hash->{foo}
 </html>
 EOF
 is $output, "<html>\ntest bar\n</html>\n", 'different tags and line start';
@@ -1015,9 +1011,9 @@ $mt = Mojo::Template->new;
 $mt->comment_mark('@@@');
 $mt->expression_mark('---');
 $output = $mt->render(<<'EOF', 'test', {foo => 'bar'});
-% my $message = shift;
+% my $msg = shift;
 <html><% my $hash = $_[0]; %><%@@@ comment lalala %>
-%--- $message . ' ' . $hash->{foo}
+%--- $msg . ' ' . $hash->{foo}
 </html>
 EOF
 is $output, <<EOF, 'different expression and comment mark';

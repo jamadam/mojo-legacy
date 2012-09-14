@@ -209,7 +209,7 @@ any time.
     my $self = shift;
 
     # Get message from stash
-    my $message = $self->stash('mymessage');
+    my $msg = $self->stash('mymessage');
 
     # Change message in stash
     $self->stash(mymessage => 'Welcome');
@@ -503,8 +503,8 @@ additional information.
   sub echo {
     my $self = shift;
     $self->on(message => sub {
-      my ($self, $message) = @_;
-      $self->send("echo: $message");
+      my ($self, $msg) = @_;
+      $self->send("echo: $msg");
     });
   }
 
@@ -713,7 +713,7 @@ play, they are basically router plugins.
   # Simple "User-Agent" condition
   $r->add_condition(
     agent => sub {
-      my ($r, $c, $captures, $pattern) = @_;
+      my ($route, $c, $captures, $pattern) = @_;
 
       # User supplied regular expression
       return unless $pattern && ref $pattern eq 'Regexp';
@@ -750,7 +750,7 @@ You can also package your conditions as reusable plugins.
     # Add "werewolf" condition
     $app->routes->add_condition(
       werewolf => sub {
-        my ($r, $c, $captures, $days) = @_;
+        my ($route, $c, $captures, $days) = @_;
 
         # Keep the werewolfs out!
         return if abs(14 - (phase(time))[2]) > ($days / 2);

@@ -10,7 +10,6 @@ has quote_start    => '(';
 has relaxed_start  => '#';
 has wildcard_start => '*';
 
-# "This is the worst kind of discrimination. The kind against me!"
 sub new { shift->SUPER::new->parse(@_) }
 
 sub match {
@@ -57,7 +56,7 @@ sub render {
     }
 
     # Placeholder, relaxed or wildcard
-    elsif (grep {$_ eq $op} qw(placeholder relaxed wildcard)) {
+    elsif (grep { $_ eq $op } qw(placeholder relaxed wildcard)) {
       my $name = $token->[1];
       $rendered = defined $values->{$name} ? $values->{$name} : '';
       my $default = $self->defaults->{$name};
@@ -131,7 +130,7 @@ sub _compile {
     }
 
     # Placeholder
-    elsif (grep {$_ eq $op} qw(placeholder relaxed wildcard)) {
+    elsif (grep { $_ eq $op } qw(placeholder relaxed wildcard)) {
       my $name = $token->[1];
       unshift @{$self->placeholders}, $name;
 
@@ -177,7 +176,6 @@ sub _compile_format {
   return $self->format_regex(qr!\.$regex$!)->format_regex;
 }
 
-# "Interesting... Oh no wait, the other thing, tedious."
 sub _compile_req {
   my $req = shift;
   return "($req)" if ref $req ne 'ARRAY';
@@ -201,7 +199,7 @@ sub _tokenize {
   while (length(my $char = substr $pattern, 0, 1, '')) {
 
     # Inside a placeholder
-    my $inside = scalar grep {$_ eq $state} qw(placeholder relaxed wildcard);
+    my $inside = !!grep { $_ eq $state } qw(placeholder relaxed wildcard);
 
     # Quote start
     if ($char eq $quote_start) {
@@ -217,7 +215,7 @@ sub _tokenize {
     }
 
     # Relaxed or wildcard start (upgrade when quoted)
-    elsif ($char eq $relaxed || $char eq $wildcard) {
+    elsif (grep { $_ eq $char } $relaxed, $wildcard) {
       push @tree, ['placeholder', ''] unless $quoted;
       $tree[-1][0] = $state = $char eq $relaxed ? 'relaxed' : 'wildcard';
     }
@@ -307,8 +305,8 @@ Raw unparsed pattern.
 
 =head2 C<placeholder_start>
 
-  my $placeholder = $pattern->placeholder_start;
-  $pattern        = $pattern->placeholder_start(':');
+  my $start = $pattern->placeholder_start;
+  $pattern  = $pattern->placeholder_start(':');
 
 Character indicating a placeholder, defaults to C<:>.
 
@@ -321,14 +319,14 @@ Placeholder names.
 
 =head2 C<quote_end>
 
-  my $quote = $pattern->quote_end;
-  $pattern  = $pattern->quote_end(']');
+  my $end  = $pattern->quote_end;
+  $pattern = $pattern->quote_end(']');
 
 Character indicating the end of a quoted placeholder, defaults to C<)>.
 
 =head2 C<quote_start>
 
-  my $quote = $pattern->quote_start;
+  my $start = $pattern->quote_start;
   $pattern  = $pattern->quote_start('[');
 
 Character indicating the start of a quoted placeholder, defaults to C<(>.
@@ -342,8 +340,8 @@ Pattern in compiled regular expression form.
 
 =head2 C<relaxed_start>
 
-  my $relaxed = $pattern->relaxed_start;
-  $pattern    = $pattern->relaxed_start('*');
+  my $start = $pattern->relaxed_start;
+  $pattern  = $pattern->relaxed_start('*');
 
 Character indicating a relaxed placeholder, defaults to C<#>.
 
@@ -356,8 +354,8 @@ Pattern in parsed form.
 
 =head2 C<wildcard_start>
 
-  my $wildcard = $pattern->wildcard_start;
-  $pattern     = $pattern->wildcard_start('*');
+  my $start = $pattern->wildcard_start;
+  $pattern  = $pattern->wildcard_start('*');
 
 Character indicating the start of a wildcard placeholder, defaults to C<*>.
 

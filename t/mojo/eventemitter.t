@@ -2,7 +2,6 @@ use Mojo::Base -strict;
 
 use Test::More tests => 46;
 
-# "Hi, Super Nintendo Chalmers!"
 use Mojo::EventEmitter;
 
 # Normal event
@@ -23,8 +22,8 @@ $e->on(error => sub { $err = pop });
 $e->on(test2 => sub { $echo .= 'echo: ' . pop });
 $e->on(
   test2 => sub {
-    my ($self, $message) = @_;
-    die "test2: $message\n";
+    my ($self, $msg) = @_;
+    die "test2: $msg\n";
   }
 );
 my $cb = sub { $echo .= 'echo2: ' . pop };

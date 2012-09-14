@@ -22,9 +22,6 @@ $HOME->parse(
   $HOME->parse($HOME->mojo_lib_dir)->rel_dir('Mojolicious/templates'));
 my %TEMPLATES = map { $_ => $HOME->slurp_rel_file($_) } @{$HOME->list_files};
 
-# "This is not how Xmas is supposed to be.
-#  In my day Xmas was about bringing people together,
-#  not blowing them apart."
 sub new {
   my $self = shift->SUPER::new(@_)->add_handler(json => \&_json);
   return $self->add_handler(data => \&_data)->add_handler(text => \&_text);
@@ -43,7 +40,7 @@ sub add_helper {
 }
 
 sub get_data_template {
-  my ($self, $options, $template) = @_;
+  my ($self, $options) = @_;
 
   # Index DATA templates
   my $loader = Mojo::Loader->new;
@@ -55,6 +52,7 @@ sub get_data_template {
   }
 
   # Find template
+  my $template = $self->template_name($options);
   return $loader->data($self->{index}{$template}, $template);
 }
 
@@ -77,11 +75,11 @@ sub render {
     handler  => $stash->{handler},
     template => delete $stash->{template}
   };
-  my $data   = $options->{data}   = delete $stash->{data};
+  my $data   = delete $stash->{data};
   my $format = $options->{format} = $stash->{format} || $self->default_format;
   my $inline = $options->{inline} = delete $stash->{inline};
-  my $json   = $options->{json}   = delete $stash->{json};
-  my $text   = $options->{test}   = delete $stash->{text};
+  my $json   = delete $stash->{json};
+  my $text   = delete $stash->{text};
   $options->{handler} = defined $options->{handler} ? $options->{handler} : $self->default_handler if defined $inline;
 
   # Text
@@ -342,7 +340,7 @@ Register a new helper.
     template       => 'foo/bar',
     format         => 'html',
     handler        => 'epl'
-  }, 'foo.html.ep');
+  });
 
 Get a C<DATA> section template by name, usually used by handlers.
 

@@ -9,7 +9,6 @@ has cookie_name        => 'mojolicious';
 has cookie_path        => '/';
 has default_expiration => 3600;
 
-# "Bender, quit destroying the universe!"
 sub load {
   my ($self, $c) = @_;
 
@@ -21,7 +20,7 @@ sub load {
   return unless my $session = Mojo::JSON->new->decode(b64_decode $value);
 
   # Expiration
-  my $expiration = $self->default_expiration;
+  my $expiration = defined $session->{expiration} ? $session->{expiration} : $self->default_expiration;
   return if !(my $expires = delete $session->{expires}) && $expiration;
   return if defined $expires && $expires <= time;
 
@@ -34,7 +33,6 @@ sub load {
   $session->{flash} = delete $session->{new_flash} if $session->{new_flash};
 }
 
-# "Emotions are dumb and should be hated."
 sub store {
   my ($self, $c) = @_;
 
@@ -50,8 +48,8 @@ sub store {
   delete $session->{new_flash} unless keys %{$session->{new_flash}};
 
   # Expiration
-  my $expiration = $self->default_expiration;
-  my $default    = delete $session->{expires};
+  my $expiration = defined $session->{expiration} ? $session->{expiration} : $self->default_expiration;
+  my $default = delete $session->{expires};
   $session->{expires} = $default || time + $expiration
     if $expiration || $default;
 
@@ -74,7 +72,7 @@ sub store {
 
 =head1 NAME
 
-Mojolicious::Sessions - Signed cookie based sessions
+Mojolicious::Sessions - Signed cookie based session manager
 
 =head1 SYNOPSIS
 
@@ -86,8 +84,8 @@ Mojolicious::Sessions - Signed cookie based sessions
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Sessions> is a very simple signed cookie based session
-implementation. All data gets serialized with L<Mojo::JSON> and stored on the
+L<Mojolicious::Sessions> manages simple signed cookie based sessions for
+L<Mojolicious>. All data gets serialized with L<Mojo::JSON> and stored on the
 client-side, but is protected from unwanted changes with a signature.
 
 =head1 ATTRIBUTES
@@ -99,39 +97,40 @@ L<Mojolicious::Sessions> implements the following attributes.
   my $domain = $sessions->cookie_domain;
   $sessions  = $sessions->cookie_domain('.example.com');
 
-Domain for session cookie, not defined by default.
+Domain for session cookies, not defined by default.
 
 =head2 C<cookie_name>
 
   my $name  = $sessions->cookie_name;
   $sessions = $sessions->cookie_name('session');
 
-Name of the signed cookie used to store session data, defaults to
-C<mojolicious>.
+Name for session cookies, defaults to C<mojolicious>.
 
 =head2 C<cookie_path>
 
   my $path  = $sessions->cookie_path;
   $sessions = $sessions->cookie_path('/foo');
 
-Path for session cookie, defaults to C</>.
+Path for session cookies, defaults to C</>.
 
 =head2 C<default_expiration>
 
   my $time  = $sessions->default_expiration;
   $sessions = $sessions->default_expiration(3600);
 
-Time for the session to expire in seconds from now, defaults to C<3600>. The
-expiration timeout gets refreshed for every request. Setting the value to C<0>
-will allow sessions to persist until the browser window is closed, this can
-have security implications though. For more control you can also use the
-C<expires> session value to set the expiration date to a specific time in
-epoch seconds.
+Default time for sessions to expire in seconds from now, defaults to C<3600>.
+The expiration timeout gets refreshed for every request. Setting the value to
+C<0> will allow sessions to persist until the browser window is closed, this
+can have security implications though. For more control you can also use the
+C<expiration> and C<expires> session values.
 
-  # Expire a week from now
+  # Expiration date in epoch seconds from now (persists between requests)
+  $c->session(expiration => 604800);
+
+  # Expiration date as absolute epoch time (only valid for one request)
   $c->session(expires => time + 604800);
 
-  # Expire a long long time ago
+  # Delete whole session by setting an expiration date in the past
   $c->session(expires => 1);
 
 =head2 C<secure>

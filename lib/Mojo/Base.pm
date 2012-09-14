@@ -13,8 +13,6 @@ sub say(@) {print @_, "\n"}
 # Only Perl 5.14+ requires it on demand
 use IO::Handle ();
 
-# "Kids, you tried your best and you failed miserably.
-#  The lesson is, never try."
 sub import {
   my $class = shift;
   return unless my $flag = shift;
@@ -105,6 +103,12 @@ sub attr {
   }
 }
 
+sub tap {
+  my ($self, $cb) = @_;
+  $_->$cb for $self;
+  return $self;
+}
+
 1;
 
 =head1 NAME
@@ -116,24 +120,24 @@ Mojo::Base - Minimal base class for Mojo projects
   package Cat;
   use Mojo::Base -base;
 
-  has 'mouse';
-  has paws => 4;
-  has [qw(ears eyes)] => 2;
+  has name => 'Nyan';
+  has [qw(birds mice)] => 2;
 
   package Tiger;
   use Mojo::Base 'Cat';
 
+  has friend  => sub { Cat->new };
   has stripes => 42;
 
   package main;
   use Mojo::Base -strict;
 
-  my $mew = Cat->new(mouse => 'Mickey');
-  say $mew->paws;
-  say $mew->paws(5)->ears(4)->paws;
+  my $mew = Cat->new(name => 'Longcat');
+  say $mew->mice;
+  say $mew->mice(3)->birds(4)->mice;
 
-  my $rawr = Tiger->new(stripes => 23);
-  say $rawr->ears * $rawr->stripes;
+  my $rawr = Tiger->new(stripes => 23, mice => 0);
+  say $rawr->tap(sub { $_->friend->name('Tacgnol') })->mice;
 
 =head1 DESCRIPTION
 
@@ -185,7 +189,7 @@ flag or a base class.
   has [qw(name1 name2 name3)] => 'foo';
   has [qw(name1 name2 name3)] => sub {...};
 
-Create attributes, just like the C<attr> method.
+Create attributes for hash-based objects, just like the C<attr> method.
 
 =head1 METHODS
 
@@ -197,8 +201,8 @@ L<Mojo::Base> implements the following methods.
   my $object = BaseSubClass->new(name => 'value');
   my $object = BaseSubClass->new({name => 'value'});
 
-This base class provides a basic object constructor. You can pass it either a
-hash or a hash reference with attribute values.
+This base class provides a basic constructor for hash-based objects. You can
+pass it either a hash or a hash reference with attribute values.
 
 =head2 C<attr>
 
@@ -210,10 +214,19 @@ hash or a hash reference with attribute values.
   BaseSubClass->attr([qw(name1 name2 name3)] => 'foo');
   BaseSubClass->attr([qw(name1 name2 name3)] => sub {...});
 
-Create attributes. An array reference can be used to create more than one
-attribute. Pass an optional second argument to set a default value, it should
-be a constant or a sub reference. The sub reference will be excuted at
-accessor read time if there's no set value.
+Create attribute accessor for hash-based objects, an array reference can be
+used to create more than one at a time. Pass an optional second argument to
+set a default value, it should be a constant or a callback. The callback will
+be excuted at accessor read time if there's no set value. Accessors can be
+chained, that means they return their invocant when they are called with an
+argument.
+
+=head2 C<tap>
+
+  $object = $object->tap(sub {...});
+
+K combinator, tap into a method chain to perform operations on an object
+within the chain.
 
 =head2 C<say>
 

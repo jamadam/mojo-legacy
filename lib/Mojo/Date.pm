@@ -17,10 +17,6 @@ my %MONTHS;
 
 sub new { shift->SUPER::new->parse(@_) }
 
-# "I suggest you leave immediately.
-#  Or what? You'll release the dogs or the bees?
-#  Or the dogs with bees in their mouths and when they bark they shoot bees
-#  at you?"
 sub parse {
   my ($self, $date) = @_;
 

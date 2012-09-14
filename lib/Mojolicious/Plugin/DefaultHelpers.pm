@@ -2,9 +2,8 @@ package Mojolicious::Plugin::DefaultHelpers;
 use Mojo::Base 'Mojolicious::Plugin';
 
 use Data::Dumper ();
+use Mojo::ByteStream;
 
-# "You're watching Futurama,
-#  the show that doesn't condone the cool crime of robbery."
 sub register {
   my ($self, $app) = @_;
 
@@ -30,7 +29,7 @@ sub register {
   $app->helper(config => sub { shift->app->config(@_) });
 
   # Add "content" helper
-  $app->helper(content => sub { shift->render_content(@_) });
+  $app->helper(content => \&_content);
 
   # Add "content_for" helper
   $app->helper(content_for => \&_content_for);
@@ -70,13 +69,44 @@ sub register {
     }
   );
 
+  # DEPRECATED in Rainbow!
+  $app->helper(
+    render_content => sub {
+      warn "Mojolicious::Controller->render_content is DEPRECATED!\n";
+      shift->content(@_);
+    }
+  );
+
   # Add "url_with" helper
   $app->helper(url_with => \&_url_with);
 }
 
+sub _content {
+  my $self    = shift;
+  my $name    = shift || 'content';
+  my $content = pop;
+
+  # Set
+  my $c = $self->stash->{'mojo.content'} ||= {};
+  if (defined $content) {
+
+    # Reset with multiple values
+    if (@_) {
+      $c->{$name}
+        = join('', map({ref $_ eq 'CODE' ? $_->() : $_} @_, $content));
+    }
+
+    # First come
+    else { $c->{$name} ||= ref $content eq 'CODE' ? $content->() : $content }
+  }
+
+  # Get
+  return Mojo::ByteStream->new(defined $c->{$name} ? $c->{$name} : '');
+}
+
 sub _content_for {
   my ($self, $name) = (shift, shift);
-  $self->render_content($name, $self->render_content($name), @_);
+  _content($self, $name, _content($self, $name), @_);
 }
 
 sub _current_route {
@@ -152,10 +182,12 @@ Alias for L<Mojo/"config">.
   %= content foo => begin
     test
   % end
+  %= content bar => 'Hello World!'
   %= content 'foo'
+  %= content 'bar'
   %= content
 
-Store content and retrieve it.
+Store partial rendered content and retrieve it.
 
 =head2 C<content_for>
 
@@ -187,7 +219,7 @@ Check or get name of current route.
 
   %= dumper {some => 'data'}
 
-Dump a Perl data structure using L<Data::Dumper>.
+Dump a Perl data structure with L<Data::Dumper>.
 
 =head2 C<extends>
 

@@ -12,8 +12,6 @@ use File::Spec::Functions qw(abs2rel catdir catfile splitdir);
 use FindBin;
 use Mojo::Util qw(class_to_path slurp);
 
-# "I'm normally not a praying man, but if you're up there,
-#  please save me Superman."
 sub new { shift->SUPER::new->parse(@_) }
 
 sub detect {
@@ -63,7 +61,7 @@ sub list_files {
   find {
     wanted => sub {
       my @parts = splitdir(abs2rel($File::Find::name, $dir));
-      push @files, join '/', @parts unless grep(/^\./, @parts);
+      push @files, join '/', @parts unless grep {/^\./} @parts;
     },
     no_chdir => 1
   }, $dir;
@@ -73,13 +71,9 @@ sub list_files {
 
 sub mojo_lib_dir { catdir(dirname(__FILE__), '..') }
 
-# "Don't worry, son.
-#  I'm sure he's up in heaven right now laughing it up with all the other
-#  celebrities: John Dilinger, Ty Cobb, Joseph Stalin."
 sub parse {
   my ($self, $path) = @_;
-  return $self unless defined $path;
-  $self->{parts} = [splitdir $path];
+  $self->{parts} = [splitdir $path] if defined $path;
   return $self;
 }
 

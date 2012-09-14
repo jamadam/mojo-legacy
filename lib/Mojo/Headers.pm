@@ -50,7 +50,7 @@ sub clone {
 }
 
 sub from_hash {
-  my ($self, $hash) = (shift, shift);
+  my ($self, $hash) = @_;
 
   # Empty hash deletes all headers
   delete $self->{headers} if keys %{$hash} == 0;
@@ -63,7 +63,6 @@ sub from_hash {
   return $self;
 }
 
-# "Will you be my mommy? You smell like dead bunnies..."
 sub header {
   my ($self, $name) = (shift, shift);
 
@@ -78,7 +77,7 @@ sub header {
   return @$headers;
 }
 
-sub is_finished { defined $_[0]->{state} && $_[0]->{state} eq 'finished' }
+sub is_finished { do {my $tmp = shift->{state}; defined $tmp ? $tmp : ''} eq 'finished' }
 
 sub is_limit_exceeded { !!shift->{limit} }
 
@@ -105,7 +104,7 @@ sub parse {
     }
 
     # New header
-    elsif ($line =~ /^(\S+)\s*:\s*(.*)$/) { push @$headers, $1, $2 }
+    if ($line =~ /^(\S+)\s*:\s*(.*)$/) { push @$headers, $1, $2 }
 
     # Multiline
     elsif (@$headers && $line =~ s/^\s+//) { $headers->[-1] .= " $line" }
@@ -125,8 +124,6 @@ sub parse {
   return $self;
 }
 
-# "You don't like your job, you don't strike.
-#  You go in every day and do it really half-assed. That's the American way."
 sub referrer { scalar shift->header(Referer => @_) }
 
 sub remove {
@@ -158,8 +155,6 @@ sub to_hash {
   return \%hash;
 }
 
-# "The only thing I asked you to do for this party was put on clothes,
-#  and you didn't do it."
 sub to_string {
   my $self = shift;
 
@@ -301,8 +296,8 @@ Shortcut for the C<Content-Encoding> header.
 
 =head2 C<content_length>
 
-  my $length = $headers->content_length;
-  $headers   = $headers->content_length(4000);
+  my $len  = $headers->content_length;
+  $headers = $headers->content_length(4000);
 
 Shortcut for the C<Content-Length> header.
 
@@ -530,8 +525,8 @@ Shortcut for the C<Server> header.
 
 =head2 C<set_cookie>
 
-  my $set_cookie = $headers->set_cookie;
-  $headers       = $headers->set_cookie('f=b; path=/');
+  my $cookie = $headers->set_cookie;
+  $headers   = $headers->set_cookie('f=b; path=/');
 
 Shortcut for the C<Set-Cookie> header from RFC 6265.
 
@@ -556,6 +551,8 @@ Shortcut for the C<TE> header.
 
 Turn headers into hash reference, nested array references to represent multi
 line values are disabled by default.
+
+  say $headers->to_hash->{DNT};
 
 =head2 C<to_string>
 

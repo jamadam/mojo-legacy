@@ -8,10 +8,6 @@ BEGIN {
 
 use Test::More tests => 32;
 
-# "Marge, you being a cop makes you the man!
-#  Which makes me the woman, and I have no interest in that,
-#  besides occasionally wearing the underwear,
-#  which as we discussed, is strictly a comfort thing."
 use Mojo::IOLoop;
 use Mojo::IOLoop::Client;
 use Mojo::IOLoop::Delay;
@@ -44,7 +40,7 @@ Mojo::IOLoop->timer(
 Mojo::IOLoop->start;
 like $err, qr/^Mojo::IOLoop already running/, 'right error';
 
-# Basics
+# Basic functionality
 my ($ticks, $timer, $hirestimer);
 my $id = $loop->recurring(0 => sub { $ticks++ });
 $loop->timer(
@@ -156,9 +152,9 @@ $loop->client(
     $connected = 1;
   }
 );
-like $ENV{MOJO_REUSE}, qr/(?:^|\,)$port\:/, 'file descriptor can be reused';
+like $ENV{MOJO_REUSE}, qr/(?:^|\,)${port}:/, 'file descriptor can be reused';
 $loop->start;
-unlike $ENV{MOJO_REUSE}, qr/(?:^|\,)$port\:/, 'environment is clean';
+unlike $ENV{MOJO_REUSE}, qr/(?:^|\,)${port}:/, 'environment is clean';
 ok $connected, 'connected';
 $err = undef;
 $loop->client(
@@ -239,7 +235,7 @@ is $client, 'works!', 'full message has been written';
 # Graceful shutdown (max_connections)
 $err = '';
 $loop = Mojo::IOLoop->new(max_connections => 0);
-$loop->remove($loop->client({port => $loop->generate_port}));
+$loop->remove($loop->client({port => $loop->generate_port} => sub { }));
 $loop->timer(1 => sub { shift->stop; $err = 'failed' });
 $loop->start;
 ok !$err, 'no error';

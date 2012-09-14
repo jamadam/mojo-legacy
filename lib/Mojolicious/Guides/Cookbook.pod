@@ -246,7 +246,7 @@ with this little mock server you can just embed them.
   # Access fully initialized application
   say $app->static->root;
   say $app->config->{secret_identity};
-  say $app->dumper(just => 'a helper test');
+  say $app->dumper({just => 'a helper test'});
 
 =head2 Web server embedding
 
@@ -314,30 +314,32 @@ L<Mojo::IOLoop> delay.
 
   use Mojolicious::Lite;
   use Mojo::IOLoop;
+  use Mojo::URL;
 
   # Search Twitter for "perl" and "python"
   get '/' => sub {
     my $self = shift;
 
-    # Delay rendering
-    my $delay = Mojo::IOLoop->delay(sub {
-      my ($delay, @results) = @_;
-      $self->render(json => {results => \@results});
-    });
+    # Prepare response in two steps
+    Mojo::IOLoop->delay(
 
-    # First request
-    $delay->begin;
-    $self->ua->get('http://search.twitter.com/search.json?q=perl' => sub {
-      my ($ua, $tx) = @_;
-      $delay->end($tx->res->json->{results}[0]{text});
-    });
+      # Parallel requests
+      sub {
+        my $delay = shift;
+        my $url   = Mojo::URL->new('http://search.twitter.com/search.json');
+        $self->ua->get($url->clone->query({q => 'perl'})   => $delay->begin);
+        $self->ua->get($url->clone->query({q => 'python'}) => $delay->begin);
+      },
 
-    # Second request
-    $delay->begin;
-    $self->ua->get('http://search.twitter.com/search.json?q=python' => sub {
-      my ($ua, $tx) = @_;
-      $delay->end($tx->res->json->{results}[0]{text});
-    });
+      # Delayed rendering
+      sub {
+        my ($delay, $perl, $python) = @_;
+        $self->render(json => {
+          perl   => $perl->res->json('/results/0/text'),
+          python => $python->res->json('/results/0/text')
+        });
+      }
+    );
   };
 
   app->start;
@@ -440,8 +442,8 @@ method L<Mojolicious::Controller/"on">.
 
     # Incoming message
     $self->on(message => sub {
-      my ($self, $message) = @_;
-      $self->send("echo: $message");
+      my ($self, $msg) = @_;
+      $self->send("echo: $msg");
     });
 
     # Disconnected
@@ -524,8 +526,8 @@ protocol for transport.
 
     # Subscribe to "message" event and forward "log" events to browser
     my $cb = $self->app->log->on(message => sub {
-      my ($log, $level, $message) = @_;
-      $self->write("event:log\ndata: [$level] $message\n\n");
+      my ($log, $level, @lines) = @_;
+      $self->write("event:log\ndata: [$level] @lines\n\n");
     });
 
     # Unsubscribe from "message" event again once we are done
@@ -623,7 +625,27 @@ which can be combined to solve some of hardest problems in web development.
 
 Internally the L<Mojo::IOLoop> event loop can use multiple reactor backends,
 L<EV> for example will be automatically used if installed. Which in turn
-allows other event loops like L<AnyEvent> to just work.
+allows other event loops like L<IO::Async> to just work.
+
+  use Mojolicious::Lite;
+  use EV;
+  use IO::Async::Loop::EV;
+  use IO::Async::Timer::Absolute;
+
+  my $loop = IO::Async::Loop::EV->new;
+
+  # Wait 3 seconds before rendering a response
+  get '/' => sub {
+    my $self = shift;
+    $loop->add(IO::Async::Timer::Absolute->new(
+      time      => time + 3,
+      on_expire => sub { $self->render(text => 'Delayed by 3 seconds!') }
+    ));
+  };
+
+  app->start;
+
+Same for L<AnyEvent>.
 
   use Mojolicious::Lite;
   use EV;
@@ -652,7 +674,7 @@ Who actually controls the event loop backend is not important.
   my $ua = Mojo::UserAgent->new;
   $ua->get('http://search.twitter.com/search.json?q=perl' => sub {
     my ($ua, $tx) = @_;
-    $cv->send($tx->res->json->{results}[0]{text});
+    $cv->send($tx->res->json('/results/0/text'));
   });
   say $cv->recv;
 

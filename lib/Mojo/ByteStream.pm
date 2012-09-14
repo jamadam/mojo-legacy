@@ -1,7 +1,8 @@
 package Mojo::ByteStream;
-use Mojo::Base 'Exporter';
+use Mojo::Base -base;
 use overload '""' => sub { shift->to_string }, fallback => 1;
 
+use Exporter 'import';
 use Mojo::Collection;
 use Mojo::Util;
 
@@ -11,8 +12,8 @@ our @EXPORT_OK = ('b');
 my @UTILS = (
   qw(b64_decode b64_encode camelize decamelize hmac_md5_sum hmac_sha1_sum),
   qw(html_escape html_unescape md5_bytes md5_sum punycode_decode),
-  qw(punycode_encode quote sha1_bytes sha1_sum slurp spurt trim unquote),
-  qw(url_escape url_unescape xml_escape)
+  qw(punycode_encode quote sha1_bytes sha1_sum slurp spurt squish trim),
+  qw(unquote url_escape url_unescape xml_escape xor_encode)
 );
 {
   no strict 'refs';
@@ -26,8 +27,6 @@ my @UTILS = (
   }
 }
 
-# "Do we have any food that wasn't brutally slaughtered?
-#  Well, I think the veal died of loneliness."
 sub new {
   my $class = shift;
   return bless \(my $dummy = join '', @_), ref $class || $class;
@@ -40,11 +39,6 @@ sub clone {
   return $self->new($$self);
 }
 
-# "I want to share something with you: The three little sentences that will
-#  get you through life.
-#  Number 1: 'Cover for me.'
-#  Number 2: 'Oh, good idea, Boss!'
-#  Number 3: 'It was like that when I got here.'"
 sub decode {
   my $self = shift;
   $$self = Mojo::Util::decode shift || 'UTF-8', $$self;
@@ -57,9 +51,6 @@ sub encode {
   return $self;
 }
 
-# "Old people don't need companionship.
-#  They need to be isolated and studied so it can be determined what
-#  nutrients they have that might be extracted for our personal use."
 {
   no warnings 'redefine';
   sub say {
@@ -78,7 +69,6 @@ sub split {
   return Mojo::Collection->new(map { $self->new($_) } split $pattern, $$self);
 }
 
-# "My cat's breath smells like cat food."
 sub to_string { ${shift()} }
 
 1;
@@ -120,13 +110,14 @@ Construct a new L<Mojo::ByteStream> object.
 
 =head1 METHODS
 
-L<Mojo::ByteStream> implements the following methods.
+L<Mojo::ByteStream> inherits all methods from L<Mojo::Base> and implements the
+following new ones.
 
 =head2 C<new>
 
   my $stream = Mojo::ByteStream->new('test123');
 
-Construct a new L<Mojo::ByteStream> object.
+Construct a new scalar-based L<Mojo::ByteStream> object.
 
 =head2 C<b64_decode>
 
@@ -245,7 +236,7 @@ Quote bytestream with L<Mojo::Util/"quote">.
   $stream->say;
   $stream->say(*STDERR);
 
-Print bytestream to handle or STDOUT and append a newline.
+Print bytestream to handle and append a newline, defaults to C<STDOUT>.
 
 =head2 C<secure_compare>
 
@@ -277,7 +268,7 @@ Size of bytestream.
 
   $stream = $stream->slurp;
 
-Read all data into bytestream with L<Mojo::Util/"slurp">.
+Read all data at once from file into bytestream with L<Mojo::Util/"slurp">.
 
   b('/home/sri/myapp.pl')->slurp->split("\n")->shuffle->join("\n")->say;
 
@@ -285,9 +276,9 @@ Read all data into bytestream with L<Mojo::Util/"slurp">.
 
   $stream = $stream->spurt('/home/sri/myapp.pl');
 
-Write bytestream to file with L<Mojo::Util/"spurt">.
+Write all data from bytestream at once to file with L<Mojo::Util/"spurt">.
 
-  b('/home/sri/foo.html')->slurp->html_unescape->spurt('/home/sri/bar.html');
+  b('/home/sri/foo.txt')->slurp->squish->spurt('/home/sri/bar.txt');
 
 =head2 C<split>
 
@@ -296,6 +287,14 @@ Write bytestream to file with L<Mojo::Util/"spurt">.
 Turn bytestream into L<Mojo::Collection>.
 
   b('a,b,c')->split(',')->pluck('quote')->join(',')->say;
+
+=head2 C<squish>
+
+  $stream = $stream->squish;
+
+Trim whitespace characters from both ends of bytestream and then change all
+consecutive groups of whitespace into one space each with
+L<Mojo::Util/"squish">.
 
 =head2 C<to_string>
 
@@ -341,7 +340,13 @@ L<Mojo::Util/"url_unescape">.
   $stream = $stream->xml_escape;
 
 Escape only the characters C<&>, C<E<lt>>, C<E<gt>>, C<"> and C<'> in
-bytestream, this is a much faster version of C<html_escape>.
+bytestream with L<Mojo::Util/"xml_escape">.
+
+=head2 C<xor_encode>
+
+  $stream = $stream->xor_encode($key);
+
+XOR encode bytestream with L<Mojo::Util/"xor_encode">.
 
 =head1 SEE ALSO
 

@@ -6,7 +6,6 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-# "Hey, Weener Boy... where do you think you're going?"
 use Test::More;
 use Mojo::IOLoop::Server;
 plan skip_all => 'set TEST_TLS to enable this test (developer only!)'
@@ -51,8 +50,8 @@ websocket '/test' => sub {
   my $self = shift;
   $self->on(
     message => sub {
-      my ($self, $message) = @_;
-      $self->send("${message}test2");
+      my ($self, $msg) = @_;
+      $self->send("${msg}test2");
     }
   );
 };
@@ -196,8 +195,8 @@ $ua->websocket(
     $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
-        my ($tx, $message) = @_;
-        $result = $message;
+        my ($tx, $msg) = @_;
+        $result = $msg;
         $tx->finish;
       }
     );
@@ -249,8 +248,8 @@ $ua->websocket(
     $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
-        my ($tx, $message) = @_;
-        $result = $message;
+        my ($tx, $msg) = @_;
+        $result = $msg;
         $tx->finish;
       }
     );

@@ -91,8 +91,6 @@ sub cookies {
 
 sub default_message { $MESSAGES{$_[1] || $_[0]->code || 404} || '' }
 
-# "Weaseling out of things is important to learn.
-#  It's what separates us from the animals... except the weasel."
 sub extract_start_line {
   my ($self, $bufferref) = @_;
 
@@ -120,9 +118,9 @@ sub get_start_line_chunk {
 
   # Status line
   unless (defined $self->{start_buffer}) {
-    my $code    = $self->code    || 404;
-    my $message = $self->message || $self->default_message;
-    $self->{start_buffer} = "HTTP/@{[$self->version]} $code $message\x0d\x0a";
+    my $code = $self->code    || 404;
+    my $msg  = $self->message || $self->default_message;
+    $self->{start_buffer} = "HTTP/@{[$self->version]} $code $msg\x0d\x0a";
   }
 
   # Progress
@@ -134,7 +132,8 @@ sub get_start_line_chunk {
 
 sub is_empty {
   my $self = shift;
-  return $self->is_status_class(100) || (defined $self->code && ($self->code == 204 || $self->code == 304));
+  return unless my $code = $self->code;
+  return $self->is_status_class(100) || grep { $_ eq $code } qw(204 304);
 }
 
 sub is_status_class {
@@ -193,8 +192,8 @@ HTTP response code.
 
 =head2 C<message>
 
-  my $message = $res->message;
-  $res        = $res->message('OK');
+  my $msg = $res->message;
+  $res    = $res->message('OK');
 
 HTTP response message.
 
@@ -213,7 +212,7 @@ Access response cookies, usually L<Mojo::Cookie::Response> objects.
 
 =head2 C<default_message>
 
-  my $message = $res->default_message;
+  my $msg = $res->default_message;
 
 Generate default response message for code.
 

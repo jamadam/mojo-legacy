@@ -1,6 +1,8 @@
 package Mojo::IOLoop;
 use Mojo::Base -base;
 
+# "Professor: Amy, technology isn't intrinsically good or evil. It's how it's
+#             used. Like the death ray."
 use Carp 'croak';
 use Mojo::IOLoop::Client;
 use Mojo::IOLoop::Delay;
@@ -60,8 +62,8 @@ sub client {
   );
   $client->on(
     error => sub {
+      $self->_remove($id);
       $self->$cb(pop, undef);
-      delete $self->{connections}{$id};
     }
   );
   $client->connect(@_);
@@ -70,12 +72,12 @@ sub client {
 }
 
 sub delay {
-  my ($self, $cb) = @_;
+  my $self = shift;
   $self = $self->singleton unless ref $self;
 
   my $delay = Mojo::IOLoop::Delay->new;
   weaken $delay->ioloop($self)->{ioloop};
-  $delay->once(finish => $cb) if $cb;
+  @_ > 1 ? $delay->steps(@_) : $delay->once(finish => shift) if @_;
 
   return $delay;
 }
@@ -106,8 +108,6 @@ sub remove {
   $self->_remove($id);
 }
 
-# "Fat Tony is a cancer on this fair city!
-#  He is the cancer and I am the... uh... what cures cancer?"
 sub server {
   my ($self, $cb) = (shift, pop);
   $self = $self->singleton unless ref $self;
@@ -444,9 +444,11 @@ L<Mojo::IOLoop::Client/"connect">.
   my $delay = Mojo::IOLoop->delay;
   my $delay = $loop->delay;
   my $delay = $loop->delay(sub {...});
+  my $delay = $loop->delay(sub {...}, sub {...});
 
-Get L<Mojo::IOLoop::Delay> object to synchronize events and subscribe to event
-L<Mojo::IOLoop::Delay/"finish"> if optional callback is provided.
+Get L<Mojo::IOLoop::Delay> object to control the flow of events. A single
+callback will be treated as a subscriber to the C<finish> event, and multiple
+ones as a chain of steps.
 
   # Synchronize multiple events
   my $delay = Mojo::IOLoop->delay(sub { say 'BOOM!' });
@@ -457,6 +459,28 @@ L<Mojo::IOLoop::Delay/"finish"> if optional callback is provided.
       $delay->end;
     });
   }
+
+  # Sequentialize multiple events
+  my $delay = Mojo::IOLoop->delay(
+
+    # First step (simple timer)
+    sub {
+      my $delay = shift;
+      Mojo::IOLoop->timer(2 => $delay->begin);
+      say 'Second step in 2 seconds.';
+    },
+
+    # Second step (parallel timers)
+    sub {
+      my $delay = shift;
+      Mojo::IOLoop->timer(1 => $delay->begin);
+      Mojo::IOLoop->timer(3 => $delay->begin);
+      say 'Third step in 3 seconds.';
+    },
+
+    # Third step (the end)
+    sub { say 'And done after 5 seconds total.' }
+  );
 
   # Wait for events if necessary
   $delay->wait unless Mojo::IOLoop->is_running;

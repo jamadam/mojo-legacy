@@ -1,6 +1,8 @@
 package Mojo::UserAgent;
 use Mojo::Base 'Mojo::EventEmitter';
 
+# "Fry: Since when is the Internet about robbing people of their privacy?
+#  Bender: August 6, 1991."
 use Carp 'croak';
 use List::Util 'first';
 use Mojo::IOLoop;
@@ -13,7 +15,6 @@ use Scalar::Util 'weaken';
 
 use constant DEBUG => $ENV{MOJO_USERAGENT_DEBUG} || 0;
 
-# "You can't let a single bad experience scare you away from drugs."
 has ca              => sub { $ENV{MOJO_CA_FILE} };
 has cert            => sub { $ENV{MOJO_CERT_FILE} };
 has connect_timeout => sub { $ENV{MOJO_CONNECT_TIMEOUT} || 10 };
@@ -52,7 +53,6 @@ sub app {
   # Default to singleton application
   return $self->{app} || $singleton_app unless $app;
   $self->{app} = $app;
-
   return $self;
 }
 
@@ -196,12 +196,13 @@ sub _connect {
       my ($loop, $err, $stream) = @_;
 
       # Connection error
+      return unless $self;
       return $self->_error($id, $err) if $err;
 
       # Connection established
       $stream->on(timeout => sub { $self->_error($id, 'Inactivity timeout') });
       $stream->on(close => sub { $self->_handle($id => 1) });
-      $stream->on(error => sub { $self->_error($id, pop, 1) });
+      $stream->on(error => sub { $self && $self->_error($id, pop, 1) });
       $stream->on(read => sub { $self->_read($id => pop) });
       $cb->();
     }
@@ -218,7 +219,7 @@ sub _connect_proxy {
       my ($self, $tx) = @_;
 
       # CONNECT failed
-      unless (defined $tx->res->code && $tx->res->code == 200) {
+      unless ((defined $tx->res->code ? $tx->res->code : '') eq '200') {
         $old->req->error('Proxy connection failed');
         return $self->_finish($old, $cb);
       }
@@ -387,7 +388,7 @@ sub _remove {
 
   # Keep connection alive
   $self->_cache(join(':', $self->transactor->endpoint($tx)), $id)
-    unless $tx->req->method eq 'CONNECT' && defined $tx->res->code && $tx->res->code == 200;
+    unless $tx->req->method eq 'CONNECT' && (defined $tx->res->code ? $tx->res->code : '') eq '200';
 }
 
 sub _redirect {
@@ -474,9 +475,10 @@ sub _upgrade {
   my ($self, $id) = @_;
 
   # Check if connection needs to be upgraded
-  my $c   = $self->{connections}{$id};
-  my $old = $c->{tx};
-  return unless $old->req->headers->upgrade && defined $old->res->code && $old->res->code == 101;
+  my $c    = $self->{connections}{$id};
+  my $old  = $c->{tx};
+  my $code = defined $old->res->code ? $old->res->code : '';
+  return unless $old->req->headers->upgrade && $code eq '101';
 
   # Check challenge and upgrade to WebSocket transaction
   my $new = Mojo::Transaction::WebSocket->new(handshake => $old, masked => 1);
@@ -501,8 +503,7 @@ sub _write {
   warn "-- Client >>> Server (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
 
   # Write chunk
-  my $stream = $self->_loop->stream($id);
-  $stream->write($chunk);
+  my $stream = $self->_loop->stream($id)->write($chunk);
   $self->_handle($id) if $tx->is_finished;
 
   # Continue writing
@@ -531,8 +532,8 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   my $tx = $ua->post_form('search.cpan.org/search' => {q => 'mojo'});
   if (my $res = $tx->success) { say $res->body }
   else {
-    my ($message, $code) = $tx->error;
-    say $code ? "$code response: $message" : "Connection error: $message";
+    my ($err, $code) = $tx->error;
+    say $code ? "$code response: $err" : "Connection error: $err";
   }
 
   # Quick JSON API request with Basic authentication
@@ -593,8 +594,8 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
     my ($ua, $tx) = @_;
     $tx->on(finish  => sub { say 'WebSocket closed.' });
     $tx->on(message => sub {
-      my ($tx, $message) = @_;
-      say "WebSocket message: $message";
+      my ($tx, $msg) = @_;
+      say "WebSocket message: $msg";
       $tx->finish;
     });
     $tx->send('hi there!');
@@ -624,7 +625,7 @@ L<Mojo::UserAgent> can emit the following events.
     ...
   });
 
-Emitted if an error happens that can't be associated with a transaction.
+Emitted if an error occurs that can't be associated with a transaction.
 
   $ua->on(error => sub {
     my ($ua, $err) = @_;
@@ -643,7 +644,7 @@ automatically prepared proxy C<CONNECT> requests and followed redirects.
 
   $ua->on(start => sub {
     my ($ua, $tx) = @_;
-    $tx->req->headers->header('X-Bender', 'Bite my shiny metal ass!');
+    $tx->req->headers->header('X-Bender' => 'Bite my shiny metal ass!');
   });
 
 =head1 ATTRIBUTES
@@ -739,16 +740,16 @@ Local address to bind to.
 
 =head2 C<max_connections>
 
-  my $max_connections = $ua->max_connections;
-  $ua                 = $ua->max_connections(5);
+  my $max = $ua->max_connections;
+  $ua     = $ua->max_connections(5);
 
 Maximum number of keep alive connections that the user agent will retain
 before it starts closing the oldest cached ones, defaults to C<5>.
 
 =head2 C<max_redirects>
 
-  my $max_redirects = $ua->max_redirects;
-  $ua               = $ua->max_redirects(3);
+  my $max = $ua->max_redirects;
+  $ua     = $ua->max_redirects(3);
 
 Maximum number of redirects the user agent will follow before it fails,
 defaults to the value of the C<MOJO_MAX_REDIRECTS> environment variable or
@@ -1044,8 +1045,8 @@ exact same arguments as L<Mojo::UserAgent::Transactor/"websocket">.
   $ua->websocket('ws://localhost:3000/echo' => sub {
     my ($ua, $tx) = @_;
     $tx->on(message => sub {
-      my ($tx, $message) = @_;
-      say $message;
+      my ($tx, $msg) = @_;
+      say $msg;
     });
     $tx->send('Hi!');
   });

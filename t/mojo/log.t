@@ -1,10 +1,7 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 45;
+use Test::More tests => 47;
 
-# "Don't let Krusty's death get you down, boy.
-#  People die all the time, just like that.
-#  Why, you could wake up dead tomorrow! Well, good night."
 use File::Spec::Functions 'catdir';
 use File::Temp 'tempdir';
 use Mojo::Asset::File;
@@ -13,14 +10,15 @@ use Mojo::Log;
 # Logging to file
 my $dir = tempdir CLEANUP => 1;
 my $path = catdir $dir, 'test.log';
-my $log = Mojo::Log->new(level => 'debug', path => $path);
-$log->debug('Just works.');
+my $log = Mojo::Log->new(level => 'error', path => $path);
+$log->error('Just works.');
+$log->fatal('Works too.');
+$log->debug('Does not work.');
 undef $log;
-like(
-  Mojo::Asset::File->new(path => $path)->slurp,
-  qr/^\[.*\] \[debug\] Just works\.\n$/,
-  'right content'
-);
+my $content = Mojo::Asset::File->new(path => $path)->slurp;
+like $content,   qr/\[.*\] \[error\] Just works\.\n/,    'has error message';
+like $content,   qr/\[.*\] \[fatal\] Works too\.\n/,     'has fatal message';
+unlike $content, qr/\[.*\] \[debug\] Does not work\.\n/, 'no debug message';
 
 # Formatting
 $log = Mojo::Log->new;
@@ -30,26 +28,30 @@ like $log->format(qw(debug Test 1 2 3)),
   qr/^\[.*\] \[debug\] Test\n1\n2\n3\n$/, 'right format';
 
 # Events
-my $messages = [];
+my $msgs = [];
 $log->unsubscribe('message')->on(
   message => sub {
     my ($log, $level, @lines) = @_;
-    push @$messages, $level, @lines;
+    push @$msgs, $level, @lines;
   }
 );
-$log->info('Whatever.');
-is_deeply $messages, [qw(info Whatever.)], 'right messages';
-$log->level('error')->info('Again.');
-is_deeply $messages, [qw(info Whatever.)], 'right messages';
-$log->fatal('Test', 123);
-is_deeply $messages, [qw(info Whatever. fatal Test 123)], 'right messages';
-$messages = [];
-$log->level('debug')->log(info => 'Whatever.');
-is_deeply $messages, [qw(info Whatever.)], 'right messages';
-$log->level('error')->log(info => 'Again.');
-is_deeply $messages, [qw(info Whatever.)], 'right messages';
-$log->log(fatal => 'Test', 1, 2, 3);
-is_deeply $messages, [qw(info Whatever. fatal Test 1 2 3)], 'right messages';
+$log->debug('Test', 1, 2, 3);
+is_deeply $msgs, [qw(debug Test 1 2 3)], 'right message';
+$msgs = [];
+$log->info('Test', 1, 2, 3);
+is_deeply $msgs, [qw(info Test 1 2 3)], 'right message';
+$msgs = [];
+$log->warn('Test', 1, 2, 3);
+is_deeply $msgs, [qw(warn Test 1 2 3)], 'right message';
+$msgs = [];
+$log->error('Test', 1, 2, 3);
+is_deeply $msgs, [qw(error Test 1 2 3)], 'right message';
+$msgs = [];
+$log->fatal('Test', 1, 2, 3);
+is_deeply $msgs, [qw(fatal Test 1 2 3)], 'right message';
+$msgs = [];
+$log->log('fatal', 'Test', 1, 2, 3);
+is_deeply $msgs, [qw(fatal Test 1 2 3)], 'right message';
 
 # "debug"
 is $log->level('debug')->level, 'debug', 'right level';

@@ -7,24 +7,17 @@ has captures => sub { {} };
 has [qw(endpoint root)];
 has stack => sub { [] };
 
-# "I'm Bender, baby, please insert liquor!"
 sub new {
   my $self = shift->SUPER::new;
 
-  # Method
   $self->{method} = uc shift;
-
-  # Path
   my $path = url_unescape shift;
-  $self->{path} = do {my $tmp = decode('UTF-8', $path); defined $tmp ? $tmp : $path};
-
-  # WebSocket
+  $self->{path} = do { my $tmp = decode('UTF-8', $path); defined $tmp ? $tmp : $path};
   $self->{websocket} = shift;
 
   return $self;
 }
 
-# "Life can be hilariously cruel."
 sub match {
   my ($self, $r, $c) = @_;
 
@@ -39,7 +32,7 @@ sub match {
   # Method
   if (my $methods = $r->via) {
     my $method = $self->{method} eq 'HEAD' ? 'GET' : $self->{method};
-    return unless grep {$_ eq $method} @$methods;
+    return unless grep { $_ eq $method } @$methods;
   }
 
   # Conditions

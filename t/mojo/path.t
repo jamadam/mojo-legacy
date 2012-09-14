@@ -4,11 +4,9 @@ use utf8;
 
 use Test::More tests => 212;
 
-# "This is the greatest case of false advertising I've seen since I sued the
-#  movie 'The Never Ending Story.'"
 use Mojo::Path;
 
-# Basics
+# Basic functionality
 my $path = Mojo::Path->new;
 is $path->parse('/path')->to_string, '/path', 'right path';
 is $path->parts->[0], 'path', 'right part';

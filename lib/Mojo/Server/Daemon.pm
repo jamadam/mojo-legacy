@@ -23,8 +23,6 @@ sub DESTROY {
   $loop->remove($_) for @{$self->{listening} || []};
 }
 
-# "40 dollars!? This better be the best damn beer ever..
-#  *drinks beer* You got lucky."
 sub run {
   my $self = shift;
 
@@ -177,6 +175,7 @@ sub _listen {
       $stream->on(close => sub { $self->_close($id) });
       $stream->on(
         error => sub {
+          return unless $self;
           $self->app->log->error(pop);
           $self->_close($id);
         }
@@ -244,8 +243,7 @@ sub _write {
   warn "-- Server >>> Client (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
 
   # Write chunk
-  my $stream = $self->ioloop->stream($id);
-  $stream->write($chunk);
+  my $stream = $self->ioloop->stream($id)->write($chunk);
 
   # Finish or continue writing
   weaken $self;
@@ -389,15 +387,15 @@ TLS verification mode, defaults to C<0x03>.
 
 =head2 C<max_clients>
 
-  my $max_clients = $daemon->max_clients;
-  $daemon         = $daemon->max_clients(1000);
+  my $max = $daemon->max_clients;
+  $daemon = $daemon->max_clients(1000);
 
 Maximum number of parallel client connections, defaults to C<1000>.
 
 =head2 C<max_requests>
 
-  my $max_requests = $daemon->max_requests;
-  $daemon          = $daemon->max_requests(100);
+  my $max = $daemon->max_requests;
+  $daemon = $daemon->max_requests(100);
 
 Maximum number of keep alive requests per connection, defaults to C<25>.
 

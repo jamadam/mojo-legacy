@@ -2,12 +2,11 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 95;
+use Test::More tests => 97;
 
-# "Now that's a wave of destruction that's easy on the eyes."
 use Mojo::Parameters;
 
-# Basics with custom pair separator
+# Basic functionality
 my $p = Mojo::Parameters->new('foo=b%3Bar&baz=23');
 my $p2 = Mojo::Parameters->new('x', 1, 'y', 2);
 is $p->pair_separator, '&',                 'right pair separator';
@@ -194,3 +193,8 @@ $p = Mojo::Parameters->new('foo=!$\'()*,%:@/?&bar=23');
 is $p->param('foo'), '!$\'()*,%:@/?', 'right value';
 is $p->param('bar'), 23, 'right value';
 is "$p", 'foo=!$\'()*,%:@/?&bar=23', 'right result';
+
+# No charset
+$p = Mojo::Parameters->new('foo=%E2%98%83')->charset(undef);
+is $p->param('foo'), "\xe2\x98\x83", 'right value';
+is "$p", 'foo=%E2%98%83', 'right result';

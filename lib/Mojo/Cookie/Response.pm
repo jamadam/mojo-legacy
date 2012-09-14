@@ -22,9 +22,6 @@ sub expires {
   return $self;
 }
 
-# "Remember the time he ate my goldfish?
-#  And you lied and said I never had goldfish.
-#  Then why did I have the bowl Bart? Why did I have the bowl?"
 sub parse {
   my ($self, $string) = @_;
 
@@ -119,7 +116,7 @@ Cookie domain.
   my $httponly = $cookie->httponly;
   $cookie      = $cookie->httponly(1);
 
-HttpOnly flag, which can prevent client side scripts from accessing this
+HttpOnly flag, which can prevent client-side scripts from accessing this
 cookie.
 
 =head2 C<max_age>
@@ -127,7 +124,7 @@ cookie.
   my $max_age = $cookie->max_age;
   $cookie     = $cookie->max_age(60);
 
-Max age for cookie in seconds.
+Max age for cookie.
 
 =head2 C<path>
 
@@ -155,7 +152,7 @@ implements the following new ones.
   $cookie     = $cookie->expires(time + 60);
   $cookie     = $cookie->expires(Mojo::Date->new(time + 60));
 
-Expiration for cookie in seconds.
+Expiration for cookie.
 
 =head2 C<parse>
 

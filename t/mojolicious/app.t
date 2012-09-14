@@ -7,7 +7,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 337;
+use Test::More tests => 339;
 
 use FindBin;
 use lib "$FindBin::Bin/lib";
@@ -18,8 +18,15 @@ use Mojo::Transaction::HTTP;
 use Mojolicious;
 use Test::Mojo;
 
-# "Congratulations Fry, you've snagged the perfect girlfriend.
-#  Amy's rich, she's probably got other characteristics..."
+# Missing config file
+{
+  eval { Test::Mojo->new('MojoliciousConfigTest')->app };
+  like $@, qr/mojolicious_config_test.conf" missing/, 'right error';
+  local $ENV{MOJO_MODE} = 'whatever';
+  is(Test::Mojo->new('MojoliciousConfigTest')->app->config->{it},
+    'works', 'right result');
+}
+
 my $t = Test::Mojo->new('MojoliciousTest');
 
 # Application is already available
@@ -84,7 +91,7 @@ $t->get_ok('/syntax_error/foo')->status_is(500)
 $t->get_ok('/foo/syntaxerror')->status_is(500)
   ->header_is(Server         => 'Mojolicious (Perl)')
   ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
-  ->content_like(qr/^Missing right curly/);
+  ->content_like(qr/Missing right curly/);
 
 # Exceptional::this_one_dies (action dies)
 $t->get_ok('/exceptional/this_one_dies')->status_is(500)

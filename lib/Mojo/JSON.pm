@@ -37,7 +37,6 @@ my $UTF_PATTERNS = {
 
 my $WHITESPACE_RE = qr/[\x20\x09\x0a\x0d]*/;
 
-# "Hey...That's not the wallet inspector..."
 sub decode {
   my ($self, $bytes) = @_;
 
@@ -157,7 +156,7 @@ sub _decode_string {
   my $pos = pos;
 
   # Extract string with escaped characters
-  m#\G(((?:[^\x00-\x1F\\"]|\\(?:["\\/bfnrt]|u[A-Fa-f0-9]{4})){0,32766})*)#gc;
+  m#\G(((?:[^\x00-\x1F\\"]|\\(?:["\\/bfnrt]|u[[:xdigit:]]{4})){0,32766})*)#gc;
   my $str = $1;
 
   # Missing quote
@@ -209,8 +208,6 @@ sub _decode_string {
   return $buffer . substr $str, pos($str), length($str);
 }
 
-# "Eternity with nerds.
-#  It's the Pasadena Star Trek convention all over again."
 sub _decode_value {
 
   # Leading whitespace

@@ -16,8 +16,6 @@ sub register {
     host => sub { _check($_[1]->req->url->to_abs->host, $_[3]) });
 }
 
-# "Wow, there's a million aliens! I've never seen something so mind-blowing!
-#  Ooh, a reception table with muffins!"
 sub _check {
   my ($value, $pattern) = @_;
   return 1
@@ -26,7 +24,7 @@ sub _check {
 }
 
 sub _headers {
-  my ($r, $c, $captures, $patterns) = @_;
+  my ($route, $c, $captures, $patterns) = @_;
   return unless $patterns && ref $patterns eq 'HASH' && keys %$patterns;
 
   # All headers need to match

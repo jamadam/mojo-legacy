@@ -4,8 +4,6 @@ use Mojo::Base 'Mojolicious::Plugin';
 use Mojo::ByteStream 'b';
 use Mojo::Util 'xml_escape';
 
-# "Is today's hectic lifestyle making you tense and impatient?
-#  Shut up and get to the point!"
 sub register {
   my ($self, $app) = @_;
 
@@ -107,7 +105,7 @@ sub _input {
     my $value = defined $attrs{value} ? $attrs{value} : '';
     if ($type eq 'checkbox' || $type eq 'radio') {
       $attrs{value} = $value;
-      $attrs{checked} = 'checked' if grep {$_ eq $value} @values;
+      $attrs{checked} = 'checked' if grep { $_ eq $value } @values;
     }
 
     # Others
@@ -224,7 +222,6 @@ sub _submit_button {
   return _tag('input', value => do {my $tmp = shift; defined $tmp ? $tmp : 'Ok'}, @_, type => 'submit');
 }
 
-# "We've lost power of the forward Gameboy! Mario not responding!"
 sub _tag {
   my $name = shift;
 

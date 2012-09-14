@@ -185,17 +185,17 @@ sub _read {
   until ($self->is_finished) {
 
     # Preamble
-    if (defined $self->{multi_state} && $self->{multi_state} eq 'multipart_preamble') {
+    if ((defined $self->{multi_state} ? $self->{multi_state} : '') eq 'multipart_preamble') {
       last unless $self->_parse_multipart_preamble($boundary);
     }
 
     # Boundary
-    elsif (defined $self->{multi_state} && $self->{multi_state} eq 'multipart_boundary') {
+    elsif ((defined $self->{multi_state} ? $self->{multi_state} : '') eq 'multipart_boundary') {
       last unless $self->_parse_multipart_boundary($boundary);
     }
 
     # Body
-    elsif (defined $self->{multi_state} && $self->{multi_state} eq 'multipart_body') {
+    elsif ((defined $self->{multi_state} ? $self->{multi_state} : '') eq 'multipart_body') {
       last unless $self->_parse_multipart_body($boundary);
     }
   }

@@ -11,10 +11,6 @@ has reactor => sub {
 };
 has timeout => 15;
 
-# "And America has so many enemies.
-#  Iran, Iraq, China, Mordor, the hoochies that laid low Tiger Woods,
-#  undesirable immigrants - by which I mean everyone that came after me,
-#  including my children..."
 sub DESTROY { shift->close }
 
 sub new { shift->SUPER::new(handle => shift, buffer => '', active => time) }
@@ -60,8 +56,6 @@ sub stop {
   $self->reactor->watch($self->{handle}, 0, $self->is_writing);
 }
 
-# "No children have ever meddled with the Republican Party and lived to tell
-#  about it."
 sub steal_handle {
   my $self = shift;
   $self->reactor->remove($self->{handle});
@@ -95,10 +89,10 @@ sub _read {
   unless (defined $read) {
 
     # Retry
-    return if grep {$_ eq $!} (EAGAIN, EINTR, EWOULDBLOCK);
+    return if grep { $_ == $! } EAGAIN, EINTR, EWOULDBLOCK;
 
     # Closed
-    return $self->close if grep {$_ eq $!} (ECONNRESET, EPIPE);
+    return $self->close if grep { $_ == $! } ECONNRESET, EPIPE;
 
     # Read error
     return $self->emit_safe(error => $!)->close;
@@ -128,8 +122,6 @@ sub _startup {
   $reactor->io($self->{handle}, sub { pop() ? $self->_write : $self->_read });
 }
 
-# "Oh, I'm in no condition to drive. Wait a minute.
-#  I don't have to listen to myself. I'm drunk."
 sub _write {
   my $self = shift;
 
@@ -142,10 +134,10 @@ sub _write {
     unless (defined $written) {
 
       # Retry
-      return if grep {$_ eq $!} (EAGAIN, EINTR, EWOULDBLOCK);
+      return if grep { $_ == $! } EAGAIN, EINTR, EWOULDBLOCK;
 
       # Closed
-      return $self->close if grep {$_ eq $!} (ECONNRESET, EPIPE);
+      return $self->close if grep { $_ == $! } ECONNRESET, EPIPE;
 
       # Write error
       return $self->emit_safe(error => $!)->close;
@@ -227,7 +219,7 @@ Emitted safely once all data has been written.
     ...
   });
 
-Emitted safely if an error happens on the stream.
+Emitted safely if an error occurs on the stream.
 
 =head2 C<read>
 

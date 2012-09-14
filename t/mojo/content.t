@@ -2,8 +2,6 @@ use Mojo::Base -strict;
 
 use Test::More tests => 25;
 
-# "No matter how good you are at something,
-#  there's always about a million people better than you."
 use Mojo::Content::MultiPart;
 use Mojo::Content::Single;
 
@@ -54,7 +52,7 @@ is $content->build_body,
 
 # Tainted environment
 $content = Mojo::Content::MultiPart->new;
-"a" =~ /(.)/;
+'a' =~ /(.)/;
 ok !$content->charset, 'no charset';
-"a" =~ /(.)/;
+'a' =~ /(.)/;
 ok !$content->boundary, 'no boundary';

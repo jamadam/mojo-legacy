@@ -2,10 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-# "Homer, we're going to ask you a few simple yes or no questions.
-#  Do you understand?
-#  Yes. *lie dectector blows up*"
-use Test::More tests => 44;
+use Test::More tests => 47;
 
 use File::Spec::Functions qw(catfile splitdir);
 use File::Temp 'tempdir';
@@ -63,6 +60,9 @@ is b('"foo 23 \"bar"')->unquote, 'foo 23 "bar', 'right unquoted result';
 # trim
 is b(' la la la ')->trim, 'la la la', 'right trimmed result';
 
+# squish
+is b("\n la\nla la \n")->squish, 'la la la', 'right squished result';
+
 # md5_bytes
 is unpack('H*', b('foo bar baz ♥')->encode->md5_bytes),
   'a740aeb6e066f158cbf19fd92e890d2d', 'right binary md5 checksum';
@@ -92,6 +92,10 @@ is b('Hi there')->hmac_sha1_sum(1234567890),
 # secure_compare
 ok b('hello')->secure_compare('hello'), 'values are equal';
 ok !b('hell')->secure_compare('hello'), 'values are not equal';
+
+# xor_encode
+is b('hello')->xor_encode('foo'), "\x0e\x0a\x03\x0a\x00", 'right result';
+is b("\x0e\x0a\x03\x0a\x00")->xor_encode('foo'), 'hello', 'right result';
 
 # Nested bytestreams
 my $stream = b(b('test'));

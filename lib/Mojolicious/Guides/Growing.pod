@@ -355,14 +355,13 @@ secure and can be changed at any time to invalidate all existing sessions.
   $self->session(user => 'sri');
   my $user = $self->session('user');
 
-By default all sessions expire after one hour, for more control you can also
-use the C<expires> session value to set the expiration date to a specific time
-in epoch seconds.
+By default all sessions expire after one hour, for more control you can use
+the C<expiration> session value to set an expiration date in seconds from now.
 
-  $self->session(expires => time + 3600);
+  $self->session(expiration => 3600);
 
-And the whole session can be deleted by setting an expiration date in the
-past.
+And the whole session can be deleted by using the C<expires> session value to
+set an absolute expiration date in the past.
 
   $self->session(expires => 1);
 
@@ -453,8 +452,8 @@ like this.
 
   @@ protected.html.ep
   % layout 'default';
-  % if (my $message = flash 'message') {
-    <b><%= $message %></b><br>
+  % if (my $msg = flash 'message') {
+    <b><%= $msg %></b><br>
   % }
   Welcome <%= session 'user' %>.<br>
   %= link_to Logout => 'logout'
@@ -645,21 +644,15 @@ Finally C<myapp.pl> can be replaced with a proper L<Mojolicious> script.
   $ touch script/myapp
   $ chmod 744 script/myapp
 
-The library detection code was specifically designed for tricky production
-environments.
+Only a few small details change.
 
   #!/usr/bin/env perl
 
   use strict;
   use warnings;
 
-  use File::Basename 'dirname';
-  use File::Spec::Functions qw(catdir splitdir);
-
-  # Source directory has precedence
-  my @base = (splitdir(dirname(__FILE__)), '..');
-  my $lib = join('/', @base, 'lib');
-  -e catdir(@base, 't') ? unshift(@INC, $lib) : push(@INC, $lib);
+  use FindBin;
+  use lib "$FindBin::Bin/../lib";
 
   # Start commands for application
   require Mojolicious::Commands;

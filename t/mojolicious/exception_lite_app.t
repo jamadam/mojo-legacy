@@ -11,9 +11,6 @@ BEGIN {
 
 use Test::More tests => 86;
 
-# "This calls for a party, baby.
-#  I'm ordering 100 kegs, 100 hookers and 100 Elvis impersonators that aren't
-#  above a little hooking should the occasion arise."
 use Mojolicious::Lite;
 use Test::Mojo;
 
@@ -28,11 +25,11 @@ app->log->on(message => sub { shift; $log .= join ':', @_ });
 
 # GET /logger
 get '/logger' => sub {
-  my $self    = shift;
-  my $level   = $self->param('level');
-  my $message = $self->param('message');
-  $self->app->log->log($level => $message);
-  $self->render(text => "$level: $message");
+  my $self  = shift;
+  my $level = $self->param('level');
+  my $msg   = $self->param('message');
+  $self->app->log->log($level => $msg);
+  $self->render(text => "$level: $msg");
 };
 
 # GET /dead_template
@@ -170,7 +167,7 @@ $t->get_ok('/dead_action.json')->status_is(500)
 
 # GET /double_dead_action_☃
 $t->get_ok('/double_dead_action_☃')->status_is(500)
-  ->content_like(qr!get &#39;/double_dead_action_☃&#39;.*lite_app\.t\:\d!s)
+  ->content_like(qr!get &#39;/double_dead_action_☃&#39;.*lite_app\.t:\d!s)
   ->content_like(qr/double dead action!/);
 
 # GET /trapped

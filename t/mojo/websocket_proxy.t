@@ -8,8 +8,6 @@ BEGIN {
 
 use Test::More tests => 12;
 
-# "I cheated the wrong way!
-#  I wrote the Lisa name and gave the Ralph answers!"
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
 use Mojo::UserAgent;
@@ -37,8 +35,8 @@ websocket '/test' => sub {
   my $self = shift;
   $self->on(
     message => sub {
-      my ($self, $message) = @_;
-      $self->send("${message}test2");
+      my ($self, $msg) = @_;
+      $self->send("${msg}test2");
     }
   );
 };
@@ -147,8 +145,8 @@ $ua->websocket(
     $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
-        my ($tx, $message) = @_;
-        $result = $message;
+        my ($tx, $msg) = @_;
+        $result = $msg;
         $tx->finish;
       }
     );
@@ -183,8 +181,8 @@ $ua->websocket(
     $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
-        my ($tx, $message) = @_;
-        $result = $message;
+        my ($tx, $msg) = @_;
+        $result = $msg;
         $tx->finish;
       }
     );
@@ -204,8 +202,8 @@ $ua->websocket(
     $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
-        my ($tx, $message) = @_;
-        $result = $message;
+        my ($tx, $msg) = @_;
+        $result = $msg;
         $tx->finish;
       }
     );

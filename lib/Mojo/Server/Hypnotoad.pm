@@ -1,6 +1,8 @@
 package Mojo::Server::Hypnotoad;
 use Mojo::Base -base;
 
+# "Bender: I was God once.
+#  God: Yes, I saw. You were doing well, until everyone died."
 use Cwd 'abs_path';
 use Fcntl ':flock';
 use File::Basename 'dirname';
@@ -23,20 +25,6 @@ sub DESTROY {
   if (my $file = $self->{config}{lock_file}) { unlink $file if -w $file }
 }
 
-# "Marge? Since I'm not talking to Lisa,
-#  would you please ask her to pass me the syrup?
-#  Dear, please pass your father the syrup, Lisa.
-#  Bart, tell Dad I will only pass the syrup if it won't be used on any meat
-#  product.
-#  You dunkin' your sausages in that syrup homeboy?
-#  Marge, tell Bart I just want to drink a nice glass of syrup like I do
-#  every morning.
-#  Tell him yourself, you're ignoring Lisa, not Bart.
-#  Bart, thank your mother for pointing that out.
-#  Homer, you're not not-talking to me and secondly I heard what you said.
-#  Lisa, tell your mother to get off my case.
-#  Uhhh, dad, Lisa's the one you're not talking to.
-#  Bart, go to your room."
 sub run {
   my ($self, $path) = @_;
 
@@ -261,9 +249,6 @@ sub _pid_file {
   print $pid $$;
 }
 
-# "Dear Mr. President, there are too many states nowadays.
-#  Please eliminate three.
-#  P.S. I am not a crackpot."
 sub _reap {
   my ($self, $pid) = @_;
 
@@ -280,7 +265,6 @@ sub _reap {
   }
 }
 
-# "I hope this has taught you kids a lesson: kids never learn."
 sub _spawn {
   my $self = shift;
 
@@ -358,14 +342,16 @@ Mojo::Server::Hypnotoad - ALL GLORY TO THE HYPNOTOAD!
   use Mojo::Server::Hypnotoad;
 
   my $toad = Mojo::Server::Hypnotoad->new;
-  $toad->run('./myapp.pl');
+  $toad->run('/home/sri/myapp.pl');
 
 =head1 DESCRIPTION
 
 L<Mojo::Server::Hypnotoad> is a full featured, UNIX optimized, preforking
 non-blocking I/O HTTP and WebSocket server, built around the very well tested
 and reliable L<Mojo::Server::Daemon>, with C<IPv6>, C<TLS>, C<libev> and hot
-deployment support that just works.
+deployment support that just works. Note that the server uses signals for
+process management, so you should avoid modifying signal handlers in your
+applications.
 
 To start applications with it you can use the L<hypnotoad> script.
 
@@ -550,8 +536,9 @@ the server has been stopped.
 
   proxy => 1
 
-Activate reverse proxy support, defaults to the value of the
-C<MOJO_REVERSE_PROXY> environment variable.
+Activate reverse proxy support, which allows for the C<X-Forwarded-For> and
+C<X-Forwarded-HTTPS> headers to be picked up automatically, defaults to the
+value of the C<MOJO_REVERSE_PROXY> environment variable.
 
 =head2 C<upgrade_timeout>
 

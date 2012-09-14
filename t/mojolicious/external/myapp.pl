@@ -2,7 +2,6 @@
 
 use utf8;
 
-# "Boy, who knew a cooler could also make a handy wang coffin?"
 use Mojolicious::Lite;
 
 # Default for config file tests
@@ -14,8 +13,8 @@ plugin 'Config';
 # Message condition
 app->routes->add_condition(
   message => sub {
-    my ($r, $c, $captures, $message) = @_;
-    $c->res->headers->header('X-Message' => $message);
+    my ($route, $c, $captures, $msg) = @_;
+    $c->res->headers->header('X-Message' => $msg);
     return 1;
   }
 );

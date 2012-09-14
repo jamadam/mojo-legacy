@@ -12,7 +12,6 @@ sub detect {
 
 sub io { croak 'Method "io" not implemented by subclass' }
 
-# "This was such a pleasant St. Patrick's Day until Irish people showed up."
 sub is_readable {
   my ($self, $handle) = @_;
 

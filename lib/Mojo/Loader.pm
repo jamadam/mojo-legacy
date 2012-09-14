@@ -9,14 +9,11 @@ use Mojo::Util qw(b64_decode class_to_path);
 # Cache
 my %CACHE;
 
-# "Homer no function beer well without."
 sub data {
   my ($self, $class, $data) = @_;
   return $class ? $data ? _all($class)->{$data} : _all($class) : undef;
 }
 
-# "Olive oil? Asparagus? If your mother wasn't so fancy,
-#  we could just shop at the gas station like normal people."
 sub load {
   my ($self, $module) = @_;
 
@@ -34,15 +31,13 @@ sub load {
   return Mojo::Exception->new($@);
 }
 
-# "This is the worst thing you've ever done.
-#  You say that so often that it lost its meaning."
 sub search {
   my ($self, $namespace) = @_;
 
   # Check all directories
   my (@modules, %found);
   for my $directory (@INC) {
-    next unless -d (my $path = catdir $directory, split(/::/, $namespace));
+    next unless -d (my $path = catdir $directory, split(/::|'/, $namespace));
 
     # List "*.pm" files in directory
     opendir(my $dir, $path);
@@ -50,7 +45,7 @@ sub search {
       next if -d catfile splitdir($path), $file;
 
       # Module found
-      my $class = "$namespace\::" . fileparse $file, qr/\.pm/;
+      my $class = "${namespace}::" . fileparse $file, qr/\.pm/;
       push @modules, $class unless $found{$class}++;
     }
   }
@@ -62,7 +57,7 @@ sub _all {
   my $class = shift;
 
   # Refresh or use cached data
-  my $handle = do { no strict 'refs'; \*{"$class\::DATA"} };
+  my $handle = do { no strict 'refs'; \*{"${class}::DATA"} };
   return $CACHE{$class} || {} unless fileno $handle;
   seek $handle, 0, 0;
   my $content = join '', <$handle>;

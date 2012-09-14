@@ -12,8 +12,6 @@ use Mojo::Util qw(punycode_decode punycode_encode url_escape url_unescape);
 has [qw(fragment host port scheme userinfo)];
 has base => sub { Mojo::URL->new };
 
-# "Homer, it's easy to criticize.
-#  Fun, too."
 sub new { shift->SUPER::new->parse(@_) }
 
 sub authority {
@@ -26,7 +24,7 @@ sub authority {
     if ($authority =~ s/^([^\@]+)\@//) { $self->userinfo(url_unescape $1) }
 
     # Port
-    if ($authority =~ s/\:(\d+)$//) { $self->port($1) }
+    if ($authority =~ s/:(\d+)$//) { $self->port($1) }
 
     # Host
     my $host = url_unescape $authority;
@@ -35,7 +33,7 @@ sub authority {
 
   # Format
   my $userinfo = $self->userinfo;
-  $authority .= url_escape($userinfo, '^A-Za-z0-9\-._~!$&\'()*+,;=\:') . '@'
+  $authority .= url_escape($userinfo, '^A-Za-z0-9\-._~!$&\'()*+,;=:') . '@'
     if $userinfo;
   $authority .= lc($self->ihost || '');
   if (my $port = $self->port) { $authority .= ":$port" }
@@ -109,14 +107,14 @@ sub query {
   my $self = shift;
 
   # Old parameters
-  return $self->{query} ||= Mojo::Parameters->new unless @_;
+  my $q = $self->{query} ||= Mojo::Parameters->new;
+  return $q unless @_;
 
   # Replace with list
   if (@_ > 1) { $self->{query} = Mojo::Parameters->new(@_) }
 
   # Merge with array
   elsif (ref $_[0] eq 'ARRAY') {
-    my $q = $self->{query} ||= Mojo::Parameters->new;
     while (my $name = shift @{$_[0]}) {
       my $value = shift @{$_[0]};
       defined $value ? $q->param($name => $value) : $q->remove($name);
@@ -124,12 +122,10 @@ sub query {
   }
 
   # Append hash
-  elsif (ref $_[0] eq 'HASH') {
-    ($self->{query} ||= Mojo::Parameters->new)->append(%{$_[0]});
-  }
+  elsif (ref $_[0] eq 'HASH') { $q->append(%{$_[0]}) }
 
   # Replace with string
-  else { $self->{query} = Mojo::Parameters->new($_[0]) }
+  else { $q->parse($_[0]) }
 
   return $self;
 }
@@ -193,9 +189,6 @@ sub to_rel {
   return $rel;
 }
 
-# "Dad, what's a Muppet?
-#  Well, it's not quite a mop, not quite a puppet, but man... *laughs*
-#  So, to answer you question, I don't know."
 sub to_string {
   my $self = shift;
 

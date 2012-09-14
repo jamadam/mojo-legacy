@@ -12,10 +12,6 @@ These options are available:
   -v, --verbose   Print return value to STDOUT.
 EOF
 
-# "It worked!
-#  Gravity normal.
-#  Air pressure returning.
-#  Terror replaced by cautious optimism."
 sub run {
   my ($self, @args) = @_;
 
@@ -28,7 +24,7 @@ sub run {
   no warnings;
   my $result = eval "package main; sub app { \$app }; $code";
   say $result if $verbose && defined $result;
-  return $@ ? die($@) : $result;
+  return $@ ? die $@ : $result;
 }
 
 1;

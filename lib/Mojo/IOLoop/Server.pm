@@ -31,19 +31,14 @@ has reactor => sub {
   Mojo::IOLoop->singleton->reactor;
 };
 
-# "Your guilty consciences may make you vote Democratic, but secretly you all
-#  yearn for a Republican president to lower taxes, brutalize criminals, and
-#  rule you like a king!"
 sub DESTROY {
   my $self = shift;
-  if (my $port = $self->{port}) { $ENV{MOJO_REUSE} =~ s/(?:^|\,)$port\:\d+// }
+  if (my $port = $self->{port}) { $ENV{MOJO_REUSE} =~ s/(?:^|\,)${port}:\d+// }
   return unless my $reactor = $self->{reactor};
   $self->stop if $self->{handle};
   $reactor->remove($_) for values %{$self->{handles}};
 }
 
-# "And I gave that man directions, even though I didn't know the way,
-#  because that's the kind of guy I am this week."
 sub listen {
   my $self = shift;
   my $args = ref $_[0] ? $_[0] : {@_};
@@ -52,7 +47,7 @@ sub listen {
   my $reuse = my $port = $self->{port} = $args->{port} || 3000;
   $ENV{MOJO_REUSE} ||= '';
   my $fd;
-  if ($ENV{MOJO_REUSE} =~ /(?:^|\,)$reuse\:(\d+)/) { $fd = $1 }
+  if ($ENV{MOJO_REUSE} =~ /(?:^|\,)${reuse}:(\d+)/) { $fd = $1 }
 
   # Allow file descriptor inheritance
   local $^F = 1000;
@@ -143,8 +138,6 @@ sub _accept {
   $self->{handles}{$handle} = $handle;
 }
 
-# "Where on my badge does it say anything about protecting people?
-#  Uh, second word, chief."
 sub _tls {
   my ($self, $handle) = @_;
 

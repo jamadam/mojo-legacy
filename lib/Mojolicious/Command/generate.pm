@@ -1,7 +1,6 @@
 package Mojolicious::Command::generate;
 use Mojo::Base 'Mojolicious::Commands';
 
-# "Ah, nothing like a warm fire and a SuperSoaker of fine cognac."
 has description => "Generate files and directories from templates.\n";
 has hint        => <<"EOF";
 
@@ -62,8 +61,8 @@ Usage information for this command, used for the help screen.
 
 =head2 C<message>
 
-  my $message = $generator->message;
-  $generator  = $generator->message('Bar!');
+  my $msg    = $generator->message;
+  $generator = $generator->message('Bar!');
 
 Short usage message shown before listing available generator commands.
 

@@ -5,7 +5,6 @@ use File::Basename 'basename';
 use File::Spec::Functions 'file_name_is_absolute';
 use Mojo::Util 'decamelize';
 
-# "Who are you, my warranty?!"
 sub load {
   my ($self, $file, $conf, $app) = @_;
   $app->log->debug(qq{Reading config file "$file".});
@@ -32,7 +31,6 @@ sub parse {
   return $config;
 }
 
-# "Planet Express - Our crew is replaceable, your package isn't."
 sub register {
   my ($self, $app, $conf) = @_;
 
@@ -56,20 +54,19 @@ sub register {
   my $home = $app->home;
   $file = $home->rel_file($file) unless file_name_is_absolute $file;
   $mode = $home->rel_file($mode) if $mode && !file_name_is_absolute $mode;
+  $mode = undef unless $mode && -e $mode;
 
   # Read config file
   my $config = {};
   if (-e $file) { $config = $self->load($file, $conf, $app) }
 
-  # Check for default
-  elsif ($conf->{default}) {
-    $app->log->debug(qq{Config file "$file" not found, using default config.});
+  # Check for default and mode specific config file
+  elsif (!$conf->{default} && !$mode) {
+    die qq{Config file "$file" missing, maybe you need to create it?\n};
   }
-  else { die qq{Config file "$file" missing, maybe you need to create it?\n} }
 
   # Merge everything
-  $config = {%$config, %{$self->load($mode, $conf, $app)}}
-    if $mode && -e $mode;
+  $config = {%$config, %{$self->load($mode, $conf, $app)}} if $mode;
   $config = {%{$conf->{default}}, %$config} if $conf->{default};
   my $current = $app->defaults(config => $app->config)->config;
   %$current = (%$current, %$config);

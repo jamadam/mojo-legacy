@@ -6,9 +6,8 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 109;
+use Test::More tests => 122;
 
-# "The strong must protect the sweet."
 use Mojo::IOLoop;
 use Mojo::UserAgent;
 use Mojolicious::Lite;
@@ -156,17 +155,13 @@ is $code,    200, 'right status';
 is $body,    'works!', 'right content';
 
 # Error in callback is logged
-my $message = app->log->subscribers('message')->[0];
-app->log->unsubscribe(message => $message);
-app->log->level('error');
 app->ua->once(error => sub { Mojo::IOLoop->stop });
 ok app->ua->has_subscribers('error'), 'has subscribers';
 my $err;
-app->log->once(message => sub { $err .= pop });
+my $msg = app->log->on(message => sub { $err .= pop });
 app->ua->get('/' => sub { die 'error event works' });
 Mojo::IOLoop->start;
-app->log->level('fatal');
-app->log->on(message => $message);
+app->log->unsubscribe(message => $msg);
 like $err, qr/error event works/, 'right error';
 
 # GET / (HTTPS request without TLS support)
@@ -193,24 +188,49 @@ ok $tx->success, 'successful';
 is $tx->res->code, 200,      'right status';
 is $tx->res->body, 'works!', 'right content';
 
-# GET / (callbacks)
-my $finished;
+# GET / (events)
+my ($finished_req, $finished_tx, $finished_res);
 $tx = $ua->build_tx(GET => '/');
+ok !$tx->is_finished, 'transaction is not finished';
 $ua->once(
   start => sub {
     my ($self, $tx) = @_;
-    $tx->on(finish => sub { $finished++ });
+    $tx->req->on(finish => sub { $finished_req++ });
+    $tx->on(finish => sub { $finished_tx++ });
+    $tx->res->on(finish => sub { $finished_res++ });
   }
 );
 $tx = $ua->start($tx);
 ok $tx->success, 'successful';
-is $finished, 1, 'finish event has been emitted';
-is $tx->res->code, 200,      'right status';
-is $tx->res->body, 'works!', 'right content';
+is $finished_req, 1, 'finish event has been emitted once';
+is $finished_tx,  1, 'finish event has been emitted once';
+is $finished_res, 1, 'finish event has been emitted once';
+ok $tx->req->is_finished, 'request is finished';
+ok $tx->is_finished, 'transaction is finished';
+ok $tx->res->is_finished, 'response is finished';
+is $tx->res->code,        200, 'right status';
+is $tx->res->body,        'works!', 'right content';
 
 # GET /no_length (missing Content-Length header)
-$tx = $ua->get('/no_length');
+($finished_req, $finished_tx, $finished_res) = undef;
+$tx = $ua->build_tx(GET => '/no_length');
+ok !$tx->is_finished, 'transaction is not finished';
+$ua->once(
+  start => sub {
+    my ($self, $tx) = @_;
+    $tx->req->on(finish => sub { $finished_req++ });
+    $tx->on(finish => sub { $finished_tx++ });
+    $tx->res->on(finish => sub { $finished_res++ });
+  }
+);
+$tx = $ua->start($tx);
 ok $tx->success, 'successful';
+is $finished_req, 1, 'finish event has been emitted once';
+is $finished_tx,  1, 'finish event has been emitted once';
+is $finished_res, 1, 'finish event has been emitted once';
+ok $tx->req->is_finished, 'request is finished';
+ok $tx->is_finished, 'transaction is finished';
+ok $tx->res->is_finished, 'response is finished';
 ok !$tx->error, 'no error';
 ok $tx->kept_alive, 'kept connection alive';
 ok !$tx->keep_alive, 'keep connection not alive';
@@ -266,13 +286,9 @@ is $body,    '{"hello":"world"}', 'right content';
 
 # GET /timeout (built-in web server times out)
 my $log = '';
-$message = app->log->subscribers('message')->[0];
-app->log->unsubscribe(message => $message);
-app->log->level('debug');
-app->log->on(message => sub { $log .= pop });
+$msg = app->log->on(message => sub { $log .= pop });
 $tx = $ua->get('/timeout?timeout=0.25');
-app->log->level('fatal');
-app->log->on(message => $message);
+app->log->unsubscribe(message => $msg);
 ok !$tx->success, 'not successful';
 is $tx->error, 'Premature connection close', 'right error';
 is $timeout, 1, 'finish event has been emitted';

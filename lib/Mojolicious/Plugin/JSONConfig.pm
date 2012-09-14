@@ -5,8 +5,6 @@ use Mojo::JSON;
 use Mojo::Template;
 use Mojo::Util 'encode';
 
-# "And so we say goodbye to our beloved pet, Nibbler, who's gone to a place
-#  where I, too, hope one day to go. The toilet."
 sub parse {
   my ($self, $content, $file, $conf, $app) = @_;
 
@@ -35,7 +33,7 @@ sub render {
   # Render
   my $mt = Mojo::Template->new($conf->{template} || {})->name($file);
   my $json = $mt->prepend($prepend . $mt->prepend)->render($content, $app);
-  return ref $json ? die($json) : encode('UTF-8', $json);
+  return ref $json ? die $json : encode 'UTF-8', $json;
 }
 
 1;

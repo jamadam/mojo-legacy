@@ -3,9 +3,6 @@ use Mojo::Base 'Mojo::Server';
 
 has 'nph';
 
-# "Lisa, you're a Buddhist, so you believe in reincarnation.
-#  Eventually, Snowball will be reborn as a higher lifeform...
-#  like a snowman."
 sub run {
   my $self = shift;
 
@@ -34,9 +31,9 @@ sub run {
 
   # Response headers
   $res->fix_headers;
-  my $code    = $res->code    || 404;
-  my $message = $res->message || $res->default_message;
-  $res->headers->status("$code $message") unless $self->nph;
+  my $code = $res->code    || 404;
+  my $msg  = $res->message || $res->default_message;
+  $res->headers->status("$code $msg") unless $self->nph;
   return unless _write($res, 'get_header_chunk');
 
   # Response body

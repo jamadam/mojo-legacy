@@ -11,8 +11,6 @@ has [qw(frames line lines_before lines_after)] => sub { [] };
 has [qw(message raw_message)] => 'Exception!';
 has verbose => sub { $ENV{MOJO_EXCEPTION_VERBOSE} || 0 };
 
-# "Attempted murder? Now honestly, what is that?
-#  Do they give a Nobel Prize for attempted chemistry?"
 sub new {
   my $self = shift->SUPER::new;
   return @_ ? $self->_detect(@_) : $self;
@@ -48,8 +46,6 @@ sub trace {
   return $self->frames(\@frames);
 }
 
-# "You killed zombie Flanders!
-#  He was a zombie?"
 sub _context {
   my ($self, $line, $lines) = @_;
 
@@ -66,7 +62,7 @@ sub _context {
   # Before
   for my $i (2 .. 6) {
     last if ((my $previous = $line - $i) < 0);
-    if (defined($lines->[0][$previous])) {
+    if (defined $lines->[0][$previous]) {
       unshift @{$self->lines_before}, [$previous + 1];
       for my $l (@$lines) {
         chomp(my $code = $l->[$previous]);
@@ -78,7 +74,7 @@ sub _context {
   # After
   for my $i (0 .. 4) {
     next if ((my $next = $line + $i) < 0);
-    if (defined($lines->[0][$next])) {
+    if (defined $lines->[0][$next]) {
       push @{$self->lines_after}, [$next + 1];
       for my $l (@$lines) {
         next unless defined(my $code = $l->[$next]);
@@ -93,13 +89,13 @@ sub _detect {
   my $self = shift;
 
   # Message
-  my $message = shift;
-  return $message if blessed $message && $message->isa('Mojo::Exception');
-  $self->message($message)->raw_message($message);
+  my $msg = shift;
+  return $msg if blessed $msg && $msg->isa('Mojo::Exception');
+  $self->message($msg)->raw_message($msg);
 
   # Extract file and line from message
   my @trace;
-  while ($message =~ /at\s+(.+?)\s+line\s+(\d+)/g) { push @trace, [$1, $2] }
+  while ($msg =~ /at\s+(.+?)\s+line\s+(\d+)/g) { push @trace, [$1, $2] }
 
   # Extract file and line from stacktrace
   my $first = $self->frames->[0];
@@ -119,15 +115,15 @@ sub _detect {
 
   # Fix file in message
   return $self unless my $name = shift;
-  unless (ref $message) {
+  unless (ref $msg) {
     my $filter = sub {
       my $num  = shift;
       my $new  = "$name line $num";
       my $line = $lines[0][$num];
       return defined $line ? qq{$new, near "$line".} : "$new.";
     };
-    $message =~ s/\(eval\s+\d+\) line (\d+).*/$filter->($1)/ge;
-    $self->message($message);
+    $msg =~ s/\(eval\s+\d+\) line (\d+).*/$filter->($1)/ge;
+    $self->message($msg);
   }
 
   # Search for better context
@@ -135,7 +131,7 @@ sub _detect {
   if ($self->message =~ /at\s+\Q$name\E\s+line\s+(\d+)/) { $line = $1 }
   else {
     for my $frame (@{$self->frames}) {
-      $line = $frame->[1] =~ /^\(eval\ \d+\)$/ ? $frame->[2] : next;
+      $line = $frame->[1] =~ /^\(eval \d+\)$/ ? $frame->[2] : next;
       last;
     }
   }
@@ -195,15 +191,15 @@ Lines before the line where the exception occured.
 
 =head2 C<message>
 
-  my $message = $e->message;
-  $e          = $e->message('Oops!');
+  my $msg = $e->message;
+  $e      = $e->message('Oops!');
 
 Exception message.
 
 =head2 C<raw_message>
 
-  my $message = $e->raw_message;
-  $e          = $e->raw_message('Oops!');
+  my $msg = $e->raw_message;
+  $e      = $e->raw_message('Oops!');
 
 Raw unprocessed exception message.
 

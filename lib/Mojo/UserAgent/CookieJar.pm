@@ -5,12 +5,6 @@ use Mojo::Cookie::Request;
 
 has max_cookie_size => 4096;
 
-# "I can't help but feel this is all my fault.
-#  It was those North Korean fortune cookies - they were so insulting.
-#  'You are a coward'
-#  Nobody wants to hear that after a nice meal.
-#  Marge, you can't keep blaming yourself.
-#  Just blame yourself once, then move on."
 sub add {
   my ($self, @cookies) = @_;
 
@@ -48,10 +42,6 @@ sub extract {
   }
 }
 
-# "Dear Homer, IOU one emergency donut.
-#  Signed Homer.
-#  Bastard!
-#  He's always one step ahead."
 sub find {
   my ($self, $url) = @_;
 
@@ -122,8 +112,8 @@ Mojo::UserAgent::CookieJar - Cookie jar for HTTP user agents
 
 =head1 DESCRIPTION
 
-L<Mojo::UserAgent::CookieJar> is a minimalistic and relaxed cookie jar for
-HTTP user agents.
+L<Mojo::UserAgent::CookieJar> is a minimalistic and relaxed cookie jar used by
+L<Mojo::UserAgent>.
 
 =head1 ATTRIBUTES
 
@@ -131,8 +121,8 @@ L<Mojo::UserAgent::CookieJar> implements the following attributes.
 
 =head2 C<max_cookie_size>
 
-  my $max_cookie_size = $jar->max_cookie_size;
-  $jar                = $jar->max_cookie_size(4096);
+  my $size = $jar->max_cookie_size;
+  $jar     = $jar->max_cookie_size(4096);
 
 Maximum cookie size in bytes, defaults to C<4096>.
 
@@ -155,7 +145,7 @@ Empty the jar.
 
 =head2 C<extract>
 
-  $jar = $jar->extract($tx);
+  $jar->extract($tx);
 
 Extract response cookies from transaction.
 
@@ -167,7 +157,7 @@ Find L<Mojo::Cookie::Request> objects in the jar for L<Mojo::URL> object.
 
 =head2 C<inject>
 
-  $jar = $jar->inject($tx);
+  $jar->inject($tx);
 
 Inject request cookies into transaction.
 

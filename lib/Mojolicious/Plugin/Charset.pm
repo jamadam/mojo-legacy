@@ -1,9 +1,6 @@
 package Mojolicious::Plugin::Charset;
 use Mojo::Base 'Mojolicious::Plugin';
 
-# "Shut up friends. My internet browser heard us saying the word Fry and it
-#  found a movie about Philip J. Fry for us.
-#  It also opened my calendar to Friday and ordered me some french fries."
 sub register {
   my ($self, $app, $conf) = @_;
 
@@ -11,7 +8,8 @@ sub register {
   return unless my $c = $conf->{charset};
   $app->types->type(html => "text/html;charset=$c");
   $app->renderer->encoding($c);
-  $app->hook(before_dispatch => sub { shift->req->default_charset($c) });
+  $app->hook(before_dispatch =>
+      sub { shift->req->default_charset($c)->url->query->charset($c) });
 }
 
 1;

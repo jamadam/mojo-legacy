@@ -18,7 +18,6 @@ my $MTIME = time;
 my $HOME   = Mojo::Home->new;
 my $PUBLIC = $HOME->parse($HOME->mojo_lib_dir)->rel_dir('Mojolicious/public');
 
-# "Valentine's Day's coming? Aw crap! I forgot to get a girlfriend again!"
 sub dispatch {
   my ($self, $c) = @_;
 
@@ -97,8 +96,6 @@ sub serve_asset {
   return $res->content->asset($asset->start_range($start)->end_range($end));
 }
 
-# "I like being a women.
-#  Now when I say something stupid, everyone laughs and buys me things."
 sub _get_data_file {
   my ($self, $rel) = @_;
 

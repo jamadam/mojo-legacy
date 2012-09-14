@@ -9,13 +9,11 @@ has [qw(inline parent partial)];
 has 'children' => sub { [] };
 has pattern    => sub { Mojolicious::Routes::Pattern->new };
 
-# "Yet thanks to my trusty safety sphere,
-#  I sublibed with only tribial brain dablage."
 sub AUTOLOAD {
   my $self = shift;
 
   # Method
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)\:\:(\w+)$/;
+  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
@@ -90,12 +88,9 @@ sub is_websocket { !!shift->{websocket} }
 
 sub name {
   my $self = shift;
-
-  # Custom names have precedence
   return $self->{name} unless @_;
   $self->{name}   = shift;
   $self->{custom} = 1;
-
   return $self;
 }
 
@@ -110,7 +105,6 @@ sub over {
   return $self unless @$conditions;
   $self->{over} = $conditions;
   $self->root->cache(0);
-
   return $self;
 }
 
@@ -230,8 +224,7 @@ sub via {
 }
 
 sub websocket {
-  my $self  = shift;
-  my $route = $self->get(@_);
+  my $route = shift->get(@_);
   $route->{websocket} = 1;
   return $route;
 }

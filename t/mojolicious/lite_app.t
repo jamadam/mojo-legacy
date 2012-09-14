@@ -11,11 +11,6 @@ BEGIN {
 
 use Test::More tests => 704;
 
-# "Wait you're the only friend I have...
-#  You really want a robot for a friend?
-#  Yeah ever since I was six.
-#  Well, ok but I don't want people thinking we're robosexuals,
-#  so if anyone asks you're my debugger."
 use Mojo::ByteStream 'b';
 use Mojo::Cookie::Response;
 use Mojo::Date;
@@ -27,7 +22,7 @@ use Test::Mojo;
 
 # Missing plugin
 eval { plugin 'does_not_exist' };
-is $@, "Plugin \"does_not_exist\" missing, maybe you need to install it?\n",
+is $@, qq{Plugin "does_not_exist" missing, maybe you need to install it?\n},
   'right error';
 
 # Default
@@ -478,7 +473,7 @@ get '/captures/:foo/:bar' => sub {
 # Default condition
 app->routes->add_condition(
   default => sub {
-    my ($r, $c, $captures, $num) = @_;
+    my ($route, $c, $captures, $num) = @_;
     $captures->{test} = $captures->{text} . "$num works!";
     return 1 if $c->stash->{default} == $num;
     return;
@@ -496,7 +491,7 @@ get '/default/:text' => (default => 23) => sub {
 # Redirect condition
 app->routes->add_condition(
   redirect => sub {
-    my ($r, $c, $captures, $active) = @_;
+    my ($route, $c, $captures, $active) = @_;
     return 1 unless $active;
     $c->redirect_to('index') and return
       unless $c->req->headers->header('X-Condition-Test');
@@ -816,7 +811,7 @@ $t->get_ok(
   $t->ua->app_url->userinfo('sri:foo')->path('/stream')->query(foo => 'bar'))
   ->status_is(200)->header_is(Server => 'Mojolicious (Perl)')
   ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
-  ->content_like(qr!^foobarsri\:foohttp://localhost\:\d+/stream$!);
+  ->content_like(qr!^foobarsri:foohttp://localhost:\d+/stream$!);
 
 # GET /maybe/ajax (not ajax)
 $t->get_ok('/maybe/ajax')->status_is(200)
@@ -864,27 +859,26 @@ $t->get_ok('/.html')->status_is(200)
 
 # GET /0 ("X-Forwarded-For")
 $t->get_ok('/0' => {'X-Forwarded-For' => '192.0.2.2, 192.0.2.1'})
-  ->status_is(200)->content_like(qr!^http\://localhost\:\d+/0-!)
+  ->status_is(200)->content_like(qr!^http://localhost:\d+/0-!)
   ->content_like(qr/-0$/)->content_unlike(qr!-192\.0\.2\.1-0$!);
 
 # GET /0 ("X-Forwarded-HTTPS")
 $t->get_ok('/0' => {'X-Forwarded-HTTPS' => 1})->status_is(200)
-  ->content_like(qr!^http\://localhost\:\d+/0-!)->content_like(qr/-0$/)
+  ->content_like(qr!^http://localhost:\d+/0-!)->content_like(qr/-0$/)
   ->content_unlike(qr!-192\.0\.2\.1-0$!);
 
 # GET /0 (reverse proxy with "X-Forwarded-For")
 {
   local $ENV{MOJO_REVERSE_PROXY} = 1;
   $t->get_ok('/0' => {'X-Forwarded-For' => '192.0.2.2, 192.0.2.1'})
-    ->status_is(200)
-    ->content_like(qr!http\://localhost\:\d+/0-192\.0\.2\.1-0$!);
+    ->status_is(200)->content_like(qr!http://localhost:\d+/0-192\.0\.2\.1-0$!);
 }
 
 # GET /0 (reverse proxy with "X-Forwarded-HTTPS")
 {
   local $ENV{MOJO_REVERSE_PROXY} = 1;
   $t->get_ok('/0' => {'X-Forwarded-HTTPS' => 1})->status_is(200)
-    ->content_like(qr!^https\://localhost\:\d+/0-!)->content_like(qr/-0$/)
+    ->content_like(qr!^https://localhost:\d+/0-!)->content_like(qr/-0$/)
     ->content_unlike(qr!-192\.0\.2\.1-0$!);
 }
 
@@ -1327,7 +1321,7 @@ EOF
 
 # GET /url_with/foo
 $t->get_ok('/url_with/foo?foo=bar')->status_is(200)
-  ->content_like(qr!http\://localhost\:\d+/url_with/bar\?foo\=bar!);
+  ->content_like(qr!http://localhost:\d+/url_with/bar\?foo\=bar!);
 
 # GET /dynamic/inline
 $t->get_ok('/dynamic/inline')->status_is(200)
@@ -1393,7 +1387,7 @@ Just works!\
 
 @@ layouts/layout.html.epl
 % my $self = shift;
-<%= $self->title %><%= $self->render_content %> with layout
+<%= $self->title %><%= $self->content %> with layout
 
 @@ autostash.html.ep
 % $self->layout('layout');

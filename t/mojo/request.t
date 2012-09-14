@@ -2,11 +2,8 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 847;
+use Test::More tests => 858;
 
-# "When will I learn?
-#  The answer to life's problems aren't at the bottom of a bottle,
-#  they're on TV!"
 use File::Spec::Functions 'catfile';
 use File::Temp 'tempdir';
 use Mojo::Content::Single;
@@ -16,9 +13,12 @@ use Mojo::Message::Request;
 
 # Parse HTTP 1.1 message with huge "Cookie" header exceeding all limits
 my $req = Mojo::Message::Request->new;
+my $finished;
+$req->on(finish => sub { $finished = shift->is_finished });
 $req->parse("GET / HTTP/1.1\x0d\x0a");
 $req->parse('Cookie: ' . ('a=b; ' x (1024 * 1024)) . "\x0d\x0a");
 $req->parse("Content-Length: 0\x0d\x0a\x0d\x0a");
+ok $finished, 'finish event has been emitted';
 ok $req->is_finished, 'request is finished';
 is $req->error,       'Maximum message size exceeded', 'right error';
 is $req->method,      'GET', 'right method';
@@ -446,8 +446,8 @@ is $req->headers->content_type,   'text/plain', 'right "Content-Type" value';
 is $req->headers->content_length, 27,           'right "Content-Length" value';
 
 # Parse full HTTP 1.0 request with zero chunk
-$req = Mojo::Message::Request->new;
-my $finished;
+$req      = Mojo::Message::Request->new;
+$finished = undef;
 $req->on(finish => sub { $finished = shift->is_finished });
 $req->parse('GET /foo/bar/baz.html?fo');
 $req->parse("o=13#23 HTTP/1.0\x0d\x0aContent");
@@ -556,9 +556,9 @@ is $req->headers->content_type, 'x-application-urlencoded',
 ok !$req->content->asset->is_file, 'stored in memory';
 is $req->content->asset->size, 26, 'right size';
 is $req->content->asset->slurp, 'foo=bar& tset=23+;&foo=bar', 'right content';
-is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
 is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
+is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
 is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
 
 # Parse HTTP 1.1 "x-application-urlencoded" (too big for memory)
@@ -577,9 +577,9 @@ is $req->headers->content_type, 'x-application-urlencoded',
 ok $req->content->asset->is_file, 'stored in file';
 is $req->content->asset->size, 26, 'right size';
 is $req->content->asset->slurp, 'foo=bar& tset=23+;&foo=bar', 'right content';
-is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
 is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
+is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
 is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
 
 # Parse HTTP 1.1 "application/x-www-form-urlencoded"
@@ -596,9 +596,9 @@ is $req->headers->content_type, 'application/x-www-form-urlencoded',
   'right "Content-Type" value';
 is $req->content->asset->size, 26, 'right size';
 is $req->content->asset->slurp, 'foo=bar&+tset=23+;&foo=bar', 'right content';
-is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
 is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
+is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
 is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
 is_deeply [$req->param('foo')], [qw(bar bar 13)], 'right values';
 is $req->param(' tset'), '23 ', 'right value';
@@ -709,7 +709,7 @@ $req = Mojo::Message::Request->new;
 is $req->content->progress, 0, 'right progress';
 $req->parse("GET /foo/bar/baz.html?foo13#23 HTTP/1.1\x0d\x0a");
 is $req->content->progress, 0, 'right progress';
-$req->parse("Content-Length: 418\x0d\x0a");
+$req->parse("Content-Length: 416\x0d\x0a");
 $req->parse('Content-Type: multipart/form-data; bo');
 is $req->content->progress, 0, 'right progress';
 $req->parse("undary=----------0xKhTmLbOuNdArY\x0d\x0a\x0d\x0a");
@@ -721,7 +721,7 @@ $req->parse("\x0d\x0ahallo welt test123\n");
 $req->parse("\x0d\x0a------------0xKhTmLbOuNdArY\x0d\x0a");
 $req->parse("Content-Disposition: form-data; name=\"text2\"\x0d\x0a");
 $req->parse("\x0d\x0a\x0d\x0a------------0xKhTmLbOuNdArY\x0d\x0a");
-$req->parse('Content-Disposition: form-data; name="upload"; file');
+$req->parse('Content-Disposition: form-data;name="upload";file');
 $req->parse("name=\"hello.pl\"\x0d\x0a");
 $req->parse("Content-Type: application/octet-stream\x0d\x0a\x0d\x0a");
 $req->parse("#!/usr/bin/perl\n\n");
@@ -729,7 +729,7 @@ $req->parse("use strict;\n");
 $req->parse("use warnings;\n\n");
 $req->parse("print \"Hello World :)\\n\"\n");
 $req->parse("\x0d\x0a------------0xKhTmLbOuNdArY--");
-is $req->content->progress, 418, 'right progress';
+is $req->content->progress, 416, 'right progress';
 ok $req->is_finished,  'request is finished';
 ok $req->is_multipart, 'multipart content';
 is $req->method,       'GET', 'right method';
@@ -739,7 +739,7 @@ is $req->query_params, 'foo13', 'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
-is $req->headers->content_length, 418, 'right "Content-Type" value';
+is $req->headers->content_length, 416, 'right "Content-Length" value';
 isa_ok $req->content->parts->[0], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[1], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[2], 'Mojo::Content::Single', 'right part';
@@ -801,7 +801,7 @@ is $req->query_params, 'foo13', 'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
-is $req->headers->content_length, 418, 'right "Content-Type" value';
+is $req->headers->content_length, 418, 'right "Content-Length" value';
 isa_ok $req->content->parts->[0], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[1], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[2], 'Mojo::Content::Single', 'right part';
@@ -877,7 +877,7 @@ is $req->query_params, 'foo13', 'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
-is $req->headers->content_length, 418, 'right "Content-Type" value';
+is $req->headers->content_length, 418, 'right "Content-Length" value';
 isa_ok $req->content->parts->[0], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[1], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[2], 'Mojo::Content::Single', 'right part';
@@ -921,7 +921,7 @@ is $req->query_params, 'foo13',                      'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
-is $req->headers->content_length, 418, 'right "Content-Type" value';
+is $req->headers->content_length, 418, 'right "Content-Length" value';
 isa_ok $req->content, 'Mojo::Content::Single', 'right content';
 like $req->content->asset->slurp, qr/------------0xKhTmLbOuNdArY--$/,
   'right content';
@@ -955,7 +955,7 @@ is $req->query_params, 'foo13', 'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
-is $req->headers->content_length, 418, 'right "Content-Type" value';
+is $req->headers->content_length, 418, 'right "Content-Length" value';
 isa_ok $req->content->parts->[0], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[1], 'Mojo::Content::Single', 'right part';
 isa_ok $req->content->parts->[2], 'Mojo::Content::Single', 'right part';
@@ -1652,49 +1652,49 @@ $req->parse("POST /example/testform_handler HTTP/1.1\x0d\x0a"
 ok $req->is_finished, 'request is finished';
 is $req->param('Vorname'), 'T', 'right value';
 
-# Google Chrome multipart/form-data request
+# Google Chrome 5 multipart/form-data request
 $req = Mojo::Message::Request->new;
 $req->parse("POST / HTTP/1.0\x0d\x0a"
     . "Host: 127.0.0.1:10002\x0d\x0a"
     . "Connection: close\x0d\x0a"
-    . "User-Agent: Mozilla/5.0 (X11; U; Linux x86_64; en-US) AppleWebKit/5"
+    . 'User-Agent: Mozilla/5.0 (X11; U; Linux x86_64; en-US) AppleWebKit/5'
     . "32.9 (KHTML, like Gecko) Chrome/5.0.307.11 Safari/532.9\x0d\x0a"
     . "Referer: http://example.org/\x0d\x0a"
     . "Content-Length: 819\x0d\x0a"
     . "Cache-Control: max-age=0\x0d\x0a"
     . "Origin: http://example.org\x0d\x0a"
-    . "Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryY"
+    . 'Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryY'
     . "GjwdkpB6ZLCZQbX\x0d\x0a"
-    . "Accept: application/xml,application/xhtml+xml,text/html;q=0.9,text/"
+    . 'Accept: application/xml,application/xhtml+xml,text/html;q=0.9,text/'
     . "plain;q=0.8,image/png,*/*;q=0.5\x0d\x0a"
     . "Accept-Encoding: gzip,deflate,sdch\x0d\x0a"
-    . "Cookie: mojolicious=BAcIMTIzNDU2NzgECAgIAwIAAAAXDGFsZXgudm9yb25vdgQ"
-    . "AAAB1c2VyBp6FjksAAAAABwAAAGV4cGlyZXM=--1641adddfe885276cda0deb7475f"
+    . 'Cookie: mojolicious=BAcIMTIzNDU2NzgECAgIAwIAAAAXDGFsZXgudm9yb25vdgQ'
+    . 'AAAB1c2VyBp6FjksAAAAABwAAAGV4cGlyZXM=--1641adddfe885276cda0deb7475f'
     . "153a\x0d\x0a"
     . "Accept-Language: ru-RU,ru;q=0.8,en-US;q=0.6,en;q=0.4\x0d\x0a"
     . "Accept-Charset: windows-1251,utf-8;q=0.7,*;q=0.3\x0d\x0a\x0d\x0a"
     . "------WebKitFormBoundaryYGjwdkpB6ZLCZQbX\x0d\x0a"
     . "Content-Disposition: form-data; name=\"fname\"\x0d\x0a\x0d\x0a"
-    . "Иван"
+    . 'Иван'
     . "\x0d\x0a------WebKitFormBoundaryYGjwdkpB6ZLCZQbX\x0d\x0a"
     . "Content-Disposition: form-data; name=\"sname\"\x0d\x0a\x0d\x0a"
-    . "Иванов"
+    . 'Иванов'
     . "\x0d\x0a------WebKitFormBoundaryYGjwdkpB6ZLCZQbX\x0d\x0a"
     . "Content-Disposition: form-data; name=\"sex\"\x0d\x0a\x0d\x0a"
-    . "мужской"
+    . 'мужской'
     . "\x0d\x0a------WebKitFormBoundaryYGjwdkpB6ZLCZQbX\x0d\x0a"
     . "Content-Disposition: form-data; name=\"bdate\"\x0d\x0a\x0d\x0a"
-    . "16.02.1987"
+    . '16.02.1987'
     . "\x0d\x0a------WebKitFormBoundaryYGjwdkpB6ZLCZQbX\x0d\x0a"
     . "Content-Disposition: form-data; name=\"phone\"\x0d\x0a\x0d\x0a"
-    . "1234567890"
+    . '1234567890'
     . "\x0d\x0a------WebKitFormBoundaryYGjwdkpB6ZLCZQbX\x0d\x0a"
-    . "Content-Disposition: form-data; name=\"avatar\"; filename=\"аватар."
+    . 'Content-Disposition: form-data; name="avatar"; filename="аватар.'
     . "jpg\"\x0d\x0a"
-    . "Content-Type: image/jpeg\x0d\x0a\x0d\x0a" . "1234"
+    . "Content-Type: image/jpeg\x0d\x0a\x0d\x0a1234"
     . "\x0d\x0a------WebKitFormBoundaryYGjwdkpB6ZLCZQbX\x0d\x0a"
     . "Content-Disposition: form-data; name=\"submit\"\x0d\x0a\x0d\x0a"
-    . "Сохранить"
+    . 'Сохранить'
     . "\x0d\x0a------WebKitFormBoundaryYGjwdkpB6ZLCZQbX--\x0d\x0a");
 ok $req->is_finished, 'request is finished';
 is $req->method,      'POST', 'right method';
@@ -1717,55 +1717,55 @@ is $upload->filename, 'аватар.jpg', 'right filename';
 is $upload->size,     4,                  'right size';
 is $upload->slurp,    '1234',             'right content';
 
-# Firefox multipart/form-data request
+# Firefox 3.5.8 multipart/form-data request
 $req = Mojo::Message::Request->new;
 $req->parse("POST / HTTP/1.0\x0d\x0a"
     . "Host: 127.0.0.1:10002\x0d\x0a"
     . "Connection: close\x0d\x0a"
-    . "User-Agent: Mozilla/5.0 (X11; U; Linux x86_64; ru; rv:1.9.1.8) Geck"
+    . 'User-Agent: Mozilla/5.0 (X11; U; Linux x86_64; ru; rv:1.9.1.8) Geck'
     . "o/20100214 Ubuntu/9.10 (karmic) Firefox/3.5.8\x0d\x0a"
-    . "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q"
+    . 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q'
     . "=0.8\x0d\x0a"
     . "Accept-Language: ru,en-us;q=0.7,en;q=0.3\x0d\x0a"
     . "Accept-Encoding: gzip,deflate\x0d\x0a"
     . "Accept-Charset: windows-1251,utf-8;q=0.7,*;q=0.7\x0d\x0a"
     . "Referer: http://example.org/\x0d\x0a"
-    . "Cookie: mojolicious=BAcIMTIzNDU2NzgECAgIAwIAAAAXDGFsZXgudm9yb25vdgQ"
-    . "AAAB1c2VyBiWFjksAAAAABwAAAGV4cGlyZXM=--cd933a37999e0fa8d7804205e891"
+    . 'Cookie: mojolicious=BAcIMTIzNDU2NzgECAgIAwIAAAAXDGFsZXgudm9yb25vdgQ'
+    . 'AAAB1c2VyBiWFjksAAAAABwAAAGV4cGlyZXM=--cd933a37999e0fa8d7804205e891'
     . "93a7\x0d\x0a"
-    . "Content-Type: multipart/form-data; boundary=-----------------------"
+    . 'Content-Type: multipart/form-data; boundary=-----------------------'
     . "----213090722714721300002030499922\x0d\x0a"
     . "Content-Length: 971\x0d\x0a\x0d\x0a"
     . "-----------------------------213090722714721300002030499922\x0d\x0a"
     . "Content-Disposition: form-data; name=\"fname\"\x0d\x0a\x0d\x0a"
-    . "Иван"
+    . 'Иван'
     . "\x0d\x0a-----------------------------213090722714721300002030499922"
     . "\x0d\x0a"
     . "Content-Disposition: form-data; name=\"sname\"\x0d\x0a\x0d\x0a"
-    . "Иванов"
+    . 'Иванов'
     . "\x0d\x0a-----------------------------213090722714721300002030499922"
     . "\x0d\x0a"
     . "Content-Disposition: form-data; name=\"sex\"\x0d\x0a\x0d\x0a"
-    . "мужской"
+    . 'мужской'
     . "\x0d\x0a-----------------------------213090722714721300002030499922"
     . "\x0d\x0a"
     . "Content-Disposition: form-data; name=\"bdate\"\x0d\x0a\x0d\x0a"
-    . "16.02.1987"
+    . '16.02.1987'
     . "\x0d\x0a-----------------------------213090722714721300002030499922"
     . "\x0d\x0a"
     . "Content-Disposition: form-data; name=\"phone\"\x0d\x0a\x0d\x0a"
-    . "1234567890"
+    . '1234567890'
     . "\x0d\x0a-----------------------------213090722714721300002030499922"
     . "\x0d\x0a"
-    . "Content-Disposition: form-data; name=\"avatar\"; filename=\"аватар."
+    . 'Content-Disposition: form-data; name="avatar"; filename="аватар.'
     . "jpg\"\x0d\x0a"
-    . "Content-Type: image/jpeg\x0d\x0a\x0d\x0a" . "1234"
+    . "Content-Type: image/jpeg\x0d\x0a\x0d\x0a1234"
     . "\x0d\x0a-----------------------------213090722714721300002030499922"
     . "\x0d\x0a"
     . "Content-Disposition: form-data; name=\"submit\"\x0d\x0a\x0d\x0a"
-    . "Сохранить"
+    . 'Сохранить'
     . "\x0d\x0a-----------------------------2130907227147213000020304999"
-    . "22--");
+    . '22--');
 ok $req->is_finished, 'request is finished';
 is $req->method,      'POST', 'right method';
 is $req->version,     '1.0', 'right version';
@@ -1787,49 +1787,49 @@ is $upload->filename, 'аватар.jpg', 'right filename';
 is $upload->size,     4,                  'right size';
 is $upload->slurp,    '1234',             'right content';
 
-# Opera multipart/form-data request
+# Opera 9.8 multipart/form-data request
 $req = Mojo::Message::Request->new;
 $req->parse("POST / HTTP/1.0\x0d\x0a"
     . "Host: 127.0.0.1:10002\x0d\x0a"
     . "Connection: close\x0d\x0a"
-    . "User-Agent: Opera/9.80 (X11; Linux x86_64; U; ru) Presto/2.2.15 Ver"
+    . 'User-Agent: Opera/9.80 (X11; Linux x86_64; U; ru) Presto/2.2.15 Ver'
     . "sion/10.10\x0d\x0a"
-    . "Accept: text/html, application/xml;q=0.9, application/xhtml+xml, im"
+    . 'Accept: text/html, application/xml;q=0.9, application/xhtml+xml, im'
     . "age/png, image/jpeg, image/gif, image/x-xbitmap, */*;q=0.1\x0d\x0a"
     . "Accept-Language: ru-RU,ru;q=0.9,en;q=0.8\x0d\x0a"
     . "Accept-Charset: iso-8859-1, utf-8, utf-16, *;q=0.1\x0d\x0a"
     . "Accept-Encoding: deflate, gzip, x-gzip, identity, *;q=0\x0d\x0a"
     . "Referer: http://example.org/\x0d\x0a"
-    . "Cookie: mojolicious=BAcIMTIzNDU2NzgECAgIAwIAAAAXDGFsZXgudm9yb25vdgQ"
-    . "AAAB1c2VyBhaIjksAAAAABwAAAGV4cGlyZXM=--78a58a94f98ae5b75a489be1189f"
+    . 'Cookie: mojolicious=BAcIMTIzNDU2NzgECAgIAwIAAAAXDGFsZXgudm9yb25vdgQ'
+    . 'AAAB1c2VyBhaIjksAAAAABwAAAGV4cGlyZXM=--78a58a94f98ae5b75a489be1189f'
     . "2672\x0d\x0a"
     . "Cookie2: \$Version=1\x0d\x0a"
     . "TE: deflate, gzip, chunked, identity, trailers\x0d\x0a"
     . "Content-Length: 771\x0d\x0a"
-    . "Content-Type: multipart/form-data; boundary=----------IWq9cR9mYYG66"
+    . 'Content-Type: multipart/form-data; boundary=----------IWq9cR9mYYG66'
     . "8xwSn56f0\x0d\x0a\x0d\x0a"
     . "------------IWq9cR9mYYG668xwSn56f0\x0d\x0a"
     . "Content-Disposition: form-data; name=\"fname\"\x0d\x0a\x0d\x0a"
-    . "Иван"
+    . 'Иван'
     . "\x0d\x0a------------IWq9cR9mYYG668xwSn56f0\x0d\x0a"
     . "Content-Disposition: form-data; name=\"sname\"\x0d\x0a\x0d\x0a"
-    . "Иванов"
+    . 'Иванов'
     . "\x0d\x0a------------IWq9cR9mYYG668xwSn56f0\x0d\x0a"
     . "Content-Disposition: form-data; name=\"sex\"\x0d\x0a\x0d\x0a"
-    . "мужской"
+    . 'мужской'
     . "\x0d\x0a------------IWq9cR9mYYG668xwSn56f0\x0d\x0a"
     . "Content-Disposition: form-data; name=\"bdate\"\x0d\x0a\x0d\x0a"
-    . "16.02.1987"
+    . '16.02.1987'
     . "\x0d\x0a------------IWq9cR9mYYG668xwSn56f0\x0d\x0a"
     . "Content-Disposition: form-data; name=\"phone\"\x0d\x0a\x0d\x0a"
-    . "1234567890"
+    . '1234567890'
     . "\x0d\x0a------------IWq9cR9mYYG668xwSn56f0\x0d\x0a"
-    . "Content-Disposition: form-data; name=\"avatar\"; filename=\"аватар."
+    . 'Content-Disposition: form-data; name="avatar"; filename="аватар.'
     . "jpg\"\x0d\x0a"
     . "Content-Type: image/jpeg\x0d\x0a\x0d\x0a" . "1234"
     . "\x0d\x0a------------IWq9cR9mYYG668xwSn56f0\x0d\x0a"
     . "Content-Disposition: form-data; name=\"submit\"\x0d\x0a\x0d\x0a"
-    . "Сохранить"
+    . 'Сохранить'
     . "\x0d\x0a------------IWq9cR9mYYG668xwSn56f0--");
 ok $req->is_finished, 'request is finished';
 is $req->method,      'POST', 'right method';
@@ -1852,7 +1852,41 @@ is $upload->filename, 'аватар.jpg', 'right filename';
 is $upload->size,     4,                  'right size';
 is $upload->slurp,    '1234',             'right content';
 
-# Parse ~ in URL
+# Firefox 14 multipart/form-data request (UTF-8)
+$req = Mojo::Message::Request->new;
+$req->parse("POST /foo HTTP/1.1\x0d\x0a");
+$req->parse("Host: 127.0.0.1:3000\x0d\x0a");
+$req->parse('User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv');
+$req->parse(":14.0) Gecko/20100101 Firefox/14.0.1\x0d\x0a");
+$req->parse('Accept: text/html,application/xhtml+xml,application/xml;');
+$req->parse("q=0.9,*/*;q=0.8\x0d\x0a");
+$req->parse("Accept-Language: en-us,en;q=0.5\x0d\x0a");
+$req->parse("Accept-Encoding: gzip, deflate\x0d\x0a");
+$req->parse("Connection: keep-alive\x0d\x0a");
+$req->parse("Referer: http://127.0.0.1:3000/\x0d\x0a");
+$req->parse('Content-Type: multipart/form-data;');
+$req->parse('boundary=---------------------------126436927890376828148');
+$req->parse("1663536\x0d\x0a");
+$req->parse("Content-Length: 233\x0d\x0a\x0d\x0a--------");
+$req->parse("---------------------1264369278903768281481663536\x0d\x0a");
+$req->parse('Content-Disposition: form-data; name="☃"; filen');
+$req->parse("ame=\"foo bär ☃.txt\"\x0d\x0aContent-Type: text/plain");
+$req->parse("\x0d\x0a\x0d\x0atest 123\x0d\x0a-------");
+$req->parse('----------------------1264369278903768281481663536--');
+ok $req->is_finished, 'request is finished';
+is $req->method,      'POST', 'right method';
+is $req->version,     '1.1', 'right version';
+is $req->url,         '/foo', 'right URL';
+like $req->headers->content_type, qr!multipart/form-data!,
+  'right "Content-Type" value';
+is $req->upload('☃')->name, '☃', 'right name';
+is $req->upload('☃')->filename, 'foo bär ☃.txt', 'right filename';
+is $req->upload('☃')->headers->content_type, 'text/plain',
+  'right "Content-Type" value';
+is $req->upload('☃')->asset->size,  8,          'right size';
+is $req->upload('☃')->asset->slurp, 'test 123', 'right content';
+
+# Parse "~" in URL
 $req = Mojo::Message::Request->new;
 $req->parse("GET /~foobar/ HTTP/1.1\x0d\x0a\x0d\x0a");
 ok $req->is_finished, 'request is finished';
@@ -1860,7 +1894,7 @@ is $req->method,      'GET', 'right method';
 is $req->version,     '1.1', 'right version';
 is $req->url,         '/~foobar/', 'right URL';
 
-# Parse : in URL
+# Parse ":" in URL
 $req = Mojo::Message::Request->new;
 $req->parse("GET /perldoc?Mojo::Message::Request HTTP/1.1\x0d\x0a\x0d\x0a");
 ok $req->is_finished, 'request is finished';

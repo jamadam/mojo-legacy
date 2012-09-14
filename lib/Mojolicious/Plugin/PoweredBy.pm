@@ -1,12 +1,6 @@
 package Mojolicious::Plugin::PoweredBy;
 use Mojo::Base 'Mojolicious::Plugin';
 
-# "It's just like the story of the grasshopper and the octopus.
-#  All year long, the grasshopper kept burying acorns for the winter,
-#  while the octopus mooched off his girlfriend and watched TV.
-#  But then the winter came, and the grasshopper died,
-#  and the octopus ate all his acorns.
-#  And also he got a racecar. Is any of this getting through to you?"
 sub register {
   my ($self, $app, $conf) = @_;
   my $name = $conf->{name} || 'Mojolicious (Perl)';
@@ -46,7 +40,7 @@ L<Mojolicious::Plugin::PoweredBy> supports the following options.
 
   plugin PoweredBy => (name => 'MyApp 1.0');
 
-Value for C<X-Powered-By> header.
+Value for C<X-Powered-By> header, defaults to C<Mojolicious (Perl)>.
 
 =head1 METHODS
 

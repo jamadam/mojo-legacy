@@ -3,8 +3,6 @@ use Mojo::Base 'Mojo::Transaction';
 
 use Mojo::Transaction::WebSocket;
 
-# "What's a wedding?  Webster's dictionary describes it as the act of
-#  removing weeds from one's garden."
 sub client_read {
   my ($self, $chunk) = @_;
 
@@ -21,10 +19,8 @@ sub client_read {
   $self->{state} = 'finished' if $res->is_finished;
 
   # Unexpected 100 Continue
-  if ($self->{state} eq 'finished' && (defined $res->code && $res->code == 100)) {
-    $self->res($res->new);
-    $self->{state} = $preserved;
-  }
+  $self->res($res->new)->{state} = $preserved
+    if $self->{state} eq 'finished' && (defined $res->code ? $res->code : '') eq '100';
 
   # Check for errors
   $self->{state} = 'finished' if $self->error;
@@ -92,10 +88,8 @@ sub server_read {
   $self->{state} ||= 'read';
 
   # Parser error
-  my $res = $self->res;
   if ($req->error && !$self->{handled}++) {
-    $self->emit('request');
-    $res->headers->connection('close');
+    $self->emit('request')->res->headers->connection('close');
   }
 
   # EOF
@@ -110,7 +104,7 @@ sub server_read {
   elsif ($req->content->is_parsing_body && !defined $self->{continued}) {
     return unless ($req->headers->expect || '') =~ /100-continue/i;
     $self->{state} = 'write';
-    $res->code(100);
+    $self->res->code(100);
     $self->{continued} = 0;
   }
 }
@@ -155,12 +149,12 @@ sub server_write {
 }
 
 sub _body {
-  my ($self, $message, $finish) = @_;
+  my ($self, $msg, $finish) = @_;
 
   # Chunk
-  my $buffer = $message->get_body_chunk($self->{offset});
+  my $buffer = $msg->get_body_chunk($self->{offset});
   my $written = defined $buffer ? length $buffer : 0;
-  $self->{write} = $message->is_dynamic ? 1 : ($self->{write} - $written);
+  $self->{write} = $msg->is_dynamic ? 1 : ($self->{write} - $written);
   $self->{offset} = $self->{offset} + $written;
   if (defined $buffer) { delete $self->{delay} }
 
@@ -179,10 +173,10 @@ sub _body {
 }
 
 sub _headers {
-  my ($self, $message, $head) = @_;
+  my ($self, $msg, $head) = @_;
 
   # Chunk
-  my $buffer = $message->get_header_chunk($self->{offset});
+  my $buffer = $msg->get_header_chunk($self->{offset});
   my $written = defined $buffer ? length $buffer : 0;
   $self->{write}  = $self->{write} - $written;
   $self->{offset} = $self->{offset} + $written;
@@ -192,13 +186,13 @@ sub _headers {
     $self->{offset} = 0;
 
     # Response without body
-    $head = $head && ($self->req->method eq 'HEAD' || $message->is_empty);
+    $head = $head && ($self->req->method eq 'HEAD' || $msg->is_empty);
     if ($head) { $self->{state} = 'finished' }
 
     # Body
     else {
       $self->{state} = 'write_body';
-      $self->{write} = $message->is_dynamic ? 1 : $message->body_size;
+      $self->{write} = $msg->is_dynamic ? 1 : $msg->body_size;
     }
   }
 
@@ -206,10 +200,10 @@ sub _headers {
 }
 
 sub _start_line {
-  my ($self, $message) = @_;
+  my ($self, $msg) = @_;
 
   # Chunk
-  my $buffer = $message->get_start_line_chunk($self->{offset});
+  my $buffer = $msg->get_start_line_chunk($self->{offset});
   my $written = defined $buffer ? length $buffer : 0;
   $self->{write}  = $self->{write} - $written;
   $self->{offset} = $self->{offset} + $written;
@@ -217,7 +211,7 @@ sub _start_line {
   # Write headers
   if ($self->{write} <= 0) {
     $self->{state}  = 'write_headers';
-    $self->{write}  = $message->header_size;
+    $self->{write}  = $msg->header_size;
     $self->{offset} = 0;
   }
 
@@ -275,7 +269,7 @@ Emitted when a request is ready and needs to be handled.
 
   $tx->on(request => sub {
     my $tx = shift;
-    $tx->res->headers->header('X-Bender', 'Bite my shiny metal ass!');
+    $tx->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
   });
 
 =head2 C<upgrade>
@@ -290,7 +284,7 @@ object.
 
   $tx->on(upgrade => sub {
     my ($tx, $ws) = @_;
-    $ws->res->headers->header('X-Bender', 'Bite my shiny metal ass!');
+    $ws->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
   });
 
 =head1 ATTRIBUTES
@@ -306,13 +300,13 @@ implements the following new ones.
 
   $tx->client_read($chunk);
 
-Read and process client data.
+Read and process data client-side.
 
 =head2 C<client_write>
 
   my $chunk = $tx->client_write;
 
-Write client data.
+Write data client-side.
 
 =head2 C<keep_alive>
 
@@ -324,19 +318,19 @@ Check if connection can be kept alive.
 
   my $leftovers = $tx->server_leftovers;
 
-Leftovers from the server request, used for pipelining.
+Leftovers from the request, used for pipelining server-side.
 
 =head2 C<server_read>
 
   $tx->server_read($chunk);
 
-Read and process server data.
+Read and process data server-side.
 
 =head2 C<server_write>
 
   my $chunk = $tx->server_write;
 
-Write server data.
+Write data server-side.
 
 =head1 SEE ALSO
 

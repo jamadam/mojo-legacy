@@ -2,6 +2,7 @@ package Mojo::Server;
 use Mojo::Base 'Mojo::EventEmitter';
 
 use Carp 'croak';
+use FindBin;
 use Mojo::Loader;
 use Mojo::Util 'md5_sum';
 use Scalar::Util 'blessed';
@@ -17,6 +18,7 @@ sub new {
 sub build_app {
   my ($self, $app) = @_;
   local $ENV{MOJO_EXE};
+  local $ENV{MOJO_APP} = $app;
   if (my $e = Mojo::Loader->new->load($app)) { die $e if ref $e }
   return $app->new;
 }
@@ -24,33 +26,31 @@ sub build_app {
 sub build_tx { shift->app->build_tx }
 
 sub load_app {
-  my ($self, $file) = @_;
+  my ($self, $path) = @_;
 
-  # Clean up environment
-  local $ENV{MOJO_APP_LOADER} = 1;
-  local $ENV{MOJO_EXE};
+  # Clean environment (and reset FindBin)
+  {
+    local $0 = $path;
+    FindBin->again;
+    local $ENV{MOJO_APP_LOADER} = 1;
+    local $ENV{MOJO_EXE};
 
-  # Try to load application from script into sandbox
-  my $app = eval <<EOF;
-package Mojo::Server::SandBox::@{[md5_sum($file . $$)]};
-my \$app = do \$file;
-if (!\$app && (my \$e = \$@ || \$!)) { die \$e }
-\$app;
+    # Try to load application from script into sandbox
+    $self->app(my $app = eval sprintf <<'EOF', md5_sum($path . $$));
+package Mojo::Server::SandBox::%s;
+my $app = do $path;
+if (!$app && (my $e = $@ || $!)) { die $e }
+$app;
 EOF
-  die qq{Couldn't load application from file "$file": $@} if !$app && $@;
-  die qq{File "$file" did not return an application object.\n}
-    unless blessed $app && $app->isa('Mojo');
-  return $self->app($app)->app;
+    die qq{Couldn't load application from file "$path": $@} if !$app && $@;
+    die qq{File "$path" did not return an application object.\n}
+      unless blessed $app && $app->isa('Mojo');
+  };
+  FindBin->again;
+
+  return $self->app;
 }
 
-# "Are you saying you're never going to eat any animal again? What about
-#  bacon?
-#  No.
-#  Ham?
-#  No.
-#  Pork chops?
-#  Dad, those all come from the same animal.
-#  Heh heh heh. Ooh, yeah, right, Lisa. A wonderful, magical animal."
 sub run { croak 'Method "run" not implemented by subclass' }
 
 1;
@@ -127,7 +127,7 @@ default request handling.
 
   my $app = $server->build_app('Mojo::HelloWorld');
 
-Build application.
+Build application from class.
 
 =head2 C<build_tx>
 
@@ -137,7 +137,7 @@ Let application build a transaction.
 
 =head2 C<load_app>
 
-  my $app = $server->load_app('./myapp.pl');
+  my $app = $server->load_app('/home/sri/myapp.pl');
 
 Load application from script.
 

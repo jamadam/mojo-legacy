@@ -3,7 +3,7 @@ use Mojo::Base -base;
 
 has 'tree';
 
-my $ESCAPE_RE = qr/\\[^0-9a-fA-F]|\\[0-9a-fA-F]{1,6}/;
+my $ESCAPE_RE = qr/\\[^[:xdigit:]]|\\[[:xdigit:]]{1,6}/;
 my $ATTR_RE   = qr/
   \[
   ((?:$ESCAPE_RE|[\w\-])+)        # Key
@@ -21,7 +21,7 @@ my $CLASS_ID_RE = qr/
     (?:\#((?:\\\#|[^.\#])+))   # ID
   )
 /x;
-my $PSEUDO_CLASS_RE = qr/(?:\:([\w\-]+)(?:\(((?:\([^)]+\)|[^)])+)\))?)/;
+my $PSEUDO_CLASS_RE = qr/(?::([\w\-]+)(?:\(((?:\([^)]+\)|[^)])+)\))?)/;
 my $TOKEN_RE        = qr/
   (\s*,\s*)?                         # Separator
   ((?:[^[\\:\s,]|$ESCAPE_RE\s?)+)?   # Element
@@ -33,7 +33,6 @@ my $TOKEN_RE        = qr/
   )?
 /x;
 
-# "Why can't she just drink herself happy like a normal person?"
 sub select {
   my $self = shift;
 
@@ -80,7 +79,7 @@ sub _attr {
   # Ignore namespace prefix
   my $attrs = $current->[2];
   for my $name (keys %$attrs) {
-    next unless $name =~ /(?:^|\:)$key$/;
+    next unless $name =~ /(?:^|:)$key$/;
     return 1 unless defined $attrs->{$name} && defined $regex;
     return 1 if $attrs->{$name} =~ $regex;
   }
@@ -182,7 +181,6 @@ sub _compile {
   return $pattern;
 }
 
-# "Rock stars... is there anything they don't know?"
 sub _equation {
   my ($self, $equation) = @_;
 
@@ -324,7 +322,7 @@ sub _selector {
     # Tag (ignore namespace prefix)
     if ($type eq 'tag') {
       my $tag = $s->[1];
-      return unless $tag eq '*' || $current->[1] =~ /(?:^|\:)$tag$/;
+      return unless $tag eq '*' || $current->[1] =~ /(?:^|:)$tag$/;
     }
 
     # Attribute
@@ -360,9 +358,6 @@ sub _sibling {
   return;
 }
 
-# "All right, brain.
-#  You don't like me and I don't like you,
-#  but let's just do this and I can get back to killing you with beer."
 sub _unescape {
   my ($self, $value) = @_;
 
@@ -370,7 +365,7 @@ sub _unescape {
   $value =~ s/\\\n//g;
 
   # Unescape Unicode characters
-  $value =~ s/\\([0-9a-fA-F]{1,6})\s?/pack('U', hex $1)/ge;
+  $value =~ s/\\([[:xdigit:]]{1,6})\s?/pack('U', hex $1)/ge;
 
   # Remove backslash
   $value =~ s/\\//g;

@@ -1,22 +1,25 @@
 package Mojo::DOM;
-use Mojo::Base -strict;
+use Mojo::Base -base;
 use overload
   '%{}'    => sub { shift->attrs },
   'bool'   => sub {1},
   '""'     => sub { shift->to_xml },
   fallback => 1;
 
+# "Fry: This snow is beautiful. I'm glad global warming never happened.
+#  Leela: Actually, it did. But thank God nuclear winter canceled it out."
 use Carp 'croak';
 use Mojo::Collection;
 use Mojo::DOM::CSS;
 use Mojo::DOM::HTML;
+use Mojo::Util 'squish';
 use Scalar::Util qw(blessed weaken);
 
 sub AUTOLOAD {
   my $self = shift;
 
   # Method
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)\:\:(\w+)$/;
+  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
@@ -28,8 +31,6 @@ sub AUTOLOAD {
 
 sub DESTROY { }
 
-# "How are the kids supposed to get home?
-#  I dunno. Internet?"
 sub new {
   my $class = shift;
   my $self = bless [Mojo::DOM::HTML->new], ref $class || $class;
@@ -72,7 +73,6 @@ sub attrs {
 
 sub charset { shift->_parser(charset => @_) }
 
-# "Oh boy! Sleep! That's when I'm a Viking!"
 sub children {
   my ($self, $type) = @_;
 
@@ -112,7 +112,6 @@ sub content_xml {
   return $result;
 }
 
-# "But I was going to loot you a present."
 sub find {
   my ($self, $selector) = @_;
 
@@ -132,7 +131,7 @@ sub namespace {
 
   # Namespace prefix
   return '' if (my $current = $self->tree)->[0] eq 'root';
-  my $ns = $current->[1] =~ /^(.*?)\:/ ? "xmlns:$1" : undef;
+  my $ns = $current->[1] =~ /^(.*?):/ ? "xmlns:$1" : undef;
 
   # Walk tree
   while ($current) {
@@ -289,7 +288,6 @@ sub type {
   return $self;
 }
 
-# "I want to set the record straight, I thought the cop was a prostitute."
 sub xml { shift->_parser(xml => @_) }
 
 sub _add {
@@ -342,7 +340,7 @@ sub _parse {
 sub _parser {
   my ($self, $method) = (shift, shift);
   return $self->[0]->$method unless @_;
-  $self->[0]->$method(shift);
+  $self->[0]->$method(@_);
   return $self;
 }
 
@@ -361,16 +359,7 @@ sub _text {
     }
 
     # Text
-    elsif ($type eq 'text') {
-      $content = $e->[1];
-
-      # Trim whitespace
-      if ($trim) {
-        $content =~ s/^\s*\n+\s*//;
-        $content =~ s/\s*\n+\s*$//;
-        $content =~ s/\s*\n+\s*/\ /g;
-      }
-    }
+    elsif ($type eq 'text') { $content = $trim ? squish($e->[1]) : $e->[1] }
 
     # CDATA or raw text
     elsif ($type eq 'cdata' || $type eq 'raw') { $content = $e->[1] }
@@ -467,14 +456,15 @@ XML detection can also be disabled with the C<xml> method.
 
 =head1 METHODS
 
-L<Mojo::DOM> implements the following methods.
+L<Mojo::DOM> inherits all methods from L<Mojo::Base> and implements the
+following new ones.
 
 =head2 C<new>
 
   my $dom = Mojo::DOM->new;
   my $dom = Mojo::DOM->new('<foo bar="baz">test</foo>');
 
-Construct a new L<Mojo::DOM> object.
+Construct a new array-based L<Mojo::DOM> object.
 
 =head2 C<all_text>
 

@@ -34,9 +34,6 @@ These options are available:
   -v, --verbose               Print request and response headers to STDERR.
 EOF
 
-# "Objection.
-#  In the absence of pants, defense's suspenders serve no purpose.
-#  I'm going to allow them... for now."
 sub run {
   my ($self, @args) = @_;
 
@@ -54,7 +51,7 @@ sub run {
 
   # Headers
   my %headers;
-  /^\s*([^:]+)\s*:\s*([^:]+)\s*$/ and $headers{$1} = $2 for @headers;
+  /^\s*([^:]+)\s*:\s*(.+)$/ and $headers{$1} = $2 for @headers;
 
   # URL and selector
   die $self->usage unless my $url = decode 'UTF-8', do {my $tmp = shift @args; defined $tmp ? $tmp : ''};
@@ -95,9 +92,9 @@ sub run {
         # Response
         my $version     = $res->version;
         my $code        = $res->code;
-        my $message     = $res->message;
+        my $msg         = $res->message;
         my $res_headers = $res->headers->to_string;
-        warn "HTTP/$version $code $message\n$res_headers\n\n";
+        warn "HTTP/$version $code $msg\n$res_headers\n\n";
 
         # Finished
         $v = undef;
@@ -126,9 +123,9 @@ sub run {
   my $tx = $ua->start($ua->build_tx($method, $url, \%headers, $content));
 
   # Error
-  my ($message, $code) = $tx->error;
+  my ($err, $code) = $tx->error;
   $url = encode 'UTF-8', $url;
-  warn qq{Problem loading URL "$url". ($message)\n} if $message && !$code;
+  warn qq{Problem loading URL "$url". ($err)\n} if $err && !$code;
 
   # JSON Pointer
   return unless $selector;
@@ -143,7 +140,8 @@ sub _json {
   my $json = Mojo::JSON->new;
   return unless my $data = $json->decode(shift);
   return unless defined($data = Mojo::JSON::Pointer->new->get($data, shift));
-  ref $data eq 'HASH' || ref $data eq 'ARRAY' ? say($json->encode($data)) : _say($data);
+  return _say($data) unless ref $data eq 'HASH' || ref $data eq 'ARRAY';
+  say($json->encode($data));
 }
 
 sub _say {

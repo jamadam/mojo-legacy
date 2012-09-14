@@ -8,9 +8,6 @@ BEGIN {
 
 use Test::More tests => 32;
 
-# "Pizza delivery for...
-#  I. C. Weiner. Aww... I always thought by this stage in my life I'd be the
-#  one making the crank calls."
 use Mojolicious::Lite;
 use Test::Mojo;
 
@@ -35,9 +32,11 @@ my $twinkle = {
 
 # Renderer
 plugin EPRenderer => {name => 'twinkle', template => $twinkle};
-plugin PODRenderer => {no_perldoc => 1};
-plugin PODRenderer =>
-  {name => 'teapod', preprocess => 'twinkle', no_perldoc => 1};
+plugin 'PODRenderer', no_perldoc => 1;
+plugin 'PODRenderer',
+  name       => 'teapod',
+  preprocess => 'twinkle',
+  no_perldoc => 1;
 
 # Configuration
 app->defaults(foo_test => 23);

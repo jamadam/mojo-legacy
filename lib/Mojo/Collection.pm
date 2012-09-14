@@ -1,10 +1,11 @@
 package Mojo::Collection;
-use Mojo::Base 'Exporter';
+use Mojo::Base -base;
 use overload
   'bool'   => sub {1},
   '""'     => sub { shift->join("\n") },
   fallback => 1;
 
+use Exporter 'import';
 use List::Util;
 use Mojo::ByteStream;
 
@@ -27,17 +28,9 @@ sub each {
 
 sub first {
   my ($self, $cb) = @_;
-  return $self->[0] unless $cb;
-  if ((ref $cb) eq 'CODE') {
-    return List::Util::first { $cb->($_) } @$self;
-  } else {
-    return List::Util::first { $_ =~ $cb } @$self;
-  }
+  return $cb ? do { (ref $cb) eq 'CODE' ? List::Util::first { $cb->($_) } @$self : List::Util::first { $_ =~ $cb } @$self } : $self->[0];
 }
 
-# "All right, let's not panic.
-#  I'll make the money by selling one of my livers.
-#  I can get by with one."
 sub grep {
   my ($self, $cb) = @_;
   if ((ref $cb) eq 'CODE') {
@@ -48,8 +41,8 @@ sub grep {
 }
 
 sub join {
-  my ($self, $expression) = @_;
-  return Mojo::ByteStream->new(join $expression, map({"$_"} @$self));
+  my ($self, $expr) = @_;
+  return Mojo::ByteStream->new(join $expr, map({"$_"} @$self));
 }
 
 sub map {
@@ -81,8 +74,7 @@ sub slice {
 
 sub sort {
   my ($self, $cb) = @_;
-  return $self->new(sort @$self) unless $cb;
-  return $self->new(sort { $a->$cb($b) } @$self);
+  return $self->new($cb ? sort { $a->$cb($b) } @$self : sort @$self);
 }
 
 sub uniq {
@@ -128,20 +120,21 @@ Construct a new L<Mojo::Collection> object.
 
 =head1 METHODS
 
-L<Mojo::Collection> implements the following methods.
+L<Mojo::Collection> inherits all methods from L<Mojo::Base> and implements the
+following new ones.
 
 =head2 C<new>
 
   my $collection = Mojo::Collection->new(1, 2, 3);
 
-Construct a new L<Mojo::Collection> object.
+Construct a new array-based L<Mojo::Collection> object.
 
 =head2 C<each>
 
   my @elements = $collection->each;
   $collection  = $collection->each(sub {...});
 
-Evaluate closure for each element in collection.
+Evaluate callback for each element in collection.
 
   $collection->each(sub {
     my ($e, $count) = @_;
@@ -154,9 +147,9 @@ Evaluate closure for each element in collection.
   my $first = $collection->first(qr/foo/);
   my $first = $collection->first(sub {...});
 
-Evaluate regular expression or closure for each element in collection and
+Evaluate regular expression or callback for each element in collection and
 return the first one that matched the regular expression, or for which the
-closure returned true.
+callback returned true.
 
   my $five = $collection->first(sub { $_ == 5 });
 
@@ -165,9 +158,9 @@ closure returned true.
   my $new = $collection->grep(qr/foo/);
   my $new = $collection->grep(sub {...});
 
-Evaluate regular expression or closure for each element in collection and
+Evaluate regular expression or callback for each element in collection and
 create a new collection with all elements that matched the regular expression,
-or for which the closure returned true.
+or for which the callback returned true.
 
   my $interesting = $collection->grep(qr/mojo/i);
 
@@ -183,7 +176,7 @@ Turn collection into L<Mojo::ByteStream>.
 
   my $new = $collection->map(sub {...});
 
-Evaluate closure for each element in collection and create a new collection
+Evaluate callback for each element in collection and create a new collection
 from the results.
 
   my $doubled = $collection->map(sub { $_ * 2 });
@@ -228,7 +221,7 @@ Number of elements in collection.
   my $new = $collection->sort;
   my $new = $collection->sort(sub {...});
 
-Sort elements based on return value of closure and create a new collection
+Sort elements based on return value of callback and create a new collection
 from the results.
 
   my $insensitive = $collection->sort(sub { uc(shift) cmp uc(shift) });

@@ -1,6 +1,7 @@
 package Mojolicious;
 use Mojo::Base 'Mojo';
 
+# "Fry: Shut up and take my money!"
 use Carp 'croak';
 use Mojo::Exception;
 use Mojolicious::Commands;
@@ -13,7 +14,6 @@ use Mojolicious::Static;
 use Mojolicious::Types;
 use Scalar::Util qw(blessed weaken);
 
-# "Robots don't have any emotions, and sometimes that makes me very sad."
 has commands => sub {
   my $commands = Mojolicious::Commands->new(app => shift);
   weaken $commands->{app};
@@ -38,15 +38,13 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Rainbow';
-our $VERSION  = '3.31';
+our $VERSION  = '3.41';
 
-# "These old doomsday devices are dangerously unstable.
-#  I'll rest easier not knowing where they are."
 sub AUTOLOAD {
   my $self = shift;
 
   # Method
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)\:\:(\w+)$/;
+  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
@@ -60,8 +58,6 @@ sub AUTOLOAD {
 
 sub DESTROY { }
 
-# "I personalized each of your meals.
-#  For example, Amy: you're cute, so I baked you a pony."
 sub new {
   my $self = shift->SUPER::new(@_);
 
@@ -75,10 +71,10 @@ sub new {
 
   # Hide controller attributes/methods and "handler"
   $r->hide(qw(AUTOLOAD DESTROY app cookie finish flash handler on param));
-  $r->hide(qw(redirect_to render render_content render_data));
-  $r->hide(qw(render_exception render_json render_not_found render_partial));
-  $r->hide(qw(render_static render_text rendered req res respond_to send));
-  $r->hide(qw(session signed_cookie stash tx ua url_for write write_chunk));
+  $r->hide(qw(redirect_to render render_data render_exception render_json));
+  $r->hide(qw(render_not_found render_partial render_static render_text));
+  $r->hide(qw(rendered req res respond_to send session signed_cookie stash));
+  $r->hide(qw(tx ua url_for write write_chunk));
 
   # Prepare log
   my $mode = $self->mode;
@@ -134,7 +130,6 @@ sub dispatch {
   $c->render_not_found unless $self->routes->dispatch($c) || $tx->res->code;
 }
 
-# "Bite my shiny metal ass!"
 sub handler {
   my ($self, $tx) = @_;
 
@@ -162,25 +157,18 @@ sub handler {
   }
 
   # Delayed
-  $self->log->debug('Nothing has been rendered, assuming delayed response.')
+  $self->log->debug('Nothing has been rendered, expecting delayed response.')
     unless $stash->{'mojo.rendered'} || $tx->is_writing;
 }
 
 sub helper {
-  my ($self, $name) = (shift, shift);
+  my ($self, $name, $cb) = @_;
   my $r = $self->renderer;
   $self->log->debug(qq{Helper "$name" already exists, replacing.})
     if exists $r->helpers->{$name};
-  $r->add_helper($name => @_);
+  $r->add_helper($name => $cb);
 }
 
-# "He knows when you are sleeping.
-#  He knows when you're on the can.
-#  He'll hunt you down and blast your ass, from here to Pakistan.
-#  Oh...
-#  You better not breathe, you better not move.
-#  You're better off dead, I'm tellin' you, dude.
-#  Santa Claus is gunning you down!"
 sub hook { shift->plugins->on(@_) }
 
 sub plugin {
@@ -341,7 +329,7 @@ file reminding you to change your passphrase.
   my $sessions = $app->sessions;
   $app         = $app->sessions(Mojolicious::Sessions->new);
 
-Simple signed cookie based sessions, defaults to a L<Mojolicious::Sessions>
+Signed cookie based session manager, defaults to a L<Mojolicious::Sessions>
 object. You can usually leave this alone, see
 L<Mojolicious::Controller/"session"> for more information about working with
 session data.
@@ -525,7 +513,7 @@ and a call to C<dispatch> the last, yours will be in between.
 
 This is a very powerful hook and should not be used lightly, it allows you to
 customize application wide exception handling for example, consider it the
-sledgehammer in your toolbox. (Passed a closure leading to the next hook and
+sledgehammer in your toolbox. (Passed a callback leading to the next hook and
 the default controller object)
 
 =back
@@ -583,7 +571,8 @@ Mount whole L<Mojolicious> applications.
 
 =item L<Mojolicious::Plugin::PODRenderer>
 
-Renderer for POD files and documentation browser.
+Renderer for turning POD into HTML and documentation browser for
+L<Mojolicious::Guides>.
 
 =item L<Mojolicious::Plugin::PoweredBy>
 
@@ -627,7 +616,7 @@ startup. Meant to be overloaded in a subclass.
 In addition to the attributes and methods above you can also call helpers on
 L<Mojolicious> objects. This includes all helpers from
 L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
-Note that application helpers are always called with a new C<controller_class>
+Note that application helpers are always called with a new default controller
 object, so they can't depend on or change controller state, which includes
 request, response and stash.
 
@@ -795,6 +784,8 @@ Dmitriy Shalashov
 
 Dmitry Konstantinov
 
+Dominique Dumont
+
 Douglas Christopher Wilson
 
 Eugene Toropov
@@ -829,7 +820,7 @@ Kazuhiro Shibuya
 
 Kevin Old
 
-KITAMURA Akatsuki
+Kitamura Akatsuki
 
 Lars Balker Rasmussen
 

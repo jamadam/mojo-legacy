@@ -75,14 +75,12 @@ my @HTML5_INLINE = (
 );
 my %INLINE = map { $_ => 1 } @HTML4_INLINE, @HTML5_INLINE;
 
-# "No one believes me.
-#  I believe you, dad.
-#  Then can you stop the cats from swearing?"
 sub parse {
   my ($self, $html) = @_;
 
-  # Decode
-  if (my $charset = $self->charset) { $html = decode $charset, $html }
+  # Try to decode
+  my $charset = $self->charset;
+  defined ($html = decode($charset, $html)) || return $self->charset(undef) if $charset;
 
   # Tokenize
   my $tree    = ['root'];
@@ -140,7 +138,7 @@ sub parse {
         if (!$self->xml && $VOID{$start}) || $attr =~ m!/\s*$!;
 
       # Relaxed "script" or "style"
-      if (grep {$_ eq $start} qw(script style)) {
+      if (grep { $_ eq $start } qw(script style)) {
         if ($html =~ m!\G(.*?)<\s*/\s*$start\s*>!gcsi) {
           $self->_raw($1, \$current);
           $self->_end($start, \$current);
@@ -159,8 +157,6 @@ sub render {
   return $charset ? encode($charset, $content) : $content;
 }
 
-# "Woah! God is so in your face!
-#  Yeah, he's my favorite fictional character."
 sub _cdata {
   my ($self, $cdata, $current) = @_;
   push @$$current, ['cdata', $cdata];
@@ -320,8 +316,6 @@ sub _render {
   return $content;
 }
 
-# "It's not important to talk about who got rich off of whom,
-#  or who got exposed to tainted what..."
 sub _start {
   my ($self, $start, $attrs, $current) = @_;
 
@@ -344,7 +338,7 @@ sub _start {
     elsif ($start eq 'option') { $self->_end('option', $current) }
 
     # "<colgroup>", "<thead>", "tbody" and "tfoot"
-    elsif (grep {$_ eq $start} qw(colgroup thead tbody tfoot)) {
+    elsif (grep { $_ eq $start } qw(colgroup thead tbody tfoot)) {
       $self->_close($current);
     }
 
@@ -352,19 +346,19 @@ sub _start {
     elsif ($start eq 'tr') { $self->_close($current, {tr => 1}) }
 
     # "<th>" and "<td>"
-    elsif (grep {$_ eq $start} qw(th td)) {
+    elsif (grep { $_ eq $start } qw(th td)) {
       $self->_close($current, {th => 1});
       $self->_close($current, {td => 1});
     }
 
     # "<dt>" and "<dd>"
-    elsif (grep {$_ eq $start} qw(dt dd)) {
+    elsif (grep { $_ eq $start } qw(dt dd)) {
       $self->_end('dt', $current);
       $self->_end('dd', $current);
     }
 
     # "<rt>" and "<rp>"
-    elsif (grep {$_ eq $start} qw(rt rp)) {
+    elsif (grep { $_ eq $start } qw(rt rp)) {
       $self->_end('rt', $current);
       $self->_end('rp', $current);
     }

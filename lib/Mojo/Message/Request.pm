@@ -137,7 +137,7 @@ sub get_start_line_chunk {
 
 sub is_secure {
   my $url = shift->url;
-  return do {my $tmp = ($url->scheme || $url->base->scheme); defined $tmp && $tmp eq 'https'};
+  return ($url->scheme || defined $url->base->scheme ? $url->base->scheme : '') eq 'https';
 }
 
 sub is_xhr {
@@ -159,7 +159,8 @@ sub parse {
 
   # CGI like environment
   $self->env($env)->_parse_env($env) if $env;
-  $self->content($self->content->parse_body(@args)) if defined $self->{state} && $self->{state} eq 'cgi';
+  $self->content($self->content->parse_body(@args))
+    if (defined $self->{state} ? $self->{state} : '') eq 'cgi';
 
   # Pass through
   $self->SUPER::parse(@args);
@@ -188,8 +189,6 @@ sub parse {
   return $self;
 }
 
-# "Bart, with $10,000, we'd be millionaires!
-#  We could buy all kinds of useful things like...love!"
 sub proxy {
   my $self = shift;
   return $self->{proxy} unless @_;
@@ -212,15 +211,14 @@ sub _parse_env {
   my $url     = $self->url;
   my $base    = $url->base;
   while (my ($name, $value) = each %$env) {
-    next unless $name =~ /^HTTP_/i;
-    $name =~ s/^HTTP_//i;
+    next unless $name =~ s/^HTTP_//i;
     $name =~ s/_/-/g;
-    $headers->header($name, $value);
+    $headers->header($name => $value);
 
     # Host/Port
     if ($name eq 'HOST') {
       my ($host, $port) = ($value, undef);
-      ($host, $port) = ($1, $2) if $host =~ /^([^\:]*)\:?(.*)$/;
+      ($host, $port) = ($1, $2) if $host =~ /^([^:]*):?(.*)$/;
       $base->host($host)->port($port);
     }
   }
@@ -257,9 +255,8 @@ sub _parse_env {
 
     # Remove SCRIPT_NAME prefix if necessary
     my $buffer = $path->to_string;
-    $value  =~ s!^/!!;
-    $value  =~ s!/$!!;
-    $buffer =~ s!^/?$value/?!!;
+    $value  =~ s!^/|/$!!g;
+    $buffer =~ s!^/?\Q$value\E/?!!;
     $buffer =~ s!^/!!;
     $path->parse($buffer);
   }

@@ -11,8 +11,6 @@ BEGIN {eval {require Pod::Simple::Search; import Pod::Simple::Search}}
 # Paths
 my @PATHS = map { $_, "$_/pods" } @INC;
 
-# "This is my first visit to the Galaxy of Terror and I'd like it to be a
-#  pleasant one."
 sub register {
   my ($self, $app, $conf) = @_;
 
@@ -20,10 +18,11 @@ sub register {
   my $preprocess = $conf->{preprocess} || 'ep';
   $app->renderer->add_handler(
     $conf->{name} || 'pod' => sub {
-      my ($r, $c, $output, $options) = @_;
+      my ($renderer, $c, $output, $options) = @_;
 
       # Preprocess and render
-      return unless $r->handlers->{$preprocess}->($r, $c, $output, $options);
+      my $handler = $renderer->handlers->{$preprocess};
+      return unless $handler->($renderer, $c, $output, $options);
       $$output = _pod_to_html($$output);
       return 1;
     }
@@ -43,7 +42,7 @@ sub _perldoc {
 
   # Find module
   my $module = $self->param('module');
-  $module =~ s!/!\:\:!g;
+  $module =~ s!/!::!g;
   my $path = Pod::Simple::Search->new->find($module, @PATHS);
 
   # Redirect to CPAN
@@ -61,7 +60,7 @@ sub _perldoc {
     sub {
       my $attrs = shift->attrs;
       $attrs->{href} =~ s!%3A%3A!/!gi
-        if $attrs->{href} =~ s!^http\://search\.cpan\.org/perldoc\?!$perldoc!;
+        if $attrs->{href} =~ s!^http://search\.cpan\.org/perldoc\?!$perldoc!;
     }
   );
 
@@ -115,7 +114,6 @@ sub _perldoc {
   $self->res->headers->content_type('text/html;charset="UTF-8"');
 }
 
-# "Aw, he looks like a little insane drunken angel."
 sub _pod_to_html {
   return unless defined(my $pod = shift);
 
@@ -177,21 +175,22 @@ L<Mojolicious::Plugin::PODRenderer> supports the following options.
   # Mojolicious::Lite
   plugin PODRenderer => {name => 'foo'};
 
-Handler name.
+Handler name, defaults to C<pod>.
 
 =head2 C<no_perldoc>
 
   # Mojolicious::Lite
   plugin PODRenderer => {no_perldoc => 1};
 
-Disable perldoc browser.
+Disable L<Mojolicious::Guides> documentation browser that will otherwise be
+available under C</perldoc>.
 
 =head2 C<preprocess>
 
   # Mojolicious::Lite
   plugin PODRenderer => {preprocess => 'epl'};
 
-Name of handler used to preprocess POD.
+Name of handler used to preprocess POD, defaults to C<ep>.
 
 =head1 HELPERS
 

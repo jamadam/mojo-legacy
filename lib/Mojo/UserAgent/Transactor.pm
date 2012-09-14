@@ -26,6 +26,7 @@ sub endpoint {
   # Proxy for normal HTTP requests
   return $self->_proxy($tx, $scheme, $host, $port)
     if $scheme eq 'http' && lc($req->headers->upgrade || '') ne 'websocket';
+
   return $scheme, $host, $port;
 }
 
@@ -79,7 +80,7 @@ sub form {
   my $req     = $tx->req;
   my $headers = $req->headers;
   $headers->content_type('multipart/form-data') if $multipart;
-  if (defined $headers->content_type && $headers->content_type eq 'multipart/form-data') {
+  if ((defined $headers->content_type ? $headers->content_type : '') eq 'multipart/form-data') {
     my $parts = $self->_multipart($encoding, $p->to_hash);
     $req->content(
       Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
@@ -102,8 +103,6 @@ sub json {
   return $tx;
 }
 
-# "This kid's a wonder!
-#  He organized all the law suits against me into one class action suit."
 sub peer {
   my ($self, $tx) = @_;
   return $self->_proxy($tx, $self->endpoint($tx));
@@ -134,8 +133,8 @@ sub redirect {
 
   # Commonly used codes
   my $res = $old->res;
-  my $code = $res->code || 0;
-  return unless grep {$_ eq $code} (301, 302, 303, 307, 308);
+  my $code = defined $res->code ? $res->code : '';
+  return unless grep { $_ eq $code } 301, 302, 303, 307, 308;
 
   # Fix broken location without authority and/or scheme
   return unless my $location = $res->headers->location;
@@ -148,19 +147,16 @@ sub redirect {
   # Clone request if necessary
   my $new    = Mojo::Transaction::HTTP->new;
   my $method = $req->method;
-  if (grep {$_ eq $code} (301, 307, 308)) {
+  if (grep { $_ eq $code } 301, 307, 308) {
     return unless $req = $req->clone;
     $new->req($req);
     $req->headers->remove('Host')->remove('Cookie')->remove('Referer');
   }
-  else { $method = 'GET' unless grep {$_ eq $method} qw(GET HEAD) }
+  elsif ($method ne 'HEAD') { $method = 'GET' }
   $new->req->method($method)->url($location);
   return $new->previous($old);
 }
 
-# "America's health care system is second only to Japan...
-#  Canada, Sweden, Great Britain... well, all of Europe.
-#  But you can thank your lucky stars we don't live in Paraguay!"
 sub tx {
   my $self = shift;
 
@@ -168,7 +164,7 @@ sub tx {
   my $tx  = Mojo::Transaction::HTTP->new;
   my $req = $tx->req->method(shift);
   my $url = shift;
-  $url = "http://$url" unless $url =~ m!^/|\://!;
+  $url = "http://$url" unless $url =~ m!^/|://!;
   ref $url ? $req->url($url) : $req->url->parse($url);
 
   # Headers
@@ -180,7 +176,6 @@ sub tx {
   return $tx;
 }
 
-# "She found my one weakness... that I'm weak!"
 sub websocket {
   my $self = shift;
 

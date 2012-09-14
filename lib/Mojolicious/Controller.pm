@@ -12,7 +12,6 @@ use Mojolicious;
 use Mojolicious::Routes::Match;
 use Scalar::Util ();
 
-# "Scalpel... blood bucket... priest."
 has app => sub { Mojolicious->new };
 has match => sub {
   Mojolicious::Routes::Match->new(GET => '/')->root(shift->app->routes);
@@ -25,13 +24,11 @@ my %RESERVED = map { $_ => 1 } (
   qw(namespace partial path status template text)
 );
 
-# "Is all the work done by the children?
-#  No, not the whipping."
 sub AUTOLOAD {
   my $self = shift;
 
   # Method
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)\:\:(\w+)$/;
+  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
   Carp::croak("Undefined subroutine &${package}::$method called")
     unless Scalar::Util::blessed($self) && $self->isa(__PACKAGE__);
 
@@ -43,9 +40,6 @@ sub AUTOLOAD {
 
 sub DESTROY { }
 
-# "For the last time, I don't like lilacs!
-#  Your first wife was the one who liked lilacs!
-#  She also liked to shut up!"
 sub cookie {
   my ($self, $name, $value, $options) = @_;
   $options ||= {};
@@ -71,7 +65,6 @@ sub cookie {
   return $cookie->value;
 }
 
-# "Something's wrong, she's not responding to my poking stick."
 sub finish {
   my ($self, $chunk) = @_;
 
@@ -90,7 +83,6 @@ sub finish {
   return $self->write('');
 }
 
-# "You two make me ashamed to call myself an idiot."
 sub flash {
   my $self = shift;
 
@@ -106,7 +98,6 @@ sub flash {
   return $self;
 }
 
-# "My parents may be evil, but at least they're stupid."
 sub on {
   my ($self, $name, $cb) = @_;
   my $tx = $self->tx;
@@ -114,8 +105,6 @@ sub on {
   return $tx->on($name => sub { shift and $self->$cb(@_) });
 }
 
-# "Just make a simple cake. And this time, if someone's going to jump out of
-#  it make sure to put them in *after* you cook it."
 sub param {
   my ($self, $name) = (shift, shift);
 
@@ -152,9 +141,6 @@ sub param {
   return $req->param($name);
 }
 
-# "Is there an app for kissing my shiny metal ass?
-#  Several!
-#  Oooh!"
 sub redirect_to {
   my $self = shift;
 
@@ -164,8 +150,6 @@ sub redirect_to {
   return $self->rendered($res->is_status_class(300) ? undef : 302);
 }
 
-# "Mamma Mia! The cruel meatball of war has rolled onto our laps and ruined
-#  our white pants of peace!"
 sub render {
   my $self = shift;
 
@@ -204,35 +188,8 @@ sub render {
   return !!$self->rendered($stash->{status});
 }
 
-sub render_content {
-  my $self    = shift;
-  my $name    = shift || 'content';
-  my $content = pop;
-
-  # Set
-  my $stash = $self->stash;
-  my $c = $stash->{'mojo.content'} ||= {};
-  if (defined $content) {
-
-    # Reset with multiple values
-    if (@_) {
-      $c->{$name}
-        = join('', map({ref $_ eq 'CODE' ? $_->() : $_} @_, $content));
-    }
-
-    # First come
-    else { $c->{$name} ||= ref $content eq 'CODE' ? $content->() : $content }
-  }
-
-  # Get
-  $content = defined $c->{$name} ? $c->{$name} : '';
-  return Mojo::ByteStream->new("$content");
-}
-
 sub render_data { shift->render(data => @_) }
 
-# "The path to robot hell is paved with human flesh.
-#  Neat."
 sub render_exception {
   my ($self, $e) = @_;
 
@@ -262,14 +219,10 @@ sub render_exception {
   $self->_fallbacks({%$options, format => 'html'}, 'exception', $inline);
 }
 
-# "If you hate intolerance and being punched in the face by me,
-#  please support Proposition Infinity."
 sub render_json { shift->render(json => @_) }
 
 sub render_later { shift->stash('mojo.rendered' => 1) }
 
-# "Excuse me, sir, you're snowboarding off the trail.
-#  Lick my frozen metal ass."
 sub render_not_found {
   my $self = shift;
 
@@ -286,8 +239,6 @@ sub render_not_found {
   $self->_fallbacks({%$options, format => 'html'}, 'not_found', $inline);
 }
 
-# "You called my thesis a fat sack of barf, and then you stole it?
-#  Welcome to academia."
 sub render_partial {
   my $self = shift;
   my $template = @_ % 2 ? shift : undef;
@@ -319,11 +270,9 @@ sub rendered {
     $app->sessions->store($self);
   }
   $self->tx->resume;
-
   return $self;
 }
 
-# "A three month calendar? What is this, Mercury?"
 sub req { shift->tx->req }
 sub res { shift->tx->res }
 
@@ -359,21 +308,19 @@ sub respond_to {
 }
 
 sub send {
-  my ($self, $message, $cb) = @_;
+  my ($self, $msg, $cb) = @_;
   my $tx = $self->tx;
   Carp::croak('No WebSocket connection to send message to')
     unless $tx->is_websocket;
-  $tx->send($message => sub { shift and $self->$cb(@_) if $cb });
+  $tx->send($msg => sub { shift and $self->$cb(@_) if $cb });
   return $self->rendered(101);
 }
 
-# "Why am I sticky and naked? Did I miss something fun?"
 sub session {
   my $self = shift;
 
   # Hash
-  my $stash = $self->stash;
-  my $session = $stash->{'mojo.session'} ||= {};
+  my $session = $self->stash->{'mojo.session'} ||= {};
   return $session unless @_;
 
   # Get
@@ -420,7 +367,6 @@ sub signed_cookie {
   return wantarray ? @results : $results[0];
 }
 
-# "All this knowledge is giving me a raging brainer."
 sub stash {
   my $self = shift;
 
@@ -449,8 +395,9 @@ sub url_for {
   my $target = shift; $target = defined $target ? $target : '';
 
   # Absolute URL
-  return $target if defined Scalar::Util::blessed($target) && Scalar::Util::blessed($target) eq 'Mojo::URL';
-  return Mojo::URL->new($target) if $target =~ m!^\w+\://!;
+  return $target
+    if Scalar::Util::blessed($target) && $target->isa('Mojo::URL');
+  return Mojo::URL->new($target) if $target =~ m!^\w+://!;
 
   # Base
   my $url  = Mojo::URL->new;
@@ -479,7 +426,7 @@ sub url_for {
       if (!$target || $target eq 'current') && $req->url->path->trailing_slash;
 
     # Fix scheme for WebSockets
-    $base->scheme(defined $base->scheme && $base->scheme eq 'https' ? 'wss' : 'ws') if $ws;
+    $base->scheme((defined $base->scheme ? $base->scheme : '') eq 'https' ? 'wss' : 'ws') if $ws;
   }
 
   # Make path absolute
@@ -508,20 +455,18 @@ sub _fallbacks {
   my ($self, $options, $template, $inline) = @_;
 
   # Mode specific template
-  unless ($self->render($options)) {
+  return 1 if $self->render($options);
 
-    # Template
-    $options->{template} = $template;
-    unless ($self->render($options)) {
+  # Template
+  $options->{template} = $template;
+  return 1 if $self->render($options);
 
-      # Inline template
-      my $stash = $self->stash;
-      return unless $stash->{format} eq 'html';
-      delete $stash->{$_} for qw(extends layout);
-      delete $options->{template};
-      return $self->render(%$options, inline => $inline, handler => 'ep');
-    }
-  }
+  # Inline template
+  my $stash = $self->stash;
+  return unless $stash->{format} eq 'html';
+  delete $stash->{$_} for qw(extends layout);
+  delete $options->{template};
+  return $self->render(%$options, inline => $inline, handler => 'ep');
 }
 
 1;
@@ -639,8 +584,8 @@ L<Mojo::Transaction::WebSocket> object.
 
   # Emitted when new WebSocket messages arrive
   $c->on(message => sub {
-    my ($c, $message) = @_;
-    $c->app->log->debug("Message: $message");
+    my ($c, $msg) = @_;
+    $c->app->log->debug("Message: $msg");
   });
 
 =head2 C<param>
@@ -712,16 +657,6 @@ Render content using L<Mojolicious::Renderer/"render">, if no template is
 provided a default one based on controller and action or route name will be
 generated. All additional values get merged into the C<stash>.
 
-=head2 C<render_content>
-
-  my $output = $c->render_content;
-  my $output = $c->render_content('header');
-  my $output = $c->render_content(header => 'Hello world!');
-  my $output = $c->render_content(header => sub { 'Hello world!' });
-
-Contains partial rendered content, used for the renderers C<layout> and
-C<extends> features.
-
 =head2 C<render_data>
 
   $c->render_data($bytes);
@@ -756,8 +691,8 @@ C<stash>.
 
   $c = $c->render_later;
 
-Disable automatic rendering, especially for long polling this can be quite
-useful.
+Disable automatic rendering to delay response generation, only necessary if
+automatic rendring would result in a response.
 
   # Delayed rendering
   $c->render_later;
@@ -873,15 +808,21 @@ browsers often don't really know what they actually want.
 
   $c = $c->send({binary => $bytes});
   $c = $c->send({text   => $bytes});
-  $c = $c->send([$fin, $rsv1, $rsv2, $rsv3, $op, $payload]);
-  $c = $c->send('Hi there!');
-  $c = $c->send('Hi there!' => sub {...});
+  $c = $c->send([$fin, $rsv1, $rsv2, $rsv3, $op, $bytes]);
+  $c = $c->send($chars);
+  $c = $c->send($chars => sub {...});
 
 Send message or frame non-blocking via WebSocket, the optional drain callback
 will be invoked once all data has been written.
 
-  # Send JSON object as text frame
+  # Send "Text" frame
+  $c->send('Hello World!');
+
+  # Send JSON object as "Text" frame
   $c->send({text => Mojo::JSON->new->encode({hello => 'world'})});
+
+  # Send JSON object as "Binary" frame
+  $c->send({binary => Mojo::JSON->new->encode({hello => 'world'})});
 
   # Send "Ping" frame
   $c->send([1, 0, 0, 0, 9, 'Hello World!']);
@@ -908,7 +849,13 @@ and stored in C<HMAC-SHA1> signed cookies. Note that cookies usually have a
   my $foo = $c->session->{foo};
   delete $c->session->{foo};
 
-  # Delete whole session
+  # Expiration date in epoch seconds from now (persists between requests)
+  $c->session(expiration => 604800);
+
+  # Expiration date as absolute epoch time (only valid for one request)
+  $c->session(expires => time + 604800);
+
+  # Delete whole session by setting an expiration date in the past
   $c->session(expires => 1);
 
 =head2 C<signed_cookie>

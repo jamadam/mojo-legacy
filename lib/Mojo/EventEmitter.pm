@@ -5,13 +5,6 @@ use Scalar::Util qw(blessed weaken);
 
 use constant DEBUG => $ENV{MOJO_EVENTEMITTER_DEBUG} || 0;
 
-# "Are we there yet?
-#  No
-#  Are we there yet?
-#  No
-#  Are we there yet?
-#  No
-#  ...Where are we going?"
 sub emit {
   my ($self, $name) = (shift, shift);
 
@@ -31,10 +24,17 @@ sub emit_safe {
     warn "-- Emit $name in @{[blessed($self)]} safely (@{[scalar(@$s)]})\n"
       if DEBUG;
     for my $cb (@$s) {
-      if (!eval { $self->$cb(@_); 1 } && $name ne 'error') {
-        $self->once(error => sub { warn $_[1] })
-          unless $self->has_subscribers('error');
-        $self->emit_safe('error', qq{Event "$name" failed: $@});
+      unless (eval { $self->$cb(@_); 1 }) {
+
+        # Error event failed
+        if ($name eq 'error') { warn qq{Event "error" failed: $@} }
+
+        # Normal event failed
+        else {
+          $self->once(error => sub { warn $_[1] })
+            unless $self->has_subscribers('error');
+          $self->emit_safe('error', qq{Event "$name" failed: $@});
+        }
       }
     }
   }
@@ -68,20 +68,16 @@ sub once {
 
 sub subscribers { shift->{events}{shift()} || [] }
 
-# "Back you robots!
-#  Nobody ruins my family vacation but me!
-#  And maybe the boy."
 sub unsubscribe {
   my ($self, $name, $cb) = @_;
 
-  # All
-  unless ($cb) {
-    delete $self->{events}{$name};
-    return $self;
+  # One
+  if ($cb) {
+    $self->{events}{$name} = [grep { $cb ne $_ } @{$self->{events}{$name}}];
   }
 
-  # One
-  $self->{events}{$name} = [grep { $cb ne $_ } @{$self->{events}{$name}}];
+  # All
+  else { delete $self->{events}{$name} }
 
   return $self;
 }

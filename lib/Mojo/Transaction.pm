@@ -9,8 +9,11 @@ has [qw(kept_alive local_address local_port previous remote_port)];
 has req => sub { Mojo::Message::Request->new };
 has res => sub { Mojo::Message::Response->new };
 
-# "Please don't eat me! I have a wife and kids. Eat them!"
-sub client_close { shift->server_close(@_) }
+sub client_close {
+  my $self = shift;
+  $self->res->finish;
+  return $self->server_close(@_);
+}
 
 sub client_read  { croak 'Method "client_read" not implemented by subclass' }
 sub client_write { croak 'Method "client_write" not implemented by subclass' }
@@ -29,13 +32,14 @@ sub error {
   return $res->error ? $res->error : undef;
 }
 
-sub is_finished { defined $_[0]->{state} && $_[0]->{state} eq 'finished' }
+sub is_finished { do {my $tmp = shift->{state}; defined $tmp ? $tmp : ''} eq 'finished' }
 
 sub is_websocket {undef}
 
 sub is_writing {
   return 1 unless my $state = shift->{state};
-  return grep {$_ eq $state} qw(write write_start_line write_headers write_body);
+  return !!grep { $_ eq $state }
+    qw(write write_start_line write_headers write_body);
 }
 
 sub remote_address {
@@ -59,12 +63,16 @@ sub remote_address {
 
 sub resume {
   my $self = shift;
-  if (defined $self->{state} && $self->{state} eq 'paused') { $self->{state} = 'write_body' }
+  if ((defined $self->{state} ? $self->{state} : '') eq 'paused') { $self->{state} = 'write_body' }
   elsif (!$self->is_writing) { $self->{state} = 'write' }
   return $self->emit('resume');
 }
 
-sub server_close { shift->emit('finish') }
+sub server_close {
+  my $self = shift;
+  $self->{state} = 'finished';
+  return $self->emit('finish');
+}
 
 sub server_read  { croak 'Method "server_read" not implemented by subclass' }
 sub server_write { croak 'Method "server_write" not implemented by subclass' }
@@ -138,15 +146,15 @@ Connection has been kept alive.
 
 =head2 C<local_address>
 
-  my $local_address = $tx->local_address;
-  $tx               = $tx->local_address($address);
+  my $address = $tx->local_address;
+  $tx         = $tx->local_address('127.0.0.1');
 
 Local interface address.
 
 =head2 C<local_port>
 
-  my $local_port = $tx->local_port;
-  $tx            = $tx->local_port($port);
+  my $port = $tx->local_port;
+  $tx      = $tx->local_port(8080);
 
 Local interface port.
 
@@ -160,17 +168,10 @@ Previous transaction that triggered this followup transaction.
   # Path of previous request
   say $tx->previous->req->url->path;
 
-=head2 C<remote_address>
-
-  my $remote_address = $tx->remote_address;
-  $tx                = $tx->remote_address($address);
-
-Remote interface address.
-
 =head2 C<remote_port>
 
-  my $remote_port = $tx->remote_port;
-  $tx             = $tx->remote_port($port);
+  my $port = $tx->remote_port;
+  $tx      = $tx->remote_port(8081);
 
 Remote interface port.
 
@@ -197,19 +198,19 @@ implements the following new ones.
 
   $tx->client_close;
 
-Transaction closed.
+Transaction closed client-side.
 
 =head2 C<client_read>
 
   $tx->client_read($chunk);
 
-Read and process client data. Meant to be overloaded in a subclass.
+Read and process data client-side. Meant to be overloaded in a subclass.
 
 =head2 C<client_write>
 
   my $chunk = $tx->client_write;
 
-Write client data. Meant to be overloaded in a subclass.
+Write data client-side. Meant to be overloaded in a subclass.
 
 =head2 C<connection>
 
@@ -220,8 +221,8 @@ Connection identifier or socket.
 
 =head2 C<error>
 
-  my $message          = $tx->error;
-  my ($message, $code) = $tx->error;
+  my $err          = $tx->error;
+  my ($err, $code) = $tx->error;
 
 Parser errors and codes.
 
@@ -249,23 +250,30 @@ Check if transaction is writing.
 
 Resume transaction.
 
+=head2 C<remote_address>
+
+  my $address = $tx->remote_address;
+  $tx         = $tx->remote_address('127.0.0.1');
+
+Remote interface address.
+
 =head2 C<server_close>
 
   $tx->server_close;
 
-Transaction closed.
+Transaction closed server-side.
 
 =head2 C<server_read>
 
   $tx->server_read($chunk);
 
-Read and process server data. Meant to be overloaded in a subclass.
+Read and process data server-side. Meant to be overloaded in a subclass.
 
 =head2 C<server_write>
 
   my $chunk = $tx->server_write;
 
-Write server data. Meant to be overloaded in a subclass.
+Write data server-side. Meant to be overloaded in a subclass.
 
 =head2 C<success>
 
@@ -278,8 +286,8 @@ message in C<error>, 400 and 500 responses also a code.
   # Sensible exception handling
   if (my $res = $tx->success) { say $res->body }
   else {
-    my ($message, $code) = $tx->error;
-    say $code ? "$code response: $message" : "Connection error: $message";
+    my ($err, $code) = $tx->error;
+    say $code ? "$code response: $err" : "Connection error: $err";
   }
 
 Error messages can be accessed with the C<error> method of the transaction

@@ -1,8 +1,6 @@
 package ojo;
 use Mojo::Base -strict;
 
-# "I heard beer makes you stupid.
-#  No I'm... doesn't."
 use Mojo::ByteStream 'b';
 use Mojo::Collection 'c';
 use Mojo::DOM;
@@ -15,8 +13,6 @@ $ENV{MOJO_LOG_LEVEL} ||= 'fatal';
 # User agent
 my $UA = Mojo::UserAgent->new;
 
-# "I'm sorry, guys. I never meant to hurt you.
-#  Just to destroy everything you ever believed in."
 sub import {
 
   # Prepare exports
@@ -47,23 +43,23 @@ sub import {
   *{"${caller}::j"} = sub {
     my $d = shift;
     my $j = Mojo::JSON->new;
-    return ref $d eq 'ARRAY' || ref $d eq 'HASH' ? $j->encode($d) : $j->decode($d);
+    return $j->encode($d) if ref $d eq 'ARRAY' || ref $d eq 'HASH';
+    return $j->decode($d);
   };
   *{"${caller}::n"} = sub { _request($UA->build_json_tx(@_)) };
   *{"${caller}::o"} = sub { _request($UA->build_tx(OPTIONS => @_)) };
-  *{"${caller}::p"} = sub { _request($UA->build_tx(POST    => @_)) };
+  *{"${caller}::p"} = sub { _request($UA->build_tx(POST => @_)) };
   *{"${caller}::r"} = sub { $UA->app->dumper(@_) };
-  *{"${caller}::t"} = sub { _request($UA->build_tx(PATCH   => @_)) };
-  *{"${caller}::u"} = sub { _request($UA->build_tx(PUT     => @_)) };
+  *{"${caller}::t"} = sub { _request($UA->build_tx(PATCH => @_)) };
+  *{"${caller}::u"} = sub { _request($UA->build_tx(PUT => @_)) };
   *{"${caller}::x"} = sub { Mojo::DOM->new(@_) };
 }
 
-# "I wonder what the shroud of Turin tastes like."
 sub _request {
   my $tx = $UA->start(@_);
-  my ($message, $code) = $tx->error;
-  warn qq/Problem loading URL "@{[$tx->req->url->to_abs]}". ($message)\n/
-    if $message && !$code;
+  my ($err, $code) = $tx->error;
+  warn qq/Problem loading URL "@{[$tx->req->url->to_abs]}". ($err)\n/
+    if $err && !$code;
   return $tx->res;
 }
 
@@ -190,7 +186,7 @@ L<Mojo::Message::Response> object.
 
   my $perl = r({data => 'structure'});
 
-Dump a Perl data structure using L<Data::Dumper>.
+Dump a Perl data structure with L<Data::Dumper>.
 
   perl -Mojo -E 'say r(g("mojolicio.us")->headers->to_hash)'
 

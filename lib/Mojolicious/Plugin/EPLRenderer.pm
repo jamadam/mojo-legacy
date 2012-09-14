@@ -4,8 +4,6 @@ use Mojo::Base 'Mojolicious::Plugin';
 use Mojo::Template;
 use Mojo::Util qw(encode md5_sum);
 
-# "Clever things make people feel stupid and unexpected things make them feel
-#  scared."
 sub register {
   my ($self, $app) = @_;
 
@@ -14,16 +12,16 @@ sub register {
 }
 
 sub _epl {
-  my ($r, $c, $output, $options) = @_;
+  my ($renderer, $c, $output, $options) = @_;
 
   # Template
   my $inline = $options->{inline};
-  my $path   = $r->template_path($options);
+  my $path   = $renderer->template_path($options);
   $path = md5_sum encode('UTF-8', $inline) if defined $inline;
   return unless defined $path;
 
   # Cached
-  my $cache = $r->cache;
+  my $cache = $renderer->cache;
   my $key   = delete $options->{cache} || $path;
   my $mt    = $cache->get($key) || Mojo::Template->new;
   if ($mt->compiled) {
@@ -43,8 +41,8 @@ sub _epl {
 
     # File
     else {
-      $mt->encoding($r->encoding) if $r->encoding;
-      return unless my $t = $r->template_name($options);
+      $mt->encoding($renderer->encoding) if $renderer->encoding;
+      return unless my $t = $renderer->template_name($options);
 
       # Try template
       if (-r $path) {
@@ -54,7 +52,7 @@ sub _epl {
       }
 
       # Try DATA section
-      elsif (my $d = $r->get_data_template($options, $t)) {
+      elsif (my $d = $renderer->get_data_template($options)) {
         $c->app->log->debug(qq{Rendering template "$t" from DATA section.});
         $mt->name(qq{template "$t" from DATA section});
         $$output = $mt->render($d, $c);
@@ -69,7 +67,7 @@ sub _epl {
   }
 
   # Exception or success
-  return ref $$output ? die($$output) : 1;
+  return ref $$output ? die $$output : 1;
 }
 
 1;

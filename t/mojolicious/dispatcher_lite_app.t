@@ -8,8 +8,6 @@ BEGIN {
 
 use Test::More tests => 33;
 
-# "Just once I'd like to eat dinner with a celebrity who isn't bound and
-#  gagged."
 use Mojo::Message::Response;
 use Mojolicious::Lite;
 use Test::Mojo;
@@ -75,7 +73,7 @@ hook after_static_dispatch => sub {
 # Response generating condition "res" for /res.txt
 app->routes->add_condition(
   res => sub {
-    my ($r, $c) = @_;
+    my ($route, $c) = @_;
     return 1 unless $c->param('res');
     $c->tx->res(
       Mojo::Message::Response->new(code => 201)->body('Conditional response!')
