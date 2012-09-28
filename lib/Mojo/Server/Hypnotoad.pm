@@ -82,7 +82,7 @@ sub run {
   $self->{poll} = IO::Poll->new;
   $self->{poll}->mask($self->{reader}, POLLIN);
 
-  # Manager environment
+  # Clean manager environment
   my $c = $self->{config};
   $SIG{INT} = $SIG{TERM} = sub { $self->{finished} = 1 };
   $SIG{CHLD} = sub {
@@ -147,9 +147,10 @@ sub _heartbeat {
 sub _hot_deploy {
   my $self = shift;
 
-  # Make sure server is running
-  return unless my $pid = $self->_pid;
-  return unless kill 0, $pid;
+  # Make sure server is running and clean up PID file if necessary
+  return unless defined(my $pid = $self->_pid);
+  my $file = $self->{config}{pid_file};
+  return -w $file ? unlink $file : undef unless $pid && kill 0, $pid;
 
   # Start hot deployment
   kill 'USR2', $pid;

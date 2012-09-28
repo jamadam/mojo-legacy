@@ -6,30 +6,23 @@ use Mojo::Transaction::WebSocket;
 sub client_read {
   my ($self, $chunk) = @_;
 
-  # EOF
-  my $preserved = $self->{state};
-  $self->{state} = 'finished' if length $chunk == 0;
-
-  # Generate response without body for HEAD request
+  # Skip body for HEAD request
   my $res = $self->res;
   $res->content->skip_body(1) if $self->req->method eq 'HEAD';
 
   # Parse response
-  $res->parse($chunk);
-  $self->{state} = 'finished' if $res->is_finished;
+  my $state = $self->{state};
+  $self->{state} = 'finished' if $res->parse($chunk)->is_finished;
 
   # Unexpected 100 Continue
-  $self->res($res->new)->{state} = $preserved
+  $self->res($res->new)->{state} = $state
     if $self->{state} eq 'finished' && (defined $res->code ? $res->code : '') eq '100';
-
-  # Check for errors
-  $self->{state} = 'finished' if $self->error;
 }
 
 sub client_write {
   my $self = shift;
 
-  # Writing
+  # Start writing
   $self->{$_} ||= 0 for qw(offset write);
   my $req = $self->req;
   unless ($self->{state}) {
@@ -82,18 +75,13 @@ sub server_leftovers {
 sub server_read {
   my ($self, $chunk) = @_;
 
-  # Parse
+  # Parse request
   my $req = $self->req;
   $req->parse($chunk) unless $req->error;
   $self->{state} ||= 'read';
 
-  # Parser error
-  if ($req->error && !$self->{handled}++) {
-    $self->emit('request')->res->headers->connection('close');
-  }
-
-  # EOF
-  elsif ((length $chunk == 0) || ($req->is_finished && !$self->{handled}++)) {
+  # Generate response
+  if ($req->is_finished && !$self->{handled}++) {
     $self->emit(
       upgrade => Mojo::Transaction::WebSocket->new(handshake => $self))
       if lc($req->headers->upgrade || '') eq 'websocket';
@@ -136,10 +124,8 @@ sub server_write {
     $chunk .= $self->_headers($res, 1);
 
     # Continued
-    if (defined $self->{continued} && !$self->{continued}) {
-      $self->{continued} = $self->{state} = 'read';
-      $self->res($self->res->new);
-    }
+    $self->res($self->res->new)->{continued} = $self->{state} = 'read'
+      if defined $self->{continued} && !$self->{continued};
   }
 
   # Body
@@ -160,9 +146,8 @@ sub _body {
 
   # Delayed
   else {
-    my $delay = delete $self->{delay};
-    $self->{state} = 'paused' if $delay;
-    $self->{delay} = 1 unless $delay;
+    if   (delete $self->{delay}) { $self->{state} = 'paused' }
+    else                         { $self->{delay} = 1 }
   }
 
   # Finished

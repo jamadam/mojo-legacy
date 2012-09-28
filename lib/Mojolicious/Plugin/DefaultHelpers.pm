@@ -82,31 +82,23 @@ sub register {
 }
 
 sub _content {
-  my $self    = shift;
-  my $name    = shift || 'content';
-  my $content = pop;
+  my ($self, $name, $content) = @_;
+  $name ||= 'content';
 
-  # Set
+  # Set (first come)
   my $c = $self->stash->{'mojo.content'} ||= {};
-  if (defined $content) {
-
-    # Reset with multiple values
-    if (@_) {
-      $c->{$name}
-        = join('', map({ref $_ eq 'CODE' ? $_->() : $_} @_, $content));
-    }
-
-    # First come
-    else { $c->{$name} ||= ref $content eq 'CODE' ? $content->() : $content }
-  }
+  $c->{$name} ||= ref $content eq 'CODE' ? $content->() : $content
+    if defined $content;
 
   # Get
   return Mojo::ByteStream->new(defined $c->{$name} ? $c->{$name} : '');
 }
 
 sub _content_for {
-  my ($self, $name) = (shift, shift);
-  _content($self, $name, _content($self, $name), @_);
+  my ($self, $name, $content) = @_;
+  return _content($self, $name) unless defined $content;
+  my $c = $self->stash->{'mojo.content'} ||= {};
+  return $c->{$name} .= ref $content eq 'CODE' ? $content->() : $content;
 }
 
 sub _current_route {
@@ -187,7 +179,7 @@ Alias for L<Mojo/"config">.
   %= content 'bar'
   %= content
 
-Store partial rendered content and retrieve it.
+Store partial rendered content in named buffer and retrieve it.
 
 =head2 C<content_for>
 
@@ -196,7 +188,7 @@ Store partial rendered content and retrieve it.
   % end
   %= content_for 'foo'
 
-Append content to named buffer and retrieve it.
+Append partial rendered content to named buffer and retrieve it.
 
   % content_for message => begin
     Hello
