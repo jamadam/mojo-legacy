@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 52;
-
+use Test::More;
 use Mojolicious::Types;
 
 # Basic functionality
@@ -66,3 +65,5 @@ is_deeply $t->detect('text/html'), ['htm', 'html'], 'right formats';
 is $t->type('json'), 'application/json',        'right type';
 is $t->type('htm'),  'text/html',               'right type';
 is $t->type('html'), 'text/html;charset=UTF-8', 'right type';
+
+done_testing();

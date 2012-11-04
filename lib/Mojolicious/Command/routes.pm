@@ -2,6 +2,7 @@ package Mojolicious::Command::routes;
 use Mojo::Base 'Mojolicious::Command';
 
 use MojoLegacy::re 'regexp_pattern';
+use Getopt::Long qw(GetOptionsFromArray :config no_auto_abbrev no_ignore_case);
 
 has description => "Show available routes.\n";
 has usage       => <<"EOF";
@@ -15,7 +16,7 @@ sub run {
   my ($self, @args) = @_;
 
   # Options
-  $self->_options(\@args, 'v|verbose' => \my $verbose);
+  GetOptionsFromArray \@args, 'v|verbose' => \my $verbose;
 
   # Walk and draw
   my $routes = [];
@@ -109,6 +110,9 @@ Mojolicious::Command::routes - Routes command
 =head1 DESCRIPTION
 
 L<Mojolicious::Command::routes> lists all your application routes.
+
+This is a core command, that means it is always enabled and its code a good
+example for learning to build new commands, you're welcome to fork it.
 
 =head1 ATTRIBUTES
 

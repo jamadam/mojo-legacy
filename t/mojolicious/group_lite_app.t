@@ -8,8 +8,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 208;
-
+use Test::More;
 use Mojo::ByteStream 'b';
 use Mojo::UserAgent::CookieJar;
 use Mojolicious::Lite;
@@ -27,7 +26,7 @@ get '/expiration' => sub {
 
 under sub {
   my $self = shift;
-  return unless $self->req->headers->header('X-Bender');
+  return undef unless $self->req->headers->header('X-Bender');
   $self->res->headers->add('X-Under' => 23);
   $self->res->headers->add('X-Under' => 24);
   1;
@@ -54,7 +53,7 @@ under sub {
 
   # Not authenticated
   $self->render('param_auth_denied');
-  return;
+  return undef;
 };
 
 # GET /param_auth
@@ -177,7 +176,7 @@ group {
     my $self = shift;
     return 1 if $self->req->param('ok');
     $self->render(text => "You're not ok.");
-    return;
+    return undef;
   };
 
   # GET /authgroup
@@ -457,6 +456,8 @@ $t->get_ok('/one_format.xml')->status_is(200)
 # GET /one_format.txt
 $t->get_ok('/one_format.txt')->status_is(404)
   ->content_type_is('text/html;charset=UTF-8');
+
+done_testing();
 
 __DATA__
 @@ not_found.html.epl

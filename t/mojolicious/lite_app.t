@@ -9,8 +9,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 705;
-
+use Test::More;
 use Mojo::ByteStream 'b';
 use Mojo::Cookie::Response;
 use Mojo::Date;
@@ -476,7 +475,7 @@ app->routes->add_condition(
     my ($route, $c, $captures, $num) = @_;
     $captures->{test} = $captures->{text} . "$num works!";
     return 1 if $c->stash->{default} == $num;
-    return;
+    return undef;
   }
 );
 
@@ -493,7 +492,7 @@ app->routes->add_condition(
   redirect => sub {
     my ($route, $c, $captures, $active) = @_;
     return 1 unless $active;
-    $c->redirect_to('index') and return
+    $c->redirect_to('index') and return undef
       unless $c->req->headers->header('X-Condition-Test');
     return 1;
   }
@@ -1331,6 +1330,8 @@ $t->get_ok('/dynamic/inline')->status_is(200)
 # GET /dynamic/inline (again)
 $t->get_ok('/dynamic/inline')->status_is(200)
   ->content_is("dynamic inline 2\n");
+
+done_testing();
 
 __DATA__
 @@ with-format.html.ep

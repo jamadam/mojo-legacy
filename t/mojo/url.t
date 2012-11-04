@@ -2,8 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 407;
-
+use Test::More;
 use Mojo::URL;
 
 # Simple
@@ -667,3 +666,5 @@ $url = Mojo::URL->new('../../');
 is $url->to_abs($base), 'http://a/', 'right absolute version';
 $url = Mojo::URL->new('../../g');
 is $url->to_abs($base), 'http://a/g', 'right absolute version';
+
+done_testing();

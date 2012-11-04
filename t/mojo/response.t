@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 357;
-
+use Test::More;
 use Mojo::Asset::File;
 use Mojo::Content::Single;
 use Mojo::Content::MultiPart;
@@ -296,6 +295,46 @@ is $res->message, 'Request Entity Too Large', 'right message';
 is $res->version, '1.1',                      'right version';
 is $res->headers->content_length, undef, 'right "Content-Length" value';
 
+# Parse HTTP 1.1 chunked response (exceeding limit)
+{
+  local $ENV{MOJO_MAX_BUFFER_SIZE} = 12;
+  $res = Mojo::Message::Response->new;
+  is $res->content->max_buffer_size, 12, 'right size';
+  $res->parse("HTTP/1.1 200 OK\x0d\x0a");
+  $res->parse("Content-Type: text/plain\x0d\x0a");
+  $res->parse("Transfer-Encoding: chunked\x0d\x0a\x0d\x0a");
+  $res->parse('a' x 1000);
+  ok $res->is_finished, 'response is finished';
+  ok $res->content->is_finished, 'content is finished';
+  is(($res->error)[0], 'Maximum buffer size exceeded', 'right error');
+  is(($res->error)[1], 400, 'right status');
+  is $res->code,    200,   'right status';
+  is $res->message, 'OK',  'right message';
+  is $res->version, '1.1', 'right version';
+  is $res->headers->content_type, 'text/plain', 'right "Content-Type" value';
+}
+
+# Parse HTTP 1.1 multipart response (exceeding limit)
+{
+  local $ENV{MOJO_MAX_BUFFER_SIZE} = 12;
+  $res = Mojo::Message::Response->new;
+  is $res->content->max_buffer_size, 12, 'right size';
+  $res->parse("HTTP/1.1 200 OK\x0d\x0a");
+  $res->parse("Content-Length: 420\x0d\x0a");
+  $res->parse('Content-Type: multipart/form-data; bo');
+  $res->parse("undary=----------0xKhTmLbOuNdArY\x0d\x0a\x0d\x0a");
+  $res->parse('a' x 200);
+  ok $res->is_finished, 'response is finished';
+  ok $res->content->is_finished, 'content is finished';
+  is(($res->error)[0], 'Maximum buffer size exceeded', 'right error');
+  is(($res->error)[1], 400, 'right status');
+  is $res->code,    200,   'right status';
+  is $res->message, 'OK',  'right message';
+  is $res->version, '1.1', 'right version';
+  ok $res->headers->content_type =~ m!multipart/form-data!,
+    'right "Content-Type" value';
+}
+
 # Parse HTTP 1.1 chunked response
 $res = Mojo::Message::Response->new;
 $res->parse("HTTP/1.1 500 Internal Server Error\x0d\x0a");
@@ -536,6 +575,31 @@ is $res->headers->sec_websocket_protocol, 'sample',
   'right "Sec-WebSocket-Protocol" value';
 is $res->body, '', 'no content';
 
+# Parse WebSocket handshake response (with frame)
+$res = Mojo::Message::Response->new;
+$res->parse("HTTP/1.1 101 Switching Protocols\x0d\x0a");
+$res->parse("Upgrade: websocket\x0d\x0a");
+$res->parse("Connection: Upgrade\x0d\x0a");
+$res->parse("Sec-WebSocket-Accept: abcdef=\x0d\x0a");
+$res->parse("Sec-WebSocket-Protocol: sample\x0d\x0a");
+$res->parse("\x0d\x0a\x81\x08\x77\x68\x61\x74\x65\x76\x65\x72");
+ok $res->is_finished, 'response is finished';
+ok $res->is_empty,    'response is empty';
+ok $res->content->skip_body, 'body has been skipped';
+is $res->code,    101,                   'right status';
+is $res->message, 'Switching Protocols', 'right message';
+is $res->version, '1.1',                 'right version';
+is $res->headers->upgrade,    'websocket', 'right "Upgrade" value';
+is $res->headers->connection, 'Upgrade',   'right "Connection" value';
+is $res->headers->sec_websocket_accept, 'abcdef=',
+  'right "Sec-WebSocket-Accept" value';
+is $res->headers->sec_websocket_protocol, 'sample',
+  'right "Sec-WebSocket-Protocol" value';
+is $res->body, '', 'no content';
+ok $res->has_leftovers, 'has leftovers';
+is $res->leftovers,     "\x81\x08\x77\x68\x61\x74\x65\x76\x65\x72",
+  'frame in leftovers';
+
 # Build WebSocket handshake response
 $res = Mojo::Message::Response->new;
 $res->code(101);
@@ -752,3 +816,5 @@ ok $res->dom, 'dom built';
 $count = 0;
 $res->dom('a')->each(sub { $count++ });
 is $count, 2, 'all anchors found';
+
+done_testing();

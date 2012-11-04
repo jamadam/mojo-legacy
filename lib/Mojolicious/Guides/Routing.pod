@@ -303,12 +303,15 @@ route with all its children.
 
   # /bye -> MyApp::Controller::Foo->bye
   $r->route('/bye')
-    ->to(namespace => 'MyApp::Controller::Foo', action => 'bye');
+    ->to(namespace => 'MyApp::Controller::Foo::Bar', action => 'bye');
 
 The C<controller> is always appended to the C<namespace> if available.
 
-  # /bye -> MyApp::Controller::Foo->bye
-  $r->route('/bye')->to('foo#bye', namespace => 'MyApp::Controller');
+  # /bye -> MyApp::Controller::Foo::Bar->bye
+  $r->route('/bye')->to('foo-bar#bye', namespace => 'MyApp::Controller');
+
+  # /hey -> MyApp::Controller::Foo::Bar->hey
+  $r->route('/hey')->to('Foo::Bar#hey', namespace => 'MyApp::Controller');
 
 You can also change the default namespace for all routes in the application
 with the router attribute L<Mojolicious::Routes/"namespace">.
@@ -536,7 +539,7 @@ be broken, this makes bridges a very powerful tool for authentication.
 
     # Not authenticated
     $self->render(text => "You're not Bender.");
-    return;
+    return undef;
   });
   $foo->route('/bar')->to(controller => 'foo', action => 'bar');
 
@@ -716,14 +719,14 @@ play, they are basically router plugins.
       my ($route, $c, $captures, $pattern) = @_;
 
       # User supplied regular expression
-      return unless $pattern && ref $pattern eq 'Regexp';
+      return undef unless $pattern && ref $pattern eq 'Regexp';
 
       # Match "User-Agent" header and return true on success
       my $agent = $c->req->headers->user_agent;
       return 1 if $agent && $agent =~ $pattern;
 
       # No success
-      return;
+      return undef;
     }
   );
 
@@ -753,7 +756,7 @@ You can also package your conditions as reusable plugins.
         my ($route, $c, $captures, $days) = @_;
 
         # Keep the werewolfs out!
-        return if abs(14 - (phase(time))[2]) > ($days / 2);
+        return undef if abs(14 - (phase(time))[2]) > ($days / 2);
 
         # It's ok, no werewolf
         return 1;
@@ -884,7 +887,7 @@ done.
 =head1 MORE
 
 You can continue with L<Mojolicious::Guides> now or take a look at the
-Mojolicious wiki L<http://github.com/kraih/mojo/wiki>, which contains a lot
+L<Mojolicious wiki|http://github.com/kraih/mojo/wiki>, which contains a lot
 more documentation and examples by many different authors.
 
 =cut

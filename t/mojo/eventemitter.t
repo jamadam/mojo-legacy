@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 46;
-
+use Test::More;
 use Mojo::EventEmitter;
 
 # Normal event
@@ -140,3 +139,5 @@ $e->emit(one => $buffer => 'three');
 is $buffer, 'abctwo123twoabcthree123threedef', 'right result';
 $e->emit(one => $buffer => 'x');
 is $buffer, 'abctwo123twoabcthree123threedefabcx123x', 'right result';
+
+done_testing();

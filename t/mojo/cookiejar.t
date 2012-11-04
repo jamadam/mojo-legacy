@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 83;
-
+use Test::More;
 use Mojo::Cookie::Response;
 use Mojo::URL;
 use Mojo::UserAgent::CookieJar;
@@ -136,6 +135,16 @@ is $cookies[1], undef, 'no second cookie';
 is $cookies[0]->name,  'bar', 'right name';
 is $cookies[0]->value, 'baz', 'right value';
 is $cookies[1], undef, 'no second cookie';
+@cookies = $jar->all;
+is $cookies[0]->domain, 'com',       'right domain';
+is $cookies[0]->path,   '/foo',      'right path';
+is $cookies[0]->name,   'foo',       'right name';
+is $cookies[0]->value,  'bar',       'right value';
+is $cookies[1]->domain, 'kraih.com', 'right domain';
+is $cookies[1]->path,   '/foo',      'right path';
+is $cookies[1]->name,   'bar',       'right name';
+is $cookies[1]->value,  'baz',       'right value';
+is $cookies[2], undef, 'no third cookie';
 
 # Huge cookie
 $jar = Mojo::UserAgent::CookieJar->new->max_cookie_size(1024);
@@ -294,3 +303,4 @@ is $cookies[0]->name,  'foo', 'right name';
 is $cookies[0]->value, 'bar', 'right value';
 is $cookies[1], undef, 'no second cookie';
 
+done_testing();

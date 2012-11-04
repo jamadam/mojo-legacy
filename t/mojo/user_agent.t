@@ -6,8 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 122;
-
+use Test::More;
 use Mojo::IOLoop;
 use Mojo::UserAgent;
 use Mojolicious::Lite;
@@ -212,7 +211,7 @@ is $tx->res->code,        200, 'right status';
 is $tx->res->body,        'works!', 'right content';
 
 # GET /no_length (missing Content-Length header)
-($finished_req, $finished_tx, $finished_res) = undef;
+($finished_req, $finished_tx, $finished_res) = ();
 $tx = $ua->build_tx(GET => '/no_length');
 ok !$tx->is_finished, 'transaction is not finished';
 $ua->once(
@@ -253,7 +252,7 @@ is $tx->res->code, 200,      'right status';
 is $tx->res->body, 'works!', 'right content';
 
 # POST /echo (non-blocking form)
-($success, $code, $body) = undef;
+($success, $code, $body) = ();
 $ua->post_form(
   '/echo' => {hello => 'world'} => sub {
     my ($self, $tx) = @_;
@@ -269,7 +268,7 @@ is $code,    200, 'right status';
 is $body,    'hello=world', 'right content';
 
 # POST /echo (non-blocking JSON)
-($success, $code, $body) = undef;
+($success, $code, $body) = ();
 $ua->post_json(
   '/echo' => {hello => 'world'} => sub {
     my ($self, $tx) = @_;
@@ -444,3 +443,5 @@ my $id   = Mojo::IOLoop->server(
 $tx = $ua->get("http://localhost:$port/");
 ok !$tx->success, 'not successful';
 is $tx->error, 'Premature connection close', 'right error';
+
+done_testing();

@@ -5,7 +5,8 @@ use Carp 'croak';
 use Mojo::Headers;
 
 has [qw(auto_relax relaxed skip_body)];
-has headers => sub { Mojo::Headers->new };
+has headers           => sub { Mojo::Headers->new };
+has max_buffer_size   => sub { $ENV{MOJO_MAX_BUFFER_SIZE} || 262144 };
 has max_leftover_size => sub { $ENV{MOJO_MAX_LEFTOVER_SIZE} || 262144 };
 
 sub body_contains {
@@ -16,8 +17,8 @@ sub body_size { croak 'Method "body_size" not implemented by subclass' }
 
 sub boundary {
   my $type = shift->headers->content_type || '';
-  $type =~ m!multipart.*boundary="*([a-zA-Z0-9'(),.:?\-_+/]+)!i and return $1;
-  return;
+  $type =~ m!multipart.*boundary="?([a-zA-Z0-9'(),.:?\-_+/]+)!i and return $1;
+  return undef;
 }
 
 sub build_body    { shift->_build('get_body_chunk') }
@@ -30,7 +31,7 @@ sub charset {
 
 sub clone {
   my $self = shift;
-  return if $self->is_dynamic;
+  return undef if $self->is_dynamic;
   return $self->new(headers => $self->headers->clone);
 }
 
@@ -66,7 +67,7 @@ sub get_header_chunk {
   return substr $self->{header_buffer}, $offset, 131072;
 }
 
-sub has_leftovers { !!length(shift->{buffer} || '') }
+sub has_leftovers { !!length shift->leftovers }
 
 sub header_size { length shift->build_headers }
 
@@ -78,6 +79,8 @@ sub is_dynamic {
 }
 
 sub is_finished { my $tmp = shift->{state}; (defined $tmp ? $tmp : '') eq 'finished' }
+
+sub is_limit_exceeded { !!shift->{limit} }
 
 sub is_multipart {undef}
 
@@ -93,21 +96,6 @@ sub parse {
   return $self if $self->{state} eq 'headers';
   $self->_body;
 
-  # No content
-  if ($self->skip_body) {
-    $self->{state} = 'finished';
-    return $self;
-  }
-
-  # Relaxed parsing
-  my $headers = $self->headers;
-  if ($self->auto_relax) {
-    my $connection = $headers->connection || '';
-    my $len = defined $headers->content_length ? $headers->content_length : '';
-    $self->relaxed(1)
-      if !length $len && ($connection =~ /close/i || $headers->content_type);
-  }
-
   # Parse chunked content
   $self->{real_size} = defined $self->{real_size} ? $self->{real_size} : 0;
   if ($self->is_chunked && $self->{state} ne 'headers') {
@@ -122,6 +110,21 @@ sub parse {
       && length($self->{buffer}) > $self->max_leftover_size;
     $self->{buffer} .= $self->{pre_buffer} unless $limit;
     $self->{pre_buffer} = '';
+  }
+
+  # No content
+  if ($self->skip_body) {
+    $self->{state} = 'finished';
+    return $self;
+  }
+
+  # Relaxed parsing
+  my $headers = $self->headers;
+  if ($self->auto_relax) {
+    my $connection = $headers->connection || '';
+    my $len = defined $headers->content_length ? $headers->content_length : '';
+    $self->relaxed(1)
+      if !length $len && ($connection =~ /close/i || $headers->content_type);
   }
 
   # Chunked or relaxed content
@@ -268,6 +271,10 @@ sub _parse_chunked {
   # Trailing headers
   $self->_parse_chunked_trailing_headers
     if (defined $self->{chunk_state} ? $self->{chunk_state} : '') eq 'trailing_headers';
+
+  # Check buffer size
+  $self->{limit} = $self->{state} = 'finished'
+    if length(defined $self->{pre_buffer} ? $self->{pre_buffer} : '') > $self->max_buffer_size;
 }
 
 sub _parse_chunked_trailing_headers {
@@ -407,6 +414,14 @@ Try to detect when relaxed parsing is necessary.
 
 Content headers, defaults to a L<Mojo::Headers> object.
 
+=head2 C<max_buffer_size>
+
+  my $size = $content->max_buffer_size;
+  $content = $content->max_buffer_size(1024);
+
+Maximum size in bytes of buffer for content parser, defaults to the value of
+the C<MOJO_MAX_BUFFER_SIZE> environment variable or C<262144>.
+
 =head2 C<max_leftover_size>
 
   my $size = $content->max_leftover_size;
@@ -527,6 +542,12 @@ working.
   my $success = $content->is_finished;
 
 Check if parser is finished.
+
+=head2 C<is_limit_exceeded>
+
+  my $success = $content->is_limit_exceeded;
+
+Check if buffer has exceeded C<max_buffer_size>.
 
 =head2 C<is_multipart>
 

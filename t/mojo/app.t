@@ -6,8 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 63;
-
+use Test::More;
 use Mojo;
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
@@ -236,7 +235,7 @@ is $tx->res->code, 200, 'right status';
 is $tx->res->body, $result, 'right content';
 
 # Upload
-($code, $body) = undef;
+($code, $body) = ();
 $tx = $ua->post_form(
   "http://127.0.0.1:$port/upload" => {file => {content => $result}});
 is $tx->res->code, 200, 'right status';
@@ -265,3 +264,5 @@ ok !$tx2->error, 'no error';
 ok $tx3->is_finished, 'transaction is finished';
 is $tx3->res->body, 'Your Mojo is working!', 'right content';
 ok !$tx3->error, 'no error';
+
+done_testing();

@@ -151,11 +151,13 @@ sub namespace {
   return '';
 }
 
+sub next { shift->_sibling(1) }
+
 sub parent {
   my $self = shift;
 
   # Not a tag
-  return if (my $tree = $self->tree)->[0] eq 'root';
+  return undef if (my $tree = $self->tree)->[0] eq 'root';
 
   # Parent
   return $self->new->charset($self->charset)->tree($tree->[3])
@@ -177,6 +179,8 @@ sub prepend_content {
     @{_parent($self->_parse("$new"), $tree)};
   return $self;
 }
+
+sub previous { shift->_sibling(0) }
 
 sub remove { shift->replace('') }
 
@@ -344,6 +348,24 @@ sub _parser {
   return $self;
 }
 
+sub _sibling {
+  my ($self, $next) = @_;
+
+  # Root
+  return undef unless my $parent = $self->parent;
+
+  # Find previous or next sibling
+  my ($previous, $current);
+  for my $child ($parent->children->each) {
+    ++$current and next if $child->tree eq $self->tree;
+    return $next ? $child : $previous if $current;
+    $previous = $child;
+  }
+
+  # No siblings
+  return undef;
+}
+
 sub _text {
   my ($elements, $recurse, $trim) = @_;
 
@@ -433,7 +455,7 @@ use it for validation.
 =head1 CASE SENSITIVITY
 
 L<Mojo::DOM> defaults to HTML semantics, that means all tags and attributes
-are lowercased and selectors need to be lowercase as well.
+are lowercased and selectors need to be lower case as well.
 
   my $dom = Mojo::DOM->new('<P ID="greeting">Hi!</P>');
   say $dom->at('p')->text;
@@ -570,6 +592,15 @@ Find element namespace.
   # Find namespace for an element that may or may not have a namespace prefix
   my $namespace = $dom->at('svg > circle')->namespace;
 
+=head2 C<next>
+
+  my $sibling = $dom->next;
+
+Next sibling of element.
+
+  # "<h2>B</h2>"
+  $dom->parse('<div><h1>A</h1><h2>B</h2></div>')->at('h1')->next;
+
 =head2 C<parent>
 
   my $parent = $dom->parent;
@@ -602,6 +633,15 @@ Prepend to element content.
 
   # "<div><h2>AB</h2></div>"
   $dom->parse('<div><h2>B</h2></div>')->at('h2')->prepend_content('A')->root;
+
+=head2 C<previous>
+
+  my $sibling = $dom->previous;
+
+Previous sibling of element.
+
+  # "<h1>A</h1>"
+  $dom->parse('<div><h1>A</h1><h2>B</h2></div>')->at('h2')->previous;
 
 =head2 C<remove>
 

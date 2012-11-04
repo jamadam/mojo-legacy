@@ -2,8 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 789;
-
+use Test::More;
 use Mojo::DOM;
 use Mojo::Util 'encode';
 
@@ -128,6 +127,13 @@ is $dom->at('[class$="ing"]')->type,    'simple', 'right type';
 is $dom->at('[class="working"]')->type, 'simple', 'right type';
 is $dom->at('[class$=ing]')->type,      'simple', 'right type';
 is $dom->at('[class=working]')->type,   'simple', 'right type';
+is $dom->at('foo > simple')->next->type, 'test', 'right type';
+is $dom->at('foo > simple')->next->next->type, 'a', 'right type';
+is $dom->at('foo > test')->previous->type, 'simple', 'right type';
+is $dom->next,     undef, 'no siblings';
+is $dom->previous, undef, 'no siblings';
+is $dom->at('foo > a')->next,          undef, 'no next sibling';
+is $dom->at('foo > simple')->previous, undef, 'no previous sibling';
 
 # Class and ID
 $dom = Mojo::DOM->new->parse('<div id="id" class="class">a</div>');
@@ -171,7 +177,7 @@ is_deeply \@div, $ids, 'found all div elements';
 
 # Script tag
 $dom = Mojo::DOM->new->parse(<<EOF);
-<script type="text/javascript" charset="utf-8">alert('lalala');</script>
+<script charset="utf-8">alert('lalala');</script>
 EOF
 is $dom->at('script')->text, "alert('lalala');", 'right script content';
 
@@ -644,6 +650,10 @@ is_deeply \@div, [qw(A C)], 'found all div elements with the right atributes';
 $dom->find('div[foo^="b"][foo$="r"]')->each(sub { push @div, shift->text });
 is_deeply \@div, [qw(A B C)],
   'found all div elements with the right atributes';
+is $dom->at('[foo="bar"]')->previous, undef, 'no previous sibling';
+is $dom->at('[foo="bar"]')->next->text, 'B', 'right text';
+is $dom->at('[foo="bar"]')->next->previous->text, 'A', 'right text';
+is $dom->at('[foo="bar"]')->next->next->next->next, undef, 'no next sibling';
 
 # Pseudo classes
 $dom = Mojo::DOM->new->parse(<<EOF);
@@ -1419,9 +1429,9 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 <html>
   <head>
     <title>Foo</title>
-    <script type="text/javascript" src="/js/one.js"></script>
-    <script type="text/javascript" src="/js/two.js"></script>
-    <script type="text/javascript" src="/js/three.js"></script>
+    <script src="/js/one.js"></script>
+    <script src="/js/two.js"></script>
+    <script src="/js/three.js"></script>
   </head>
   <body>Bar</body>
 </html>
@@ -1442,9 +1452,9 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 <html>
   <head>
     <title>Foo</title>
-    <script type="text/javascript" src="/js/one.js"></script>
-    <script type="text/javascript" src="/js/two.js"></script>
-    <script type="text/javascript" src="/js/three.js">
+    <script src="/js/one.js"></script>
+    <script src="/js/two.js"></script>
+    <script src="/js/three.js">
   </head>
   <body>Bar</body>
 </html>
@@ -2132,3 +2142,17 @@ $dom = Mojo::DOM->new->charset('doesnotexist');
 $dom->parse(qq{<html><div id="a">A</div></html>});
 is $dom->at('#a'), undef, 'no result';
 is "$dom", '', 'right result';
+
+# Comments
+$dom = Mojo::DOM->new(<<EOF);
+<!-- HTML5 -->
+<!-- bad idea -- HTML5 -->
+<!-- HTML4 -- >
+<!-- bad idea -- HTML4 -- >
+EOF
+is $dom->tree->[1][1], ' HTML5 ',             'right comment';
+is $dom->tree->[3][1], ' bad idea -- HTML5 ', 'right comment';
+is $dom->tree->[5][1], ' HTML4 ',             'right comment';
+is $dom->tree->[7][1], ' bad idea -- HTML4 ', 'right comment';
+
+done_testing();

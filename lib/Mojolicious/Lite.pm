@@ -533,7 +533,7 @@ are only evaluated if the callback returned a true value.
 
     # Not authenticated
     $self->render('denied');
-    return;
+    return undef;
   };
 
   # / (with authentication)
@@ -579,7 +579,7 @@ C<under> statements.
     my $self = shift;
     return 1 if $self->req->headers->header('X-Bender');
     $self->render(text => "You're not Bender.");
-    return;
+    return undef;
   };
 
   # Admin section
@@ -590,7 +590,7 @@ C<under> statements.
       my $self = shift;
       return 1 if $self->req->heaers->header('X-Awesome');
       $self->render(text => "You're not awesome enough.");
-      return;
+      return undef;
     };
 
     # GET /admin/dashboard
@@ -868,7 +868,7 @@ Base64 encoded) or a C<public> directory if it exists.
 Testing your application is as easy as creating a C<t> directory and filling
 it with normal Perl unit tests.
 
-  use Test::More tests => 3;
+  use Test::More;
   use Test::Mojo;
 
   use FindBin;
@@ -876,6 +876,8 @@ it with normal Perl unit tests.
 
   my $t = Test::Mojo->new;
   $t->get_ok('/')->status_is(200)->content_like(qr/Funky/);
+
+  done_testing();
 
 Run all unit tests with the C<test> command.
 

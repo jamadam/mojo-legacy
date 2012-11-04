@@ -125,16 +125,15 @@ sub header_isnt {
 
 sub header_like {
   my ($self, $name, $regex, $desc) = @_;
-  $desc ||= "$name is similar";
   return $self->_test('like', scalar $self->tx->res->headers->header($name),
-    $regex, $desc);
+    $regex, $desc || "$name is similar");
 }
 
 sub header_unlike {
   my ($self, $name, $regex, $desc) = @_;
-  $desc ||= "$name is not similar";
-  return $self->_test('unlike', scalar $self->tx->res->headers->header($name),
-    $regex, $desc);
+  return $self->_test('unlike',
+    do { my $tmp = scalar $self->tx->res->headers->header($name); defined $tmp ? $tmp : '' },
+    $regex, $desc || "$name is not similar");
 }
 
 sub json_content_is {
@@ -329,7 +328,7 @@ Test::Mojo - Testing Mojo!
 
 =head1 SYNOPSIS
 
-  use Test::More tests => 12;
+  use Test::More;
   use Test::Mojo;
 
   my $t = Test::Mojo->new('MyApp');
@@ -349,6 +348,8 @@ Test::Mojo - Testing Mojo!
     ->send_ok('hello')
     ->message_is('echo: hello')
     ->finish_ok;
+
+  done_testing();
 
 =head1 DESCRIPTION
 

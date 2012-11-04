@@ -8,8 +8,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 72;
-
+use Test::More;
 use Mojolicious::Lite;
 use Test::Mojo;
 
@@ -96,8 +95,8 @@ EOF
 
 # GET /script
 $t->get_ok('/script')->status_is(200)->content_is(<<EOF);
-<script src="/script.js" type="text/javascript"></script>
-<script type="text/javascript">//<![CDATA[
+<script src="/script.js"></script>
+<script>//<![CDATA[
 
   var a = 'b';
 
@@ -111,8 +110,8 @@ EOF
 
 # GET /style
 $t->get_ok('/style')->status_is(200)->content_is(<<EOF);
-<link href="/foo.css" media="screen" rel="stylesheet" type="text/css" />
-<style type="text/css">/*<![CDATA[*/
+<link href="/foo.css" media="screen" rel="stylesheet" />
+<style>/*<![CDATA[*/
 
   body {color: #000}
 
@@ -372,6 +371,8 @@ $t->post_ok('/no_snowman?foo=1')->status_is(200)->content_is(<<'EOF');
   <input type="submit" value="whatever" />
 </form>
 EOF
+
+done_testing();
 
 __DATA__
 @@ tags.html.ep

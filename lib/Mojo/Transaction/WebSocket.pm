@@ -67,7 +67,7 @@ sub build_frame {
     warn "-- Extended 64bit payload ($len)\n$payload\n" if DEBUG;
     vec($prefix, 0, 8) = $masked ? (127 | 0b10000000) : 127;
     $frame .= $prefix;
-    $frame .= MODERN ? pack('Q>', $len) : pack('NN', 0, $len & 0xFFFFFFFF);
+    $frame .= pack('NN', 0, $len & 0xFFFFFFFF);
   }
 
   # Mask payload
@@ -122,7 +122,7 @@ sub parse_frame {
   my ($self, $buffer) = @_;
 
   # Head
-  return unless length(my $clone = $$buffer) >= 2;
+  return undef unless length(my $clone = $$buffer) >= 2;
   my $head = substr $clone, 0, 2;
 
   # FIN
@@ -144,7 +144,7 @@ sub parse_frame {
 
   # Extended payload (16bit)
   elsif ($len == 126) {
-    return unless length $clone > 4;
+    return undef unless length $clone > 4;
     $hlen = 4;
     $len = unpack 'n', substr($clone, 2, 2);
     warn "-- Extended 16bit payload ($len)\n" if DEBUG;
@@ -152,24 +152,24 @@ sub parse_frame {
 
   # Extended payload (64bit with 32bit fallback)
   elsif ($len == 127) {
-    return unless length $clone > 10;
+    return undef unless length $clone > 10;
     $hlen = 10;
     my $ext = substr $clone, 2, 8;
-    $len = MODERN ? unpack('Q>', $ext) : unpack('N', substr($ext, 4, 4));
+    $len = unpack('N', substr($ext, 4, 4));
     warn "-- Extended 64bit payload ($len)\n" if DEBUG;
   }
 
   # Check message size
-  $self->finish and return if $len > $self->max_websocket_size;
+  $self->finish and return undef if $len > $self->max_websocket_size;
 
   # Check if whole packet has arrived
   my $masked = vec($head, 1, 8) & 0b10000000;
-  return if length $clone < ($len + $hlen + ($masked ? 4 : 0));
+  return undef if length $clone < ($len + $hlen + ($masked ? 4 : 0));
   substr $clone, 0, $hlen, '';
 
   # Payload
   $len += 4 if $masked;
-  return if length $clone < $len;
+  return undef if length $clone < $len;
   my $payload = $len ? substr($clone, 0, $len, '') : '';
 
   # Unmask payload

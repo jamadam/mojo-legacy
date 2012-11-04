@@ -39,7 +39,7 @@ sub is_readable {
 
 sub is_writing {
   my $self = shift;
-  return unless exists $self->{handle};
+  return undef unless exists $self->{handle};
   return !!length($self->{buffer}) || $self->has_subscribers('drain');
 }
 
@@ -184,6 +184,9 @@ Mojo::IOLoop::Stream - Non-blocking I/O stream
   # Start and stop watching for new data
   $stream->start;
   $stream->stop;
+
+  # Start reactor if necessary
+  $stream->reactor->start unless $stream->reactor->is_running;
 
 =head1 DESCRIPTION
 

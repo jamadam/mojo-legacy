@@ -9,7 +9,6 @@ BEGIN {
 use Test::More;
 plan skip_all => 'set TEST_HYPNOTOAD to enable this test (developer only!)'
   unless $ENV{TEST_HYPNOTOAD};
-plan tests => 50;
 
 use File::Spec::Functions 'catdir';
 use File::Temp 'tempdir';
@@ -180,8 +179,10 @@ sleep 1
   );
 
 sub _pid {
-  return unless open my $file, '<', catdir($dir, 'hypnotoad.pid');
+  return undef unless open my $file, '<', catdir($dir, 'hypnotoad.pid');
   my $pid = <$file>;
   chomp $pid;
   return $pid;
 }
+
+done_testing();

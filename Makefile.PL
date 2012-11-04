@@ -15,6 +15,8 @@ WriteMakefile(
     'Pod::Simple::HTML'       => '0',
     'Pod::Simple::Search'     => '0',
     'Digest::SHA'             => '0',
+    'Socket'                  => '1.81',
+    'Test::More'              => '0.98',
   },
   META_MERGE   => {
     requires  => {perl => '5.008007'},

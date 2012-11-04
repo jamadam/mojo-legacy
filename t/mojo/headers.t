@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 93;
-
+use Test::More;
 use Mojo::Headers;
 
 # Basic functionality
@@ -185,3 +184,5 @@ EOF
 ok $headers->is_finished, 'parser is finished';
 is $headers->content_type, 'text/plain', 'right value';
 is $headers->header('X-Bender'), 'Bite my shiny, metal ass!', 'right value';
+
+done_testing();

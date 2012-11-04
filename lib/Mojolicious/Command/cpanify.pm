@@ -2,6 +2,7 @@ package Mojolicious::Command::cpanify;
 use Mojo::Base 'Mojolicious::Command';
 
 use File::Basename 'basename';
+use Getopt::Long qw(GetOptionsFromArray :config no_auto_abbrev no_ignore_case);
 use Mojo::UserAgent;
 
 has description => "Upload distribution to CPAN.\n";
@@ -19,11 +20,9 @@ sub run {
   my ($self, @args) = @_;
 
   # Options
-  $self->_options(
-    \@args,
+  GetOptionsFromArray \@args,
     'p|password=s' => \(my $password = ''),
-    'u|user=s'     => \(my $user     = '')
-  );
+    'u|user=s'     => \(my $user     = '');
   die $self->usage unless my $file = shift @args;
 
   # Upload
@@ -65,6 +64,9 @@ Mojolicious::Command::cpanify - Cpanify command
 =head1 DESCRIPTION
 
 L<Mojolicious::Command::cpanify> uploads files to CPAN.
+
+This is a core command, that means it is always enabled and its code a good
+example for learning to build new commands, you're welcome to fork it.
 
 =head1 ATTRIBUTES
 

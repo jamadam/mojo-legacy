@@ -44,13 +44,13 @@ sub decode {
   $self->error(undef);
 
   # Missing input
-  $self->error('Missing or empty input') and return unless $bytes;
+  $self->error('Missing or empty input') and return undef unless $bytes;
 
   # Remove BOM
   $bytes =~ s/^(?:\357\273\277|\377\376\0\0|\0\0\376\377|\376\377|\377\376)//g;
 
   # Wide characters
-  $self->error('Wide character in input') and return
+  $self->error('Wide character in input') and return undef
     unless utf8::downgrade($bytes, 1);
 
   # Detect and decode Unicode
@@ -277,7 +277,8 @@ sub _encode_values {
     return _encode_object($value) if $ref eq 'HASH';
 
     # True or false
-    return $value ? 'true' : 'false' if $ref eq 'Mojo::JSON::_Bool';
+    return $$value ? 'true' : 'false' if $ref eq 'SCALAR';
+    return $value  ? 'true' : 'false' if $ref eq 'Mojo::JSON::_Bool';
 
     # Blessed reference with TO_JSON method
     if (blessed $value && (my $sub = $value->can('TO_JSON'))) {
@@ -346,7 +347,8 @@ stringify them if it doesn't exist.
   {"foo": "bar"} -> {foo => 'bar'}
 
 Literal names will be translated to and from L<Mojo::JSON> constants or a
-similar native Perl value.
+similar native Perl value. In addition C<Scalar> references will be used to
+generate booleans, based on if their values are true or false.
 
   true  -> Mojo::JSON->true
   false -> Mojo::JSON->false

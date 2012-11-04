@@ -14,6 +14,7 @@ has capture_end   => 'end';
 has capture_start => 'begin';
 has comment_mark  => '#';
 has encoding      => 'UTF-8';
+has escape        => sub { \&Mojo::Util::xml_escape };
 has [qw(escape_mark expression_mark trim_mark)] => '=';
 has [qw(line_start replace_mark)] => '%';
 has name      => 'template';
@@ -21,18 +22,6 @@ has namespace => 'Mojo::Template::SandBox';
 has tag_start => '<%';
 has tag_end   => '%>';
 has tree      => sub { [] };
-
-# Escape helper
-my $ESCAPE = <<'EOF';
-no warnings 'redefine';
-sub _escape {
-  return $_[0] if ref $_[0] eq 'Mojo::ByteStream';
-  no warnings 'uninitialized';
-  Mojo::Util::xml_escape "$_[0]";
-}
-use Mojo::Base -strict;
-EOF
-$ESCAPE =~ s/\n//g;
 
 sub build {
   my $self = shift;
@@ -105,25 +94,16 @@ sub build {
     }
   }
 
-  # Wrap lines
-  my $first = $lines[0] ||= '';
-  $lines[0] = 'package ' . $self->namespace . "; $ESCAPE ";
-  $lines[0]  .= "sub { my \$_M = ''; " . $self->prepend . "; do { $first";
-  $lines[-1] .= $self->append . "; \$_M; } };";
-
-  # Code
-  my $code = join "\n", @lines;
-  warn "-- Code for @{[$self->name]}\n@{[encode 'UTF-8', $code]}\n\n" if DEBUG;
-  return $self->code($code)->tree([]);
+  return $self->code($self->_wrap(\@lines))->tree([]);
 }
 
 sub compile {
   my $self = shift;
 
   # Compile
-  return unless my $code = $self->code;
+  return undef unless my $code = $self->code;
   my $compiled = eval $code;
-  $self->compiled($compiled) and return unless $@;
+  $self->compiled($compiled) and return undef unless $@;
 
   # Use local stacktrace for compile exceptions
   return Mojo::Exception->new($@, [$self->template, $code], $self->name)
@@ -140,7 +120,7 @@ sub interpret {
   };
 
   # Interpret
-  return unless my $compiled = $self->compiled;
+  return undef unless my $compiled = $self->compiled;
   my $output = eval { $compiled->(@_) };
   return $output unless $@;
 
@@ -326,6 +306,30 @@ sub _trim {
   }
 }
 
+sub _wrap {
+  my ($self, $lines) = @_;
+
+  # Escape function
+  no strict 'refs';
+  no warnings 'redefine';
+  my $escape = $self->escape;
+  *{$self->namespace . '::_escape'} = sub {
+    no warnings 'uninitialized';
+    ref $_[0] eq 'Mojo::ByteStream' ? $_[0] : $escape->("$_[0]");
+  };
+
+  # Wrap lines
+  my $first = $lines->[0] ||= '';
+  $lines->[0] = "package @{[$self->namespace]}; use Mojo::Base -strict;";
+  $lines->[0]  .= "sub { my \$_M = ''; @{[$self->prepend]}; do { $first";
+  $lines->[-1] .= "@{[$self->append]}; \$_M } };";
+
+  # Code
+  my $code = join "\n", @$lines;
+  warn "-- Code for @{[$self->name]}\n@{[encode 'UTF-8', $code]}\n\n" if DEBUG;
+  return $code;
+}
+
 1;
 
 =head1 NAME
@@ -438,17 +442,16 @@ Perl lines can also be indented freely.
   %= $block->('Baerbel')
   %= $block->('Wolfgang')
 
-L<Mojo::Template> templates work just like Perl subs (actually they get
-compiled to a Perl sub internally). That means you can access arguments simply
-via C<@_>.
+L<Mojo::Template> templates get compiled to a Perl subroutine, that means you
+can access arguments simply via C<@_>.
 
   % my ($foo, $bar) = @_;
   % my $x = shift;
   test 123 <%= $foo %>
 
-Templates get compiled to Perl code internally, this can make debugging a bit
-tricky. But L<Mojo::Template> will return L<Mojo::Exception> objects that
-stringify to error messages with context.
+The compilation of templates to Perl code can make debugging a bit tricky, but
+L<Mojo::Template> will return L<Mojo::Exception> objects that stringify to
+error messages with context.
 
   Bareword "xx" not allowed while "strict subs" in use at template line 4.
   2: </head>
@@ -466,7 +469,7 @@ L<Mojo::Template> implements the following attributes.
   my $escape = $mt->auto_escape;
   $mt        = $mt->auto_escape(1);
 
-Activate automatic XML escaping.
+Activate automatic escaping.
 
 =head2 C<append>
 
@@ -504,7 +507,7 @@ Keyword indicating the start of a capture block, defaults to C<begin>.
   my $code = $mt->code;
   $mt      = $mt->code($code);
 
-Template code.
+Perl code for template.
 
 =head2 C<comment_mark>
 
@@ -528,6 +531,14 @@ Compiled template code.
   $mt          = $mt->encoding('UTF-8');
 
 Encoding used for template files.
+
+=head2 C<escape>
+
+  my $cb = $mt->escape;
+  $mt    = $mt->escape(sub { reverse $_[0] });
+
+A callback used to escape the results of escaped expressions, defaults to
+L<Mojo::Util/"xml_escape">.
 
 =head2 C<escape_mark>
 
@@ -570,6 +581,8 @@ this method is attribute and might change without warning!
   $mt           = $mt->namespace('main');
 
 Namespace used to compile templates, defaults to C<Mojo::Template::SandBox>.
+Note that namespaces should only be shared very carefully between templates,
+since functions and global variables will not be cleared automatically.
 
 =head2 C<prepend>
 
@@ -645,20 +658,20 @@ Construct a new L<Mojo::Template> object.
 
   $mt = $mt->build;
 
-Build template.
+Build Perl code from tree.
 
 =head2 C<compile>
 
   my $exception = $mt->compile;
 
-Compile template.
+Compile Perl code for template.
 
 =head2 C<interpret>
 
   my $output = $mt->interpret;
   my $output = $mt->interpret(@args);
 
-Interpret template.
+Interpret compiled template code.
 
   # Reuse template
   say $mt->render('Hello <%= $_[0] %>!', 'Bender');
@@ -669,7 +682,7 @@ Interpret template.
 
   $mt = $mt->parse($template);
 
-Parse template.
+Parse template into tree.
 
 =head2 C<render>
 

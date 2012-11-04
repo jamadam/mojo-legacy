@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 25;
-
+use Test::More;
 use Mojo::Content::MultiPart;
 use Mojo::Content::Single;
 
@@ -29,6 +28,11 @@ ok $content->body_contains('foo'),     'content contains "foo"';
 ok $content->body_contains('bar+'),    'content contains "bar+"';
 ok $content->body_contains('.'),       'content contains "."';
 ok $content->body_contains('.*?foo+'), 'content contains ".*?foo+"';
+ok !$content->headers->content_type, 'no "Content-Type" header';
+ok my $boundary = $content->build_boundary, 'boundary has been generated';
+is $boundary, $content->boundary, 'same boundary';
+is $content->headers->content_type, "multipart/mixed; boundary=$boundary",
+  'right "Content-Type" header';
 
 # Dynamic content
 $content = Mojo::Content::Single->new;
@@ -50,9 +54,18 @@ is $content->build_body,
   "6\x0d\x0aHello \x0d\x0a6\x0d\x0aWorld!\x0d\x0a0\x0d\x0a\x0d\x0a",
   'right content';
 
+# Multipart boundary detection
+$content = Mojo::Content::MultiPart->new;
+$content->headers->content_type(
+  'multipart/form-data; boundary="azAZ09\'(),.:?-_+/"');
+is $content->boundary, "azAZ09\'(),.:?-_+/", 'right boundary';
+is $content->boundary, $content->build_boundary, 'same boundary';
+
 # Tainted environment
 $content = Mojo::Content::MultiPart->new;
 'a' =~ /(.)/;
 ok !$content->charset, 'no charset';
 'a' =~ /(.)/;
 ok !$content->boundary, 'no boundary';
+
+done_testing();

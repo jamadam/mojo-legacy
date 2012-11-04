@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 275;
-
+use Test::More;
 use File::Spec::Functions 'catdir';
 use FindBin;
 use Mojo::URL;
@@ -555,3 +554,5 @@ $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
 is $tx->req->body, '', 'no content';
 is $t->redirect($tx), undef, 'unsupported redirect';
+
+done_testing();

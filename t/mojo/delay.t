@@ -6,8 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 14;
-
+use Test::More;
 use Mojo::IOLoop;
 use Mojo::IOLoop::Delay;
 
@@ -95,7 +94,7 @@ is_deeply [$delay->wait], [2, 3, 4], 'right numbers';
 is_deeply $result, [2, 3, 4], 'right numbers';
 
 # Nested delays
-($finished, $result) = undef;
+($finished, $result) = ();
 $delay = Mojo::IOLoop->delay(
   sub {
     my $first = shift;
@@ -125,3 +124,5 @@ $delay = Mojo::IOLoop->delay(
 is_deeply [$delay->wait], [2, 3, 2, 1, 4, 5, 6], 'right numbers';
 is $finished, 1, 'finish event has been emitted once';
 is_deeply $result, [1, 2, 3, 2, 3, 2, 1, 4, 5, 6], 'right numbers';
+
+done_testing();

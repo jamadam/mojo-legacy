@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 19;
-
+use Test::More;
 use Mojo::JSON;
 use Mojo::Server::PSGI;
 use Mojolicious::Command::psgi;
@@ -127,3 +126,5 @@ ok scalar @{$res->[1]} >= 10, 'enough headers';
 my $i = 0;
 for my $header (@{$res->[1]}) { $i++ if $header eq 'Set-Cookie' }
 is $i, 2, 'right number of "Set-Cookie" headers';
+
+done_testing();

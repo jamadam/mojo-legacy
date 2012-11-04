@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 117;
-
+use Test::More;
 use Mojo::Transaction::WebSocket;
 
 # Simple text frame roundtrip
@@ -206,3 +205,5 @@ is $frame->[4], 2,  'binary frame';
 is $frame->[5], '', 'no payload';
 isnt(Mojo::Transaction::WebSocket->new->build_frame(1, 0, 0, 0, 2, ''),
   $bytes, 'frames are not equal');
+
+done_testing();

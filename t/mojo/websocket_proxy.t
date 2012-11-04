@@ -6,8 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 12;
-
+use Test::More;
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
 use Mojo::UserAgent;
@@ -173,7 +172,7 @@ ok !$kept_alive, 'connection was not kept alive';
 is $result, 'http://kraih.com/proxy', 'right content';
 
 # WebSocket /test (kept alive proxy websocket)
-($kept_alive, $result) = undef;
+($kept_alive, $result) = ();
 $ua->websocket(
   "ws://localhost:$port/test" => sub {
     my ($ua, $tx) = @_;
@@ -231,3 +230,5 @@ $ua->websocket(
 Mojo::IOLoop->start;
 ok !$success, 'no success';
 is $err, 'Proxy connection failed', 'right message';
+
+done_testing();

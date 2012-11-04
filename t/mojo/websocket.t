@@ -6,8 +6,7 @@ BEGIN {
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
 }
 
-use Test::More tests => 48;
-
+use Test::More;
 use IO::Socket::INET;
 use Mojo::IOLoop;
 use Mojo::Transaction::WebSocket;
@@ -276,7 +275,7 @@ is $denied,    1,   'finished websocket';
 
 # WebSocket /subreq
 $finished = 0;
-($code, $result) = undef;
+($code, $result) = ();
 $ua->websocket(
   '/subreq' => sub {
     my $tx = pop;
@@ -305,7 +304,7 @@ is $subreq,   1,            'finished server websocket';
 # WebSocket /subreq (parallel)
 my $delay = Mojo::IOLoop->delay;
 $finished = 0;
-($code, $result) = undef;
+($code, $result) = ();
 my ($code2, $result2);
 $delay->begin;
 $ua->websocket(
@@ -437,7 +436,7 @@ is $code, 500, 'right status';
 is $msg, 'Internal Server Error', 'right message';
 
 # WebSocket /foo (forbidden)
-($websocket, $code, $msg) = undef;
+($websocket, $code, $msg) = ();
 $ua->websocket(
   '/foo' => sub {
     my $tx = pop;
@@ -513,3 +512,5 @@ is $pong, 'test', 'received pong with payload';
 
 # The "finish" event has been emitted on the server side too
 is $server, 3, 'finish event has been emitted';
+
+done_testing();

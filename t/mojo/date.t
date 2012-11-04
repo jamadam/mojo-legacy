@@ -1,7 +1,6 @@
 use Mojo::Base -strict;
 
-use Test::More tests => 20;
-
+use Test::More;
 use Mojo::Date;
 
 # RFC 822/1123
@@ -52,3 +51,5 @@ is(Mojo::Date->new('Thu, 01 Jan 1970 00:00:00 GMT')->epoch,
 $date = Mojo::Date->new;
 ok $date->parse('Mon, 01 Jan 1900 00:00:00'), 'right format';
 is $date->epoch, undef, 'no epoch value';
+
+done_testing();

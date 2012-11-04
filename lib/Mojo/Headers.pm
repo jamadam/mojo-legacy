@@ -33,7 +33,7 @@ sub add {
 
   # Make sure we have a normal case entry for name
   my $lcname = lc $name;
-  $NORMALCASE{$lcname} = defined $NORMALCASE{$lcname} ? $NORMALCASE{$lcname} : $name;
+  $self->{normalcase}{$lcname} = $self->{normalcase}{$lcname} ? $self->{normalcase}{$lcname} : $name unless $NORMALCASE{$lcname};
 
   # Add lines
   push @{$self->{headers}{$lcname}}, map { ref $_ eq 'ARRAY' ? $_ : [$_] } @_;
@@ -84,7 +84,9 @@ sub is_limit_exceeded { !!shift->{limit} }
 sub leftovers { delete shift->{buffer} }
 
 sub names {
-  [map { $NORMALCASE{$_} || $_ } keys %{shift->{headers}}];
+  my $self = shift;
+  return [map { $NORMALCASE{$_} || $self->{normalcase}{$_} || $_ }
+      keys %{$self->{headers}}];
 }
 
 sub parse {
@@ -416,9 +418,9 @@ Shortcut for the C<Last-Modified> header.
 
 =head2 C<leftovers>
 
-  my $leftovers = $headers->leftovers;
+  my $bytes = $headers->leftovers;
 
-Leftovers.
+Get leftover data from header parser.
 
 =head2 C<location>
 

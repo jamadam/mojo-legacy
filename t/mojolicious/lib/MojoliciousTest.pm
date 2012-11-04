@@ -75,7 +75,7 @@ sub startup {
   my $auth = $r->bridge('/auth')->to(
     cb => sub {
       return 1 if shift->req->headers->header('X-Bender');
-      return;
+      return undef;
     }
   );
 
@@ -117,6 +117,12 @@ sub startup {
     controller => 'mojolicious_test2-foo',
     action     => 'test'
   );
+
+  # /test7 (controller class shortcut)
+  $r->route('/test7')->to('Foo::Bar#test');
+
+  # /test8 (controller class)
+  $r->route('/test8')->to(controller => 'Foo::Bar', action => 'test');
 
   # /withblock (template with blocks)
   $r->route('/withblock')->to('foo#withblock');

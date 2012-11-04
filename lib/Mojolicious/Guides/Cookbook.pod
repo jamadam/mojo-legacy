@@ -78,7 +78,7 @@ for a full list see L<Mojo::Server::Hypnotoad/"SETTINGS">.
 
   app->config(hypnotoad => {listen => ['http://*:3000']});
 
-  get '/' => {text => 'ALL GLORY TO THE HYPNOTOAD!'};
+  get '/' => {text => 'Hello Wor...ALL GLORY TO THE HYPNOTOAD!'};
 
   app->start;
 
@@ -102,6 +102,20 @@ C<X-Forwarded-For> and C<X-Forwarded-HTTPS> headers.
 
   # myapp.conf
   {hypnotoad => {proxy => 1}};
+
+Your application is preloaded in the manager process during startup, to run
+code whenever a new worker process has been forked you can use L<Mojo::IOLoop>
+timers.
+
+  use Mojolicious::Lite;
+
+  Mojo::IOLoop->timer(0 => sub {
+    app->log->info("Worker $$ star...ALL GLORY TO THE HYPNOTOAD!");
+  });
+
+  get '/' => {text => 'Hello Wor...ALL GLORY TO THE HYPNOTOAD!'};
+
+  app->start;
 
 =head2 Nginx
 
@@ -486,7 +500,7 @@ While the message flow on WebSocket connections can be rather dynamic, it
 more often than not is quite predictable, which allows this rather pleasant
 L<Test::Mojo> API to be used.
 
-  use Test::More tests => 4;
+  use Test::More;
   use Test::Mojo;
 
   # Include application
@@ -499,6 +513,8 @@ L<Test::Mojo> API to be used.
     ->send_ok('Hello Mojo!')
     ->message_is('echo: Hello Mojo!')
     ->finish_ok;
+
+  done_testing();
 
 =head2 EventSource web service
 
@@ -720,6 +736,27 @@ sense for a standalone parser.
   $tx->res->dom('h1, h2, h3')->each(sub {
     say 'Heading: ', shift->all_text;
   });
+
+  # Recurse through children manually to extract more than just text
+  sub text_and_images {
+    my $elements = shift;
+    for my $e ($elements->each) {
+
+      # Text before this element
+      print $e->text_before(0);
+
+      # Also include alternate text for images
+      print $e->{alt} if $e->type eq 'img';
+
+      # Text from children
+      my $children = $e->children;
+      $children->size ? text_and_images($children) : print $e->text(0);
+    }
+
+    # Text after last element
+    print $elements->[-1]->text_after(0);
+  }
+  text_and_images($tx->res->dom->children);
 
 Especially for unit testing your L<Mojolicious> applications this can be a
 very powerful tool.
@@ -1035,10 +1072,10 @@ that they will be picked up automatically by the command line interface?
   has usage       => "usage: $0 spy [TARGET]\n";
 
   sub run {
-    my ($self, $whatever) = @_;
+    my ($self, $target) = @_;
 
     # Leak secret passphrase
-    if ($whatever eq 'secret') {
+    if ($target eq 'secret') {
       my $secret = $self->app->secret;
       say qq{The secret of this application is "$secret".};
     }
@@ -1169,7 +1206,7 @@ And you can use all the commands from L<Mojolicious::Commands>.
 =head1 MORE
 
 You can continue with L<Mojolicious::Guides> now or take a look at the
-Mojolicious wiki L<http://github.com/kraih/mojo/wiki>, which contains a lot
+L<Mojolicious wiki|http://github.com/kraih/mojo/wiki>, which contains a lot
 more documentation and examples by many different authors.
 
 =cut

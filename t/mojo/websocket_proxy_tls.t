@@ -12,7 +12,6 @@ plan skip_all => 'set TEST_TLS to enable this test (developer only!)'
   unless $ENV{TEST_TLS};
 plan skip_all => 'IO::Socket::SSL 1.75 required for this test!'
   unless Mojo::IOLoop::Server::TLS;
-plan tests => 17;
 
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
@@ -225,7 +224,7 @@ ok !$kept_alive, 'connection was not kept alive';
 is $result, "https://localhost:$port/proxy", 'right content';
 
 # GET /proxy (kept alive proxy request)
-($kept_alive, $result) = undef;
+($kept_alive, $result) = ();
 $ua->get(
   "https://localhost:$port/proxy" => sub {
     my ($ua, $tx) = @_;
@@ -240,7 +239,7 @@ ok $kept_alive, 'connection was kept alive';
 
 # WebSocket /test (kept alive proxy websocket)
 $ua->https_proxy("http://localhost:$proxy");
-($kept_alive, $result) = undef;
+($kept_alive, $result) = ();
 $ua->websocket(
   "wss://localhost:$port/test" => sub {
     my ($ua, $tx) = @_;
@@ -278,3 +277,5 @@ $ua->websocket(
 Mojo::IOLoop->start;
 ok !$success, 'no success';
 is $err, 'Proxy connection failed', 'right message';
+
+done_testing();

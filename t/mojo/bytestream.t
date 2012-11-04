@@ -2,8 +2,7 @@ use Mojo::Base -strict;
 
 use utf8;
 
-use Test::More tests => 47;
-
+use Test::More;
 use File::Spec::Functions qw(catfile splitdir);
 use File::Temp 'tempdir';
 use FindBin;
@@ -33,7 +32,7 @@ is b('foo%C3%9F%C4%80bar%E2%98%BA')->url_unescape->decode('UTF-8'),
   "foo\x{df}\x{0100}bar\x{263a}", 'right url unescaped result';
 
 # html_escape
-is b("foo bar'<baz>")->html_escape, 'foo bar&#39;&LT;baz&GT;',
+is b("foo bar'<baz>")->html_escape, 'foo bar&#39;&lt;baz&gt;',
   'right html escaped result';
 
 # html_unescape
@@ -153,3 +152,5 @@ my $dir = tempdir CLEANUP => 1;
 $file = catfile $dir, 'test.txt';
 is b("just\nworks!")->spurt($file)->quote, qq{"just\nworks!"}, 'right result';
 is b($file)->slurp, "just\nworks!", 'successful roundtrip';
+
+done_testing();

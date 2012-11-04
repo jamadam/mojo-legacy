@@ -78,8 +78,7 @@ L<Mojolicious>, L<Mojolicious::Guides>, L<http://mojolicio.us>.
 % my $name = shift;
 use Mojo::Base -strict;
 
-use Test::More tests => 3;
-
+use Test::More;
 use Mojolicious::Lite;
 use Test::Mojo;
 
@@ -92,6 +91,8 @@ get '/' => sub {
 
 my $t = Test::Mojo->new;
 $t->get_ok('/')->status_is(200)->content_is('Hello Mojo!');
+
+done_testing();
 
 @@ makefile
 % my ($class, $path) = @_;
@@ -124,6 +125,9 @@ Mojolicious::Command::generate::plugin - Plugin generator command
 
 L<Mojolicious::Command::generate::plugin> generates directory structures for
 fully functional L<Mojolicious> plugins.
+
+This is a core command, that means it is always enabled and its code a good
+example for learning to build new commands, you're welcome to fork it.
 
 =head1 ATTRIBUTES
 
