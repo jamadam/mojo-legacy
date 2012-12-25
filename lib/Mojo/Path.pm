@@ -5,8 +5,9 @@ use overload
   '""'     => sub { shift->to_string },
   fallback => 1;
 
-use Mojo::Util qw(encode url_escape url_unescape);
+use Mojo::Util qw(decode encode url_escape url_unescape);
 
+has charset => 'UTF-8';
 has [qw(leading_slash trailing_slash)];
 has parts => sub { [] };
 
@@ -42,7 +43,7 @@ sub clone {
   my $clone = Mojo::Path->new;
   $clone->leading_slash($self->leading_slash);
   $clone->trailing_slash($self->trailing_slash);
-  return $clone->parts([@{$self->parts}]);
+  return $clone->charset($self->charset)->parts([@{$self->parts}]);
 }
 
 sub contains {
@@ -74,9 +75,10 @@ sub parse {
   my ($self, $path) = @_;
 
   $path = url_unescape defined $path ? $path : '';
-  utf8::decode $path;
-  $path =~ s!^/!! ? $self->leading_slash(1)  : $self->leading_slash(undef);
-  $path =~ s!/$!! ? $self->trailing_slash(1) : $self->trailing_slash(undef);
+  my $charset = $self->charset;
+  $path = do { my $tmp = decode($charset, $path); defined $tmp ? $tmp : $path } if $charset;
+  $self->leading_slash($path =~ s!^/!!  ? 1 : undef);
+  $self->trailing_slash($path =~ s!/$!! ? 1 : undef);
 
   return $self->parts([split '/', $path, -1]);
 }
@@ -89,12 +91,11 @@ sub to_abs_string {
 sub to_string {
   my $self = shift;
 
-  # Escape
-  my $chars = '^A-Za-z0-9\-._~!$&\'()*+,;=:@';
-  my @parts = map { url_escape(encode('UTF-8', $_), $chars) } @{$self->parts};
-
-  # Format
-  my $path = join '/', @parts;
+  my @parts   = @{$self->parts};
+  my $charset = $self->charset;
+  @parts = map { encode $charset, $_ } @parts if $charset;
+  my $path = join '/',
+    map { url_escape $_, '^A-Za-z0-9\-._~!$&\'()*+,;=:@' } @parts;
   $path = "/$path" if $self->leading_slash;
   $path = "$path/" if $self->trailing_slash;
 
@@ -122,6 +123,16 @@ L<Mojo::Path> is a container for URL paths.
 =head1 ATTRIBUTES
 
 L<Mojo::Path> implements the following attributes.
+
+=head2 C<charset>
+
+  my $charset = $path->charset;
+  $path       = $path->charset('UTF-8');
+
+Charset used for encoding and decoding, defaults to C<UTF-8>.
+
+  # Disable encoding and decoding
+  $path->charset(undef);
 
 =head2 C<leading_slash>
 

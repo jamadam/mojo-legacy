@@ -240,7 +240,8 @@ sub _decode_value {
 }
 
 sub _encode_array {
-  return '[' . join(',', map { _encode_values($_) } @{shift()}) . ']';
+  my $array = shift;
+  return '[' . join(',', map { _encode_values($_) } @$array) . ']';
 }
 
 sub _encode_object {
@@ -330,7 +331,7 @@ Mojo::JSON - Minimalistic JSON
   use Mojo::JSON;
 
   my $json  = Mojo::JSON->new;
-  my $bytes = $json->encode({foo => [1, 2], bar => 'hello!'});
+  my $bytes = $json->encode({foo => [1, 2], bar => 'hello!', baz => \1});
   my $hash  = $json->decode($bytes);
 
 =head1 DESCRIPTION

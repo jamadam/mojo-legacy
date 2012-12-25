@@ -146,6 +146,7 @@ Mojolicious::Routes::Match - Routes visitor
 
 =head1 SYNOPSIS
 
+  use Mojolicious::Controller;
   use Mojolicious::Routes;
   use Mojolicious::Routes::Match;
 
@@ -155,8 +156,9 @@ Mojolicious::Routes::Match - Routes visitor
   $r->put('/bar')->to(action => 'bar');
 
   # Match
+  my $c = Mojolicious::Controller->new;
   my $m = Mojolicious::Routes::Match->new(PUT => '/bar');
-  $m->match($r);
+  $m->match($r, $c);
   say $m->captures->{action};
 
 =head1 DESCRIPTION
@@ -180,14 +182,14 @@ Captured parameters.
   my $endpoint = $m->endpoint;
   $m           = $m->endpoint(Mojolicious::Routes->new);
 
-The routes endpoint that actually matched.
+The route endpoint that actually matched.
 
 =head2 C<root>
 
   my $root = $m->root;
   $m       = $m->root($routes);
 
-The root of the routes tree.
+The root of the route tree.
 
 =head2 C<stack>
 
@@ -206,13 +208,13 @@ implements the following ones.
   my $m = Mojolicious::Routes::Match->new(GET => '/foo');
   my $m = Mojolicious::Routes::Match->new(GET => '/foo', $ws);
 
-Construct a new match object.
+Construct a new L<Mojolicious::Routes::Match> object.
 
 =head2 C<match>
 
   $m->match(Mojolicious::Routes->new, Mojolicious::Controller->new);
 
-Match against a routes tree.
+Match against a route tree.
 
 =head2 C<path_for>
 

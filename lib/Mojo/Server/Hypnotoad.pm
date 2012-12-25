@@ -118,16 +118,17 @@ sub _config {
   # Daemon settings
   $ENV{MOJO_REVERSE_PROXY} = $c->{proxy} if defined $c->{proxy};
   my $daemon = $self->{daemon};
-  $daemon->backlog($c->{backlog}) if defined $c->{backlog};
-  $daemon->max_clients($c->{clients} || 1000);
-  $daemon->group($c->{group}) if defined $c->{group};
+  defined $c->{$_} and $daemon->$_($c->{$_}) for qw(backlog group user);
+  $daemon->max_clients($c->{clients}              || 1000);
   $daemon->max_requests($c->{keep_alive_requests} || 25);
   $daemon->inactivity_timeout(defined $c->{inactivity_timeout} ? $c->{inactivity_timeout} : 15);
-  $daemon->user($c->{user}) if defined $c->{user};
   $daemon->listen($c->{listen} || ['http://*:8080']);
+
+  # Event loop settings
   my $loop = $daemon->ioloop;
   $loop->max_accepts(defined $c->{accepts} ? $c->{accepts} : 1000);
-  $loop->multi_accept($c->{multi_accept}) if defined $c->{multi_accept};
+  defined $c->{$_} and $loop->$_($c->{$_})
+    for qw(accept_interval multi_accept);
 }
 
 sub _exit { say shift and exit 0 }
@@ -317,8 +318,7 @@ sub _spawn {
   );
 
   # Clean worker environment
-  $SIG{INT} = $SIG{TERM} = $SIG{CHLD} = $SIG{USR2} = $SIG{TTIN} = $SIG{TTOU}
-    = 'DEFAULT';
+  $SIG{$_} = 'DEFAULT' for qw(INT TERM CHLD USR2 TTIN TTOU);
   $SIG{QUIT} = sub { $loop->max_connections(0) };
   delete $self->{$_} for qw(poll reader);
 
@@ -351,17 +351,17 @@ Mojo::Server::Hypnotoad - ALL GLORY TO THE HYPNOTOAD!
 
 L<Mojo::Server::Hypnotoad> is a full featured, UNIX optimized, preforking
 non-blocking I/O HTTP and WebSocket server, built around the very well tested
-and reliable L<Mojo::Server::Daemon>, with C<IPv6>, C<TLS>, C<libev> and hot
-deployment support that just works. Note that the server uses signals for
-process management, so you should avoid modifying signal handlers in your
-applications.
+and reliable L<Mojo::Server::Daemon>, with C<IPv6>, C<TLS>, C<Comet> (long
+polling), multiple event loop and hot deployment support that just works. Note
+that the server uses signals for process management, so you should avoid
+modifying signal handlers in your applications.
 
 To start applications with it you can use the L<hypnotoad> script.
 
   $ hypnotoad myapp.pl
   Server available at http://127.0.0.1:8080.
 
-You can run the exact same command again for automatic hot deployment.
+You can run the same command again for automatic hot deployment.
 
   $ hypnotoad myapp.pl
   Starting hot deployment for Hypnotoad server 31841.
@@ -440,6 +440,14 @@ Stop worker gracefully.
 
 L<Mojo::Server::Hypnotoad> can be configured with the following settings, see
 L<Mojolicious::Guides::Cookbook/"Hypnotoad"> for examples.
+
+=head2 C<accept_interval>
+
+  accept_interval => 0.5
+
+Interval in seconds for trying to reacquire the accept mutex and connection
+management, defaults to C<0.025>. Note that changing this value can affect
+performance and idle CPU usage.
 
 =head2 C<accepts>
 
@@ -567,7 +575,7 @@ Username for worker processes.
   workers => 10
 
 Number of worker processes, defaults to C<4>. A good rule of thumb is two
-worker processes per cpu core.
+worker processes per CPU core.
 
 =head1 METHODS
 

@@ -7,7 +7,9 @@ BEGIN {
 }
 
 use Test::More;
+use IO::Compress::Gzip 'gzip';
 use Mojo::IOLoop;
+use Mojo::Message::Request;
 use Mojo::UserAgent;
 use Mojolicious::Lite;
 
@@ -40,7 +42,9 @@ get '/no_content' => {text => 'fail!', status => 204};
 # GET /echo
 get '/echo' => sub {
   my $self = shift;
-  $self->render_data($self->req->body);
+  gzip \(my $uncompressed = $self->req->body), \my $compressed;
+  $self->res->headers->content_encoding($self->req->headers->accept_encoding);
+  $self->render_data($compressed);
 };
 
 # POST /echo
@@ -309,6 +313,24 @@ $tx = $ua->get('/timeout?timeout=5');
 ok !$tx->success, 'not successful';
 is $tx->error, 'Inactivity timeout', 'right error';
 
+# GET /echo (response exceeding message size limit)
+$ua->once(
+  start => sub {
+    my ($ua, $tx) = @_;
+    $tx->res->max_message_size(12);
+  }
+);
+$tx = $ua->get('/echo' => 'Hello World!');
+ok !$tx->success, 'not successful';
+is(($tx->error)[0], 'Maximum message size exceeded', 'right error');
+is(($tx->error)[1], undef, 'no code');
+
+# GET /does_not_exist (404 response)
+$tx = $ua->get('/does_not_exist');
+ok !$tx->success, 'not successful';
+is(($tx->error)[0], 'Not Found', 'right error');
+is(($tx->error)[1], 404,         'right code');
+
 # GET / (introspect)
 my $req = my $res = '';
 my $start = $ua->on(
@@ -353,7 +375,7 @@ like $res, qr|^HTTP/.*200 OK.*works!$|s, 'right response';
 $ua->unsubscribe(start => $start);
 ok !$ua->has_subscribers('start'), 'unsubscribed successfully';
 
-# GET /echo (stream with drain callback)
+# GET /echo (stream with drain callback and compressed response)
 $tx = $ua->build_tx(GET => '/echo');
 my $i = 0;
 my ($stream, $drain);
@@ -433,12 +455,40 @@ ok !$tx->kept_alive, 'kept connection not alive';
 is $tx->res->code, 200,      'right status';
 is $tx->res->body, 'works!', 'right content';
 
-# Premature connection close
+# Unexpected 1xx responses
 my $port = Mojo::IOLoop->generate_port;
-my $id   = Mojo::IOLoop->server(
-  address => '127.0.0.1',
-  port    => $port,
-  sub { Mojo::IOLoop->remove(pop) }
+$req = Mojo::Message::Request->new;
+Mojo::IOLoop->server(
+  {address => '127.0.0.1', port => $port} => sub {
+    my ($loop, $stream) = @_;
+    $stream->on(
+      read => sub {
+        my ($stream, $chunk) = @_;
+        $stream->write("HTTP/1.1 100 Continue\x0d\x0a"
+            . "X-Foo: Bar\x0d\x0a\x0d\x0a"
+            . "HTTP/1.1 101 Switching Protocols\x0d\x0a\x0d\x0a"
+            . "HTTP/1.1 200 OK\x0d\x0a"
+            . "Content-Length: 3\x0d\x0a\x0d\x0a" . 'Hi!')
+          if $req->parse($chunk)->is_finished;
+      }
+    );
+  }
+);
+$tx = $ua->build_tx(GET => "http://localhost:$port/");
+my @unexpected;
+$tx->on(unexpected => sub { push @unexpected, pop });
+$tx = $ua->start($tx);
+is $unexpected[0]->code, 100, 'right status';
+is $unexpected[0]->headers->header('X-Foo'), 'Bar', 'right "X-Foo" value';
+is $unexpected[1]->code, 101, 'right status';
+ok $tx->success, 'successful';
+is $tx->res->code, 200,   'right status';
+is $tx->res->body, 'Hi!', 'right content';
+
+# Premature connection close
+$port = Mojo::IOLoop->generate_port;
+Mojo::IOLoop->server(
+  {address => '127.0.0.1', port => $port} => sub { Mojo::IOLoop->remove(pop) }
 );
 $tx = $ua->get("http://localhost:$port/");
 ok !$tx->success, 'not successful';

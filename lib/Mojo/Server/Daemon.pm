@@ -20,7 +20,7 @@ sub DESTROY {
   my $self = shift;
   return unless my $loop = $self->ioloop;
   $self->_remove($_) for keys %{$self->{connections} || {}};
-  $loop->remove($_) for @{$self->{listening} || []};
+  $loop->remove($_) for @{$self->{acceptors} || []};
 }
 
 sub run {
@@ -55,8 +55,32 @@ sub setuidgid {
 
 sub start {
   my $self = shift;
-  $self->_listen($_) for @{$self->listen};
-  $self->ioloop->max_connections($self->max_clients);
+
+  # Resume accepting connections
+  my $loop = $self->ioloop;
+  if (my $acceptors = $self->{acceptors}) {
+    push @$acceptors, $loop->acceptor(delete $self->{servers}{$_})
+      for keys %{$self->{servers}};
+  }
+
+  # Start listening
+  else { $self->_listen($_) for @{$self->listen} }
+  $loop->max_connections($self->max_clients);
+
+  return $self;
+}
+
+sub stop {
+  my $self = shift;
+
+  # Pause accepting connections
+  my $loop = $self->ioloop;
+  while (my $id = shift @{$self->{acceptors}}) {
+    my $server = $self->{servers}{$id} = $loop->acceptor($id);
+    $loop->remove($id);
+    $server->stop;
+  }
+
   return $self;
 }
 
@@ -137,12 +161,13 @@ sub _finish {
   }
 
   # Close connection if necessary
-  return $self->_remove($id) if $tx->req->error || !$tx->keep_alive;
+  my $req = $tx->req;
+  return $self->_remove($id) if $req->error || !$tx->keep_alive;
 
   # Build new transaction for leftovers
-  return unless defined(my $leftovers = $tx->server_leftovers);
+  return unless $req->has_leftovers;
   $tx = $c->{tx} = $self->_build_tx($id, $c);
-  $tx->server_read($leftovers);
+  $tx->server_read($req->leftovers);
 }
 
 sub _listen {
@@ -162,7 +187,7 @@ sub _listen {
   my $verify = $query->param('verify');
   $options->{tls_verify} = hex $verify if defined $verify;
   delete $options->{address} if $options->{address} eq '*';
-  my $tls = $options->{tls} = $url->scheme eq 'https' ? 1 : undef;
+  my $tls = $options->{tls} = $url->protocol eq 'https' ? 1 : undef;
 
   # Listen
   weaken $self;
@@ -191,7 +216,7 @@ sub _listen {
           sub { $self->app->log->debug('Inactivity timeout.') if $c->{tx} });
     }
   );
-  push @{$self->{listening} ||= []}, $id;
+  push @{$self->{acceptors} ||= []}, $id;
 
   # Friendly message
   return if $self->silent;
@@ -211,9 +236,9 @@ sub _read {
   warn "-- Server <<< Client (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
   $tx->server_read($chunk);
 
-  # Last keep alive request
+  # Last keep alive request or corrupted connection
   $tx->res->headers->connection('close')
-    if ($c->{requests} || 0) >= $self->max_requests;
+    if (($c->{requests} || 0) >= $self->max_requests) || $tx->req->error;
 
   # Finish or start writing
   if ($tx->is_finished) { $self->_finish($id, $tx) }
@@ -290,7 +315,8 @@ Mojo::Server::Daemon - Non-blocking I/O HTTP and WebSocket server
 =head1 DESCRIPTION
 
 L<Mojo::Server::Daemon> is a full featured, highly portable non-blocking I/O
-HTTP and WebSocket server, with C<IPv6>, C<TLS> and C<libev> support.
+HTTP and WebSocket server, with C<IPv6>, C<TLS>, C<Comet> (long polling) and
+multiple event loop support.
 
 Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
 L<IO::Socket::SSL> (1.75+) are supported transparently through
@@ -433,6 +459,12 @@ Set user and group for process.
   $daemon = $daemon->start;
 
 Start accepting connections.
+
+=head2 C<stop>
+
+  $daemon = $daemon->stop;
+
+Stop accepting connections.
 
 =head1 DEBUGGING
 

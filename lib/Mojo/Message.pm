@@ -34,7 +34,7 @@ sub body {
     return $content->unsubscribe('read')->on(read => sub { $self->$new(pop) });
   }
 
-  # Set text content
+  # Set raw content
   else { $content->asset(Mojo::Asset::Memory->new->add_chunk($new)) }
 
   return $self;
@@ -47,13 +47,13 @@ sub body_params {
   return $self->{body_params} if $self->{body_params};
 
   # Charset
-  my $p = $self->{body_params} = Mojo::Parameters->new;
-  $p->charset($self->content->charset || $self->default_charset);
+  my $params = $self->{body_params} = Mojo::Parameters->new;
+  $params->charset($self->content->charset || $self->default_charset);
 
   # "x-application-urlencoded" and "application/x-www-form-urlencoded"
   my $type = $self->headers->content_type || '';
   if ($type =~ m!(?:x-application|application/x-www-form)-urlencoded!i) {
-    $p->parse($self->content->asset->slurp);
+    $params->parse($self->content->asset->slurp);
   }
 
   # "multipart/formdata"
@@ -68,11 +68,11 @@ sub body_params {
       next if defined $filename;
 
       # Form value
-      $p->append($name, $value);
+      $params->append($name, $value);
     }
   }
 
-  return $p;
+  return $params;
 }
 
 sub body_size { shift->content->body_size }
@@ -129,8 +129,7 @@ sub finish {
 sub fix_headers {
   my $self = shift;
 
-  # Content-Length header or connection close is required unless the chunked
-  # transfer encoding is used
+  # Content-Length or Connection (unless chunked transfer encoding is used)
   return $self if $self->{fix}++ || $self->is_chunked;
   my $headers = $self->headers;
   $self->is_dynamic
@@ -229,9 +228,7 @@ sub parse {
     if $self->content->is_limit_exceeded;
 
   # Progress
-  $self->emit('progress');
-
-  return $self->content->is_finished ? $self->finish : $self;
+  return $self->emit('progress')->content->is_finished ? $self->finish : $self;
 }
 
 sub start_line_size { length shift->build_start_line }
@@ -330,7 +327,7 @@ sub _parse_formdata {
   my @formdata;
   my $content = $self->content;
   return \@formdata unless $content->is_multipart;
-  my $default = $content->charset || $self->default_charset;
+  my $charset = $content->charset || $self->default_charset;
 
   # Walk the tree
   my @parts;
@@ -351,7 +348,6 @@ sub _parse_formdata {
     my $value      = $part;
 
     # Decode
-    my $charset = $part->charset || $default;
     if ($charset) {
       $name     = do {my $tmp = decode($charset, $name); defined $tmp ? $tmp : $name} if $name;
       $filename = do {my $tmp = decode($charset, $filename); defined $tmp ? $tmp : $filename} if $filename;
@@ -502,7 +498,7 @@ Access C<content> data or replace all subscribers of the C<read> event.
 
 =head2 C<body_params>
 
-  my $p = $msg->body_params;
+  my $params = $msg->body_params;
 
 C<POST> parameters extracted from C<x-application-urlencoded>,
 C<application/x-www-form-urlencoded> or C<multipart/form-data> message body,
@@ -578,7 +574,7 @@ before the entire message body has been received.
   $msg             = $msg->error('Parser error');
   $msg             = $msg->error('Parser error', 500);
 
-Parser errors and codes.
+Error and code.
 
 =head2 C<extract_start_line>
 
@@ -596,7 +592,7 @@ Finish message parser/generator.
 
   $msg = $msg->fix_headers;
 
-Make sure message has all required headers for the current HTTP version.
+Make sure message has all required headers.
 
 =head2 C<get_body_chunk>
 

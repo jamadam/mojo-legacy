@@ -9,8 +9,8 @@ use Mojo::Parameters;
 use Mojo::Path;
 use Mojo::Util qw(punycode_decode punycode_encode url_escape url_unescape);
 
-has [qw(fragment host port scheme userinfo)];
 has base => sub { Mojo::URL->new };
+has [qw(fragment host port scheme userinfo)];
 
 sub new { shift->SUPER::new->parse(@_) }
 
@@ -21,10 +21,10 @@ sub authority {
   if (defined $authority) {
 
     # Userinfo
-    if ($authority =~ s/^([^\@]+)\@//) { $self->userinfo(url_unescape $1) }
+    $authority =~ s/^([^\@]+)\@// and $self->userinfo(url_unescape $1);
 
     # Port
-    if ($authority =~ s/:(\d+)$//) { $self->port($1) }
+    $authority =~ s/:(\d+)$// and $self->port($1);
 
     # Host
     my $host = url_unescape $authority;
@@ -35,7 +35,7 @@ sub authority {
   my $userinfo = $self->userinfo;
   $authority .= url_escape($userinfo, '^A-Za-z0-9\-._~!$&\'()*+,;=:') . '@'
     if $userinfo;
-  $authority .= lc($self->ihost || '');
+  $authority .= defined $self->ihost ? $self->ihost : '';
   if (my $port = $self->port) { $authority .= ":$port" }
 
   return $authority;
@@ -46,7 +46,9 @@ sub clone {
 
   my $clone = Mojo::URL->new;
   $clone->scheme($self->scheme);
-  $clone->authority($self->authority);
+  $clone->userinfo($self->userinfo);
+  $clone->host($self->host);
+  $clone->port($self->port);
   $clone->path($self->path->clone);
   $clone->query($self->query->clone);
   $clone->fragment($self->fragment);
@@ -65,7 +67,7 @@ sub ihost {
 
   # Check if host needs to be encoded
   return undef unless my $host = $self->host;
-  return $host unless $host =~ /[^\x00-\x7f]/;
+  return lc $host unless $host =~ /[^\x00-\x7f]/;
 
   # Encode
   return join '.',
@@ -103,6 +105,8 @@ sub path {
   return $self;
 }
 
+sub protocol { lc(do { my $tmp = shift->scheme; defined $tmp ? $tmp : ''} ) }
+
 sub query {
   my $self = shift;
 
@@ -111,7 +115,7 @@ sub query {
   return $q unless @_;
 
   # Replace with list
-  if (@_ > 1) { $self->{query} = Mojo::Parameters->new(@_) }
+  if (@_ > 1) { $q->params([])->parse(@_) }
 
   # Merge with array
   elsif (ref $_[0] eq 'ARRAY') {
@@ -132,12 +136,14 @@ sub query {
 
 sub to_abs {
   my $self = shift;
-  my $base = shift || $self->base->clone;
 
-  # Scheme
+  # Already absolute
   my $abs = $self->clone;
   return $abs if $abs->is_abs;
-  $abs->scheme($base->scheme);
+
+  # Scheme
+  my $base = shift || $abs->base;
+  $abs->base($base)->scheme($base->scheme);
 
   # Authority
   return $abs if $abs->authority;
@@ -166,10 +172,14 @@ sub to_abs {
 
 sub to_rel {
   my $self = shift;
-  my $base = shift || $self->base->clone;
+
+  # Already relative
+  my $rel = $self->clone;
+  return $rel unless $rel->is_abs;
 
   # Scheme and authority
-  my $rel = $self->clone->base($base)->scheme(undef);
+  my $base = shift || $rel->base;
+  $rel->base($base)->scheme(undef);
   $rel->userinfo(undef)->host(undef)->port(undef) if $base->authority;
 
   # Path
@@ -192,9 +202,9 @@ sub to_rel {
 sub to_string {
   my $self = shift;
 
-  # Scheme
+  # Protocol
   my $url = '';
-  if (my $scheme = $self->scheme) { $url .= lc "$scheme://" }
+  if (my $proto = $self->protocol) { $url .= "$proto://" }
 
   # Authority
   my $authority = $self->authority;
@@ -264,13 +274,6 @@ Resource Locators with support for IDNA and IRIs.
 
 L<Mojo::URL> implements the following attributes.
 
-=head2 C<authority>
-
-  my $authority = $url->authority;
-  $url          = $url->authority('root:pass%3Bw0rd@localhost:8080');
-
-Authority part of this URL.
-
 =head2 C<base>
 
   my $base = $url->base;
@@ -325,6 +328,13 @@ following new ones.
 
 Construct a new L<Mojo::URL> object.
 
+=head2 C<authority>
+
+  my $authority = $url->authority;
+  $url          = $url->authority('root:pass%3Bw0rd@localhost:8080');
+
+Authority part of this URL.
+
 =head2 C<clone>
 
   my $url2 = $url->clone;
@@ -371,6 +381,15 @@ defaults to a L<Mojo::Path> object.
 
   # "http://mojolicio.us/perldoc/Mojo/DOM/HTML"
   Mojo::URL->new('http://mojolicio.us/perldoc/Mojo/')->path('DOM/HTML');
+
+=head2 C<protocol>
+
+  my $proto = $url->protocol;
+
+Normalized version of C<scheme>.
+
+  # "http"
+  Mojo::URL->new('HtTp://mojolicio.us')->protocol;
 
 =head2 C<query>
 

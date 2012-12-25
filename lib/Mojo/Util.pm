@@ -4,7 +4,7 @@ use Mojo::Base 'Exporter';
 use Carp 'croak';
 use Digest::MD5 qw(md5 md5_hex);
 BEGIN {eval {require Digest::SHA; import Digest::SHA qw(sha1 sha1_hex)}}
-use Encode ();
+use Encode 'find_encoding';
 use File::Basename 'dirname';
 use File::Spec::Functions 'catfile';
 use MIME::Base64 qw(decode_base64 encode_base64);
@@ -34,20 +34,23 @@ my %ENTITIES;
 # Reverse entities for html_escape (without "apos")
 my %REVERSE = ("\x{0027}" => '#39;');
 $REVERSE{$ENTITIES{$_}} = defined $REVERSE{$ENTITIES{$_}} ? $REVERSE{$ENTITIES{$_}} : $_
-  for sort { @{[$a =~ /[A-Z]/g]} <=> @{[$b =~ /[A-Z]/g]} }
+  for sort  { @{[$a =~ /[A-Z]/g]} <=> @{[$b =~ /[A-Z]/g]} }
   sort grep {/;/} keys %ENTITIES;
+
+# Encoding cache
+my %CACHE;
 
 our @EXPORT_OK = (
   qw(b64_decode b64_encode camelize class_to_file class_to_path decamelize),
   qw(decode encode get_line hmac_md5_sum hmac_sha1_sum html_escape),
-  qw(html_unescape md5_bytes md5_sum punycode_decode punycode_encode quote),
-  qw(secure_compare sha1_bytes sha1_sum slurp spurt squish trim unquote),
-  qw(url_escape url_unescape xml_escape xor_encode)
+  qw(html_unescape md5_bytes md5_sum monkey_patch punycode_decode),
+  qw(punycode_encode quote secure_compare sha1_bytes sha1_sum slurp spurt),
+  qw(squish trim unquote url_escape url_unescape xml_escape xor_encode)
 );
 
-sub b64_decode { decode_base64(shift) }
+sub b64_decode { decode_base64($_[0]) }
 
-sub b64_encode { encode_base64(shift, shift) }
+sub b64_encode { encode_base64($_[0], $_[1]) }
 
 sub camelize {
   my $string = shift;
@@ -88,11 +91,11 @@ sub decamelize {
 sub decode {
   my ($encoding, $bytes) = @_;
   return undef
-    unless eval { $bytes = Encode::decode($encoding, $bytes, 1); 1 };
+    unless eval { $bytes = _encoding($encoding)->decode("$bytes", 1); 1 };
   return $bytes;
 }
 
-sub encode { Encode::encode(shift, shift) }
+sub encode { _encoding($_[0])->encode("$_[1]") }
 
 sub get_line {
 
@@ -126,6 +129,13 @@ sub html_unescape {
 
 sub md5_bytes { md5(@_) }
 sub md5_sum   { md5_hex(@_) }
+
+sub monkey_patch {
+  my ($class, $name, $cb) = @_;
+  no strict 'refs';
+  no warnings 'redefine';
+  *{"${class}::$name"} = $cb;
+}
 
 sub punycode_decode {
   my $input = shift;
@@ -370,6 +380,10 @@ sub _encode {
   return exists $REVERSE{$_[0]} ? "&$REVERSE{$_[0]}" : "&#@{[ord($_[0])]};";
 }
 
+sub _encoding {
+  $CACHE{$_[0]} = defined $CACHE{$_[0]} ? $CACHE{$_[0]} : defined find_encoding($_[0]) ? find_encoding($_[0]) : croak "Unknown encoding '$_[0]'";
+}
+
 sub _hmac {
   my ($hash, $string, $secret) = @_;
 
@@ -525,6 +539,14 @@ Generate binary MD5 checksum for string.
   my $checksum = md5_sum $string;
 
 Generate MD5 checksum for string.
+
+=head2 C<monkey_patch>
+
+  monkey_patch $package, $name, sub {...};
+
+Monkey patch function into package.
+
+  monkey_patch 'MyApp', 'hello', sub { say 'Hello!' };
 
 =head2 C<punycode_decode>
 

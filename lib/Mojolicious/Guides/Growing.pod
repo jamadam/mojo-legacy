@@ -109,11 +109,12 @@ Traditionally all session data was stored on the server-side and only session
 ids were exchanged between browser and web server in the form of cookies.
 
   HTTP/1.1 200 OK
-  Set-Cookie: session=base64(hmac-sha1(json($session)))
+  Set-Cookie: session=hmac-sha1(base64(json($session)))
 
 In L<Mojolicious> however we are taking this concept one step further by
-storing everything in C<HMAC-SHA1> signed cookies, which is more compatible
-with the REST philosophy and reduces infrastructure requirements.
+storing everything C<JSON> serialized and C<Base64> encoded in C<HMAC-SHA1>
+signed cookies, which is more compatible with the REST philosophy and reduces
+infrastructure requirements.
 
 =head2 Test Driven Development
 
@@ -233,9 +234,9 @@ logic related to matching usernames and passwords.
 
   1;
 
-A simple helper function can be registered with the method
-L<Mojolicious/"helper"> to make our C<model> available to all actions and
-templates.
+A simple helper can be registered with the function
+L<Mojolicious::Lite/"helper"> to make our C<model> available to all actions
+and templates.
 
   #!/usr/bin/env perl
   use Mojolicious::Lite;
@@ -243,11 +244,8 @@ templates.
   use lib 'lib';
   use MyUsers;
 
-  # Model object
-  my $users = MyUsers->new;
-
-  # Helper function returning our model object
-  helper users => sub { return $users };
+  # Helper to lazy initialize and store our model object
+  helper users => sub { state $users = MyUsers->new };
 
   # /?user=sri&pass=secr3t
   any '/' => sub {
@@ -392,8 +390,7 @@ like this.
   # Make signed cookies secure
   app->secret('Mojolicious rocks');
 
-  my $users = MyUsers->new;
-  helper users => sub { return $users };
+  helper users => sub { state $users = MyUsers->new };
 
   # Main login action
   any '/' => sub {
@@ -508,8 +505,7 @@ actual action code needs to be changed.
     my $self = shift;
 
     $self->secret('Mojolicious rocks');
-    my $users = MyUsers->new;
-    $self->helper(users => sub { return $users });
+    $self->helper(users => sub { state $users = MyUsers->new });
 
     my $r = $self->routes;
 
@@ -614,8 +610,7 @@ information.
     my $self = shift;
 
     $self->secret('Mojolicious rocks');
-    my $users = MyUsers->new;
-    $self->helper(users => sub { return $users });
+    $self->helper(users => sub { state $users = MyUsers->new });
 
     my $r = $self->routes;
     $r->any('/')->to('login#index')->name('index');

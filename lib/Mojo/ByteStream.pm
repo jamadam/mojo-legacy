@@ -15,16 +15,13 @@ my @UTILS = (
   qw(punycode_encode quote sha1_bytes sha1_sum slurp spurt squish trim),
   qw(unquote url_escape url_unescape xml_escape xor_encode)
 );
-{
-  no strict 'refs';
-  for my $name (@UTILS) {
-    my $sub = Mojo::Util->can($name);
-    *{__PACKAGE__ . "::$name"} = sub {
-      my $self = shift;
-      $$self = $sub->($$self, @_);
-      return $self;
-    };
-  }
+for my $name (@UTILS) {
+  my $sub = Mojo::Util->can($name);
+  Mojo::Util::monkey_patch __PACKAGE__, $name, sub {
+    my $self = shift;
+    $$self = $sub->($$self, @_);
+    return $self;
+  };
 }
 
 sub new {
@@ -34,10 +31,7 @@ sub new {
 
 sub b { __PACKAGE__->new(@_) }
 
-sub clone {
-  my $self = shift;
-  return $self->new($$self);
-}
+sub clone { $_[0]->new(${$_[0]}) }
 
 sub decode {
   my $self = shift;
@@ -62,14 +56,14 @@ sub encode {
 
 sub secure_compare { Mojo::Util::secure_compare ${shift()}, @_ }
 
-sub size { length ${shift()} }
+sub size { length ${$_[0]} }
 
 sub split {
   my ($self, $pattern) = @_;
   return Mojo::Collection->new(map { $self->new($_) } split $pattern, $$self);
 }
 
-sub to_string { ${shift()} }
+sub to_string { ${$_[0]} }
 
 1;
 

@@ -140,7 +140,7 @@ Most commonly used features every L<Mojolicious> developer should know about.
 =head2 Minimal route
 
 Every L<Mojolicious> application has a router object you can use to generate
-routes structures.
+route structures, that match in the same order in which they were defined.
 
   # Application
   package MyApp;
@@ -313,10 +313,10 @@ The C<controller> is always appended to the C<namespace> if available.
   # /hey -> MyApp::Controller::Foo::Bar->hey
   $r->route('/hey')->to('Foo::Bar#hey', namespace => 'MyApp::Controller');
 
-You can also change the default namespace for all routes in the application
-with the router attribute L<Mojolicious::Routes/"namespace">.
+You can also change the default namespaces for all routes in the application
+with the router attribute L<Mojolicious::Routes/"namespaces">.
 
-  $r->namespace('MyApp::Controller');
+  $r->namespaces(['MyApp::Controller']);
 
 =head2 Route to callback
 
@@ -685,13 +685,8 @@ Less commonly used and more powerful features.
 IRIs are handled transparently, that means paths are guaranteed to be
 unescaped and decoded to Perl characters.
 
-  use utf8;
-
   # GET /☃ (unicode snowman) -> {controller => 'foo', action => 'snowman'}
   $r->get('/☃')->to('foo#snowman');
-
-Just don't forget to use the L<utf8> pragma or you'll make the Unicode snowman
-very sad.
 
 =head2 Rearranging routes
 

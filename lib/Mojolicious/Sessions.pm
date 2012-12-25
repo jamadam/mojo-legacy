@@ -85,8 +85,9 @@ Mojolicious::Sessions - Signed cookie based session manager
 =head1 DESCRIPTION
 
 L<Mojolicious::Sessions> manages simple signed cookie based sessions for
-L<Mojolicious>. All data gets serialized with L<Mojo::JSON> and stored on the
-client-side, but is protected from unwanted changes with a signature.
+L<Mojolicious>. All data gets serialized with L<Mojo::JSON> and stored
+C<Base64> encoded on the client-side, but is protected from unwanted changes
+with a C<HMAC-SHA1> signature.
 
 =head1 ATTRIBUTES
 
@@ -124,7 +125,7 @@ C<0> will allow sessions to persist until the browser window is closed, this
 can have security implications though. For more control you can also use the
 C<expiration> and C<expires> session values.
 
-  # Expiration date in epoch seconds from now (persists between requests)
+  # Expiration date in seconds from now (persists between requests)
   $c->session(expiration => 604800);
 
   # Expiration date as absolute epoch time (only valid for one request)

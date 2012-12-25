@@ -11,7 +11,7 @@ use Mojolicious::Lite;
 use Test::Mojo;
 
 # POST /json/echo
-post '/json/echo' => sub {
+any [qw(POST PUT)] => '/json/echo' => sub {
   my $self = shift;
   $self->respond_to(json => {json => $self->req->json});
 };
@@ -52,10 +52,19 @@ $t->post_json_ok(
   ->status_is(200)->content_type_is('application/json')
   ->json_content_is({hello => 'world'});
 
-# POST /json/echo (array with json format)
-$t->post_json_ok('/json/echo' => [1, 2, 3] => {Accept => 'application/json'})
-  ->status_is(200)->content_type_is('application/json')
-  ->json_content_is([1, 2, 3]);
+# PUT /json/echo (hash with json format)
+my $tx = $t->ua->build_json_tx(
+  '/json/echo' => {hello => 'world'} => {Accept => 'application/json'});
+$tx->req->method('PUT');
+$t->request_ok($tx)->status_is(200)->content_type_is('application/json')
+  ->json_content_is({hello => 'world'});
+
+# PUT /json/echo (array with json format)
+$tx = $t->ua->build_json_tx(
+  '/json/echo' => [1, 2, 3] => {Accept => 'application/json'});
+$tx->req->method('PUT');
+$t->request_ok($tx, 'request succesful')->status_is(200)
+  ->content_type_is('application/json')->json_content_is([1, 2, 3]);
 
 # GET /rest
 $t->get_ok('/rest')->status_is(200)
@@ -425,6 +434,13 @@ $t->post_ok('/rest.png?format=json')->status_is(201)
 # GET /nothing (does not exist)
 $t->get_ok('/nothing' => {Accept => 'image/png'})->status_is(404);
 
+# GET /rest (Ajax)
+my $ajax = 'text/html;q=0.1,application/xml';
+$t->get_ok(
+  '/rest' => {Accept => $ajax, 'X-Requested-With' => 'XMLHttpRequest'})
+  ->status_is(200)->content_type_is('application/xml')
+  ->text_is(just => 'works');
+
 # GET /rest.html (Internet Explorer 8)
 my $ie
   = 'image/jpeg, application/x-ms-application, image/gif, application/xaml+xml'
@@ -450,5 +466,12 @@ $t->get_ok('/rest.html' => {Accept => $chrome})->status_is(200)
 $t->get_ok('/rest?format=html' => {Accept => $chrome})->status_is(200)
   ->content_type_is('text/html;charset=UTF-8')
   ->text_is('html > body', 'works');
+
+# GET /rest (jQuery 1.8)
+my $jquery = 'application/json, text/javascript, */*; q=0.01';
+$t->get_ok(
+  '/rest' => {Accept => $jquery, 'X-Requested-With' => 'XMLHttpRequest'})
+  ->status_is(200)->content_type_is('application/json')
+  ->json_content_is({just => 'works'});
 
 done_testing();

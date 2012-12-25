@@ -1,5 +1,5 @@
 This is a modified version of mojo to run on Perl-5.8.7 environment.
-The API is expected to be compatible with Mojolicious v3.41.
+The API is expected to be compatible with Mojolicious v3.70.
 
 The code is experimental and might not work in all cases.
 
@@ -17,3 +17,5 @@ To use morbo with it, you must at least upgrade Socket module to
 version 1.81 or higher. Please do the following command.
 
 $ cpanm Socket
+
+To use websocket, you must at least install Digest::SHA.

@@ -3,8 +3,10 @@ use Mojo::Base -strict;
 use Test::More;
 use File::Spec::Functions 'catdir';
 use FindBin;
+use Mojo::Transaction::WebSocket;
 use Mojo::URL;
 use Mojo::UserAgent::Transactor;
+use Mojo::Util 'encode';
 
 # Simle GET
 my $t = Mojo::UserAgent::Transactor->new;
@@ -144,6 +146,7 @@ like $tx->req->content->parts->[2]->headers->content_disposition, qr/"test"/,
   'right "Content-Disposition" value';
 is $tx->req->content->parts->[2]->asset->slurp, 3, 'right part';
 is $tx->req->content->parts->[3], undef, 'no more parts';
+is_deeply [$tx->req->param('test')], [1, 2, 3], 'right values';
 
 # Multipart form with real file and custom header
 $tx = $t->form('http://kraih.com/foo',
@@ -183,6 +186,25 @@ like $tx->req->content->parts->[0]->headers->content_disposition,
   qr/foo\.zip/, 'right "Content-Disposition" value';
 is $tx->req->content->parts->[0]->asset->slurp, 'whatever', 'right part';
 is $tx->req->content->parts->[1], undef, 'no more parts';
+is $tx->req->upload('myzip')->filename, 'foo.zip',  'right filename';
+is $tx->req->upload('myzip')->size,     8,          'right size';
+is $tx->req->upload('myzip')->slurp,    'whatever', 'right content';
+
+# Multipart form with filename (UTF-8)
+my $snowman = encode 'UTF-8', '☃';
+$tx = $t->form('http://kraih.com/foo' => 'UTF-8' =>
+    {'☃' => {content => 'snowman', filename => '☃.jpg'}});
+is $tx->req->url->to_abs, 'http://kraih.com/foo', 'right URL';
+is $tx->req->method, 'POST', 'right method';
+is $tx->req->headers->content_type, 'multipart/form-data',
+  'right "Content-Type" value';
+like $tx->req->content->parts->[0]->headers->content_disposition,
+  qr/$snowman/, 'right "Content-Disposition" value';
+is $tx->req->content->parts->[0]->asset->slurp, 'snowman', 'right part';
+is $tx->req->content->parts->[1], undef, 'no more parts';
+is $tx->req->upload('☃')->filename, '☃.jpg', 'right filename';
+is $tx->req->upload('☃')->size,     7,         'right size';
+is $tx->req->upload('☃')->slurp,    'snowman', 'right content';
 
 # Simple endpoint
 $tx = $t->tx(GET => 'mojolicio.us');
@@ -205,7 +227,7 @@ is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
 is(($t->endpoint($tx))[2], 80,             'right port');
 
 # HTTPS endpoint
-$tx = $t->tx(GET => 'https://mojolicio.us');
+$tx = $t->tx(GET => 'HTTPS://mojolicio.us');
 is(($t->endpoint($tx))[0], 'https',        'right scheme');
 is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
 is(($t->endpoint($tx))[2], 443,            'right port');
@@ -218,7 +240,7 @@ is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
 is(($t->endpoint($tx))[2], 443,            'right port');
 
 # TLS WebSocket endpoint with proxy
-$tx = $t->websocket('wss://mojolicio.us');
+$tx = $t->websocket('WSS://mojolicio.us');
 $tx->req->proxy('http://127.0.0.1:3000');
 is(($t->endpoint($tx))[0], 'https',        'right scheme');
 is(($t->endpoint($tx))[1], 'mojolicio.us', 'right host');
@@ -236,6 +258,20 @@ $tx->req->proxy('http://127.0.0.1:3000');
 is(($t->peer($tx))[0], 'http',      'right scheme');
 is(($t->peer($tx))[1], '127.0.0.1', 'right host');
 is(($t->peer($tx))[2], 3000,        'right port');
+
+# Simple peer with proxy (no port)
+$tx = $t->tx(GET => 'http://mojolicio.us');
+$tx->req->proxy('http://127.0.0.1');
+is(($t->peer($tx))[0], 'http',      'right scheme');
+is(($t->peer($tx))[1], '127.0.0.1', 'right host');
+is(($t->peer($tx))[2], 80,          'right port');
+
+# Simple peer with HTTPS proxy (no port)
+$tx = $t->tx(GET => 'http://mojolicio.us');
+$tx->req->proxy('HTTPS://127.0.0.1');
+is(($t->peer($tx))[0], 'https',     'right scheme');
+is(($t->peer($tx))[1], '127.0.0.1', 'right host');
+is(($t->peer($tx))[2], 443,         'right port');
 
 # Simple WebSocket peer with proxy
 $tx = $t->websocket('ws://mojolicio.us');
@@ -266,6 +302,7 @@ is(($t->peer($tx))[2], 3000,        'right port');
 
 # WebSocket handshake
 $tx = $t->websocket('ws://127.0.0.1:3000/echo');
+ok !$tx->is_websocket, 'not a WebSocket';
 is $tx->req->url->to_abs, 'http://127.0.0.1:3000/echo', 'right URL';
 is $tx->req->method, 'GET', 'right method';
 is $tx->req->headers->connection, 'Upgrade', 'right "Connection" value';
@@ -275,6 +312,10 @@ ok $tx->req->headers->sec_websocket_protocol,
 ok $tx->req->headers->sec_websocket_version,
   'has "Sec-WebSocket-Version" value';
 is $tx->req->headers->upgrade, 'websocket', 'right "Upgrade" value';
+is $t->upgrade($tx), undef, 'not upgraded';
+Mojo::Transaction::WebSocket->new(handshake => $tx)->server_handshake;
+$tx = $t->upgrade($tx);
+ok $tx->is_websocket, 'is a WebSocket';
 
 # WebSocket handshake with header
 $tx = $t->websocket('wss://127.0.0.1:3000/echo' => {Expect => 'foo'});
@@ -290,7 +331,7 @@ ok $tx->req->headers->sec_websocket_version,
 is $tx->req->headers->upgrade, 'websocket', 'right "Upgrade" value';
 
 # Proxy CONNECT
-$tx = $t->tx(GET => 'https://sri:secr3t@mojolicio.us');
+$tx = $t->tx(GET => 'HTTPS://sri:secr3t@mojolicio.us');
 $tx->req->proxy('http://sri:secr3t@127.0.0.1:3000');
 ok !$tx->req->headers->authorization,       'no "Authorization" header';
 ok !$tx->req->headers->proxy_authorization, 'no "Proxy-Authorization" header';
@@ -312,10 +353,11 @@ ok !$tx->req->headers->authorization, 'no "Authorization" header';
 is $tx->req->headers->proxy_authorization, 'Basic c3JpOnNlY3IzdA==',
   'right "Proxy-Authorization" header';
 is $tx->req->headers->host, '127.0.0.1:3000', 'right "Host" header';
+is $t->proxy_connect($tx), undef, 'already a CONNECT request';
 
 # Simple 302 redirect
-$tx
-  = $t->tx(POST => 'http://mojolico.us/foo' => {Accept => 'application/json'});
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo' => {Accept => 'application/json'});
 $tx->res->code(302);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
@@ -330,7 +372,7 @@ is $tx->res->code, undef, 'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 302 redirect (dynamic)
-$tx = $t->tx(POST => 'http://mojolico.us/foo');
+$tx = $t->tx(POST => 'http://mojolicio.us/foo');
 $tx->res->code(302);
 $tx->res->headers->location('http://kraih.com/bar');
 $tx->req->write_chunk('whatever' => sub { shift->finish });
@@ -344,8 +386,8 @@ is $tx->res->code, undef, 'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # Simple 303 redirect
-$tx
-  = $t->tx(POST => 'http://mojolico.us/foo' => {Accept => 'application/json'});
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo' => {Accept => 'application/json'});
 $tx->res->code(303);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
@@ -360,7 +402,7 @@ is $tx->res->code, undef, 'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 303 redirect (dynamic)
-$tx = $t->tx(POST => 'http://mojolico.us/foo');
+$tx = $t->tx(POST => 'http://mojolicio.us/foo');
 $tx->res->code(303);
 $tx->res->headers->location('http://kraih.com/bar');
 $tx->req->write_chunk('whatever' => sub { shift->finish });
@@ -375,7 +417,7 @@ is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 303 redirect (additional headers)
 $tx = $t->tx(
-  POST => 'http://mojolico.us/foo' => {
+  POST => 'http://mojolicio.us/foo' => {
     Accept  => 'application/json',
     Cookie  => 'one',
     Host    => 'two',
@@ -402,8 +444,8 @@ is $tx->res->code, undef, 'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # Simple 301 redirect
-$tx
-  = $t->tx(POST => 'http://mojolico.us/foo' => {Accept => 'application/json'});
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo' => {Accept => 'application/json'});
 $tx->res->code(301);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
@@ -419,7 +461,7 @@ is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 301 redirect with content
 $tx = $t->tx(
-  POST => 'http://mojolico.us/foo' => {Accept => '*/*'} => 'whatever');
+  POST => 'http://mojolicio.us/foo' => {Accept => '*/*'} => 'whatever');
 $tx->res->code(301);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, '*/*', 'right "Accept" value';
@@ -434,15 +476,15 @@ is $tx->res->code, undef,      'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 301 redirect (dynamic)
-$tx = $t->tx(POST => 'http://mojolico.us/foo');
+$tx = $t->tx(POST => 'http://mojolicio.us/foo');
 $tx->res->code(301);
 $tx->res->headers->location('http://kraih.com/bar');
 $tx->req->write_chunk('whatever' => sub { shift->finish });
 is $t->redirect($tx), undef, 'unsupported redirect';
 
 # Simple 307 redirect
-$tx
-  = $t->tx(POST => 'http://mojolico.us/foo' => {Accept => 'application/json'});
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo' => {Accept => 'application/json'});
 $tx->res->code(307);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
@@ -458,7 +500,7 @@ is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 307 redirect with content
 $tx = $t->tx(
-  POST => 'http://mojolico.us/foo' => {Accept => '*/*'} => 'whatever');
+  POST => 'http://mojolicio.us/foo' => {Accept => '*/*'} => 'whatever');
 $tx->res->code(307);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, '*/*', 'right "Accept" value';
@@ -473,7 +515,7 @@ is $tx->res->code, undef,      'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 307 redirect (dynamic)
-$tx = $t->tx(POST => 'http://mojolico.us/foo');
+$tx = $t->tx(POST => 'http://mojolicio.us/foo');
 $tx->res->code(307);
 $tx->res->headers->location('http://kraih.com/bar');
 $tx->req->write_chunk('whatever' => sub { shift->finish });
@@ -481,7 +523,7 @@ is $t->redirect($tx), undef, 'unsupported redirect';
 
 # 307 redirect (additional headers)
 $tx = $t->tx(
-  POST => 'http://mojolico.us/foo' => {
+  POST => 'http://mojolicio.us/foo' => {
     Accept  => 'application/json',
     Cookie  => 'one',
     Host    => 'two',
@@ -508,8 +550,8 @@ is $tx->res->code, undef, 'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # Simple 308 redirect
-$tx
-  = $t->tx(POST => 'http://mojolico.us/foo' => {Accept => 'application/json'});
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo' => {Accept => 'application/json'});
 $tx->res->code(308);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
@@ -525,7 +567,7 @@ is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 308 redirect with content
 $tx = $t->tx(
-  POST => 'http://mojolico.us/foo' => {Accept => '*/*'} => 'whatever');
+  POST => 'http://mojolicio.us/foo' => {Accept => '*/*'} => 'whatever');
 $tx->res->code(308);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, '*/*', 'right "Accept" value';
@@ -540,19 +582,51 @@ is $tx->res->code, undef,      'no status';
 is $tx->res->headers->location, undef, 'no "Location" value';
 
 # 308 redirect (dynamic)
-$tx = $t->tx(POST => 'http://mojolico.us/foo');
+$tx = $t->tx(POST => 'http://mojolicio.us/foo');
 $tx->res->code(308);
 $tx->res->headers->location('http://kraih.com/bar');
 $tx->req->write_chunk('whatever' => sub { shift->finish });
 is $t->redirect($tx), undef, 'unsupported redirect';
 
 # 309 redirect (unsupported)
-$tx
-  = $t->tx(POST => 'http://mojolico.us/foo' => {Accept => 'application/json'});
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo' => {Accept => 'application/json'});
 $tx->res->code(309);
 $tx->res->headers->location('http://kraih.com/bar');
 is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
 is $tx->req->body, '', 'no content';
 is $t->redirect($tx), undef, 'unsupported redirect';
+
+# 302 redirect (relative path)
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo/bar' => {Accept => 'application/json'});
+$tx->res->code(302);
+$tx->res->headers->location('baz');
+is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
+is $tx->req->body, '', 'no content';
+$tx = $t->redirect($tx);
+is $tx->req->method, 'GET', 'right method';
+is $tx->req->url->to_abs, 'http://mojolicio.us/foo/baz', 'right URL';
+is $tx->req->headers->accept,   undef, 'no "Accept" value';
+is $tx->req->headers->location, undef, 'no "Location" value';
+is $tx->req->body, '',    'no content';
+is $tx->res->code, undef, 'no status';
+is $tx->res->headers->location, undef, 'no "Location" value';
+
+# 302 redirect (absolute path)
+$tx = $t->tx(
+  POST => 'http://mojolicio.us/foo/bar' => {Accept => 'application/json'});
+$tx->res->code(302);
+$tx->res->headers->location('/baz');
+is $tx->req->headers->accept, 'application/json', 'right "Accept" value';
+is $tx->req->body, '', 'no content';
+$tx = $t->redirect($tx);
+is $tx->req->method, 'GET', 'right method';
+is $tx->req->url->to_abs, 'http://mojolicio.us/baz', 'right URL';
+is $tx->req->headers->accept, undef, 'no "Accept" value';
+is $tx->req->headers->location, undef, 'no "Location" value';
+is $tx->req->body, '',    'no content';
+is $tx->res->code, undef, 'no status';
+is $tx->res->headers->location, undef, 'no "Location" value';
 
 done_testing();

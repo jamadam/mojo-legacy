@@ -77,19 +77,18 @@ sub serve_asset {
   # Range
   my $size  = $asset->size;
   my $start = 0;
-  my $end   = $size - 1 >= 0 ? $size - 1 : 0;
+  my $end   = $size - 1;
   if (my $range = $headers->range) {
 
-    # Satisfiable
-    if ($range =~ m/^bytes=(\d+)-(\d+)?/ && $1 <= $end) {
-      $start = $1;
-      $end = $2 if defined $2 && $2 <= $end;
-      $res->code(206)->headers->content_length($end - $start + 1)
-        ->content_range("bytes $start-$end/$size");
-    }
-
     # Not satisfiable
-    else { return $res->code(416) }
+    return $res->code(416) unless $size && $range =~ m/^bytes=(\d+)?-(\d+)?/;
+    $start = $1 if defined $1;
+    $end = $2 if defined $2 && $2 <= $end;
+    return $res->code(416) if $start > $end || $end > ($size - 1);
+
+    # Satisfiable
+    $res->code(206)->headers->content_length($end - $start + 1)
+      ->content_range("bytes $start-$end/$size");
   }
 
   # Serve asset

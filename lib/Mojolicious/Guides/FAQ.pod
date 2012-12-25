@@ -77,9 +77,9 @@ C<MOJO_MAX_LINE_SIZE> environment variable to change this value.
 
 This protection mechanism is very similar to those mentioned in the two
 previous answers. It limits how much content the HTTP parser is allowed to
-buffer when parsing chunked and multipart messages. This limit is around
-C<256KB> by default, you can use the C<MOJO_MAX_BUFFER_SIZE> environment
-variable to change this value.
+buffer when parsing chunked, compressed and multipart messages. This limit is
+around C<256KB> by default, you can use the C<MOJO_MAX_BUFFER_SIZE>
+environment variable to change this value.
 
 =head2 What does the error "EV does not work with ithreads" mean?
 
@@ -100,6 +100,14 @@ secure, so we added this log message as a reminder. You can change the
 passphrase with the attribute L<Mojolicious/"secret">.
 
   app->secret('My very secret passphrase.');
+
+=head2 What does "Nothing has been rendered, expecting delayed response" mean?
+
+L<Mojolicious> has been designed from the ground up for non-blocking I/O and
+event loops. So when a new request comes in and no response is generated right
+away, it will assume that this was intentional and return control to the web
+server, which can then handle other requests while waiting for events such as
+timers to finally generate a response.
 
 =head2 What does "Inactivity timeout" mean?
 

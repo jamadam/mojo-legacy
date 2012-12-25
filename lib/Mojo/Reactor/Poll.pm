@@ -31,7 +31,7 @@ sub one_tick {
 
     # Calculate ideal timeout based on timers
     my $min = min map { $_->{time} } values %{$self->{timers}};
-    my $timeout = defined $min ? ($min - time) : 0.025;
+    my $timeout = defined $min ? ($min - time) : 0.5;
     $timeout = 0 if $timeout < 0;
 
     # I/O
@@ -69,7 +69,7 @@ sub recurring { shift->_timer(1, @_) }
 
 sub remove {
   my ($self, $remove) = @_;
-  return !!delete shift->{timers}{shift()} unless ref $remove;
+  return !!delete $self->{timers}{$remove} unless ref $remove;
   $self->_poll->remove($remove);
   return !!delete $self->{io}{fileno $remove};
 }
@@ -218,8 +218,8 @@ seconds.
 
   $reactor = $reactor->watch($handle, $readable, $writable);
 
-Change I/O events to watch handle for with C<true> and C<false> values. Note
-that this method requires an active I/O watcher.
+Change I/O events to watch handle for with true and false values. Note that
+this method requires an active I/O watcher.
 
 =head1 SEE ALSO
 

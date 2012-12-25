@@ -25,7 +25,7 @@ sub check_file {
 sub run {
   my ($self, $app) = @_;
 
-  # Watch files and manage worker
+  # Prepare environment
   $SIG{CHLD} = sub { $self->_reap };
   $SIG{INT} = $SIG{TERM} = $SIG{QUIT} = sub {
     $self->{finished} = 1;
@@ -33,6 +33,11 @@ sub run {
   };
   unshift @{$self->watch}, $app;
   $self->{modified} = 1;
+
+  # Prepare and cache listen sockets for smooth restarting
+  my $daemon = Mojo::Server::Daemon->new(silent => 1)->start->stop;
+
+  # Watch files and manage worker
   $self->_manage while !$self->{finished} || $self->{running};
   exit 0;
 }
@@ -112,7 +117,8 @@ Mojo::Server::Morbo - DOOOOOOOOOOOOOOOOOOM!
 
 L<Mojo::Server::Morbo> is a full featured, self-restart capable non-blocking
 I/O HTTP and WebSocket server, built around the very well tested and reliable
-L<Mojo::Server::Daemon>, with C<IPv6>, C<TLS> and C<libev> support.
+L<Mojo::Server::Daemon>, with C<IPv6>, C<TLS>, C<Comet> (long polling) and
+multiple event loop support.
 
 To start applications with it you can use the L<morbo> script.
 

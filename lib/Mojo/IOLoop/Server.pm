@@ -89,7 +89,8 @@ sub listen {
       '!aNULL:!eNULL:!EXPORT:!DSS:!DES:!SSLv2:!LOW:RC4-SHA:RC4-MD5:ALL',
     SSL_honor_cipher_order => 1,
     SSL_key_file           => $args->{tls_key} || $KEY,
-    SSL_startHandshake     => 0
+    SSL_startHandshake     => 0,
+    SSL_verify_mode        => 0x00
   };
   return unless $args->{tls_ca};
   $options->{SSL_ca_file} = -T $args->{tls_ca} ? $args->{tls_ca} : undef;
@@ -109,10 +110,7 @@ sub start {
     $self->{handle} => sub { $self->_accept for 1 .. $self->multi_accept });
 }
 
-sub stop {
-  my $self = shift;
-  $self->reactor->remove($self->{handle});
-}
+sub stop { $_[0]->reactor->remove($_[0]->{handle}) }
 
 sub _accept {
   my $self = shift;

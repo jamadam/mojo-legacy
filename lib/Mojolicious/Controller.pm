@@ -147,7 +147,7 @@ sub redirect_to {
   # Don't override 3xx status
   my $res = $self->res;
   $res->headers->location($self->url_for(@_)->to_abs);
-  return $self->rendered($res->is_status_class(300) ? undef : 302);
+  return $self->rendered($res->is_status_class(300) ? () : 302);
 }
 
 sub render {
@@ -182,9 +182,7 @@ sub render {
   return Mojo::ByteStream->new($output) if $args->{partial};
 
   # Prepare response
-  my $res = $self->res;
-  $res->body($output) unless $res->body;
-  my $headers = $res->headers;
+  my $headers = $self->res->body($output)->headers;
   $headers->content_type($type) unless $headers->content_type;
   return !!$self->rendered($stash->{status});
 }
@@ -283,10 +281,11 @@ sub respond_to {
 
   # Detect formats
   my $app     = $self->app;
-  my @formats = @{$app->types->detect($self->req->headers->accept)};
+  my $req     = $self->req;
+  my @formats = @{$app->types->detect($req->headers->accept, $req->is_xhr)};
   my $stash   = $self->stash;
   unless (@formats) {
-    my $format = $stash->{format} || $self->req->param('format');
+    my $format = $stash->{format} || $req->param('format');
     push @formats, $format ? $format : $app->renderer->default_format;
   }
 
@@ -427,7 +426,7 @@ sub url_for {
       if (!$target || $target eq 'current') && $req->url->path->trailing_slash;
 
     # Fix scheme for WebSockets
-    $base->scheme((defined $base->scheme ? $base->scheme : '') eq 'https' ? 'wss' : 'ws') if $ws;
+    $base->scheme($base->protocol eq 'https' ? 'wss' : 'ws') if $ws;
   }
 
   # Make path absolute
@@ -630,8 +629,7 @@ For more control you can also access request information directly.
   $c = $c->redirect_to('/path');
   $c = $c->redirect_to('http://127.0.0.1/foo/bar');
 
-Prepare a C<302> redirect response, takes the exact same arguments as
-C<url_for>.
+Prepare a C<302> redirect response, takes the same arguments as C<url_for>.
 
   # Conditional redirect
   return $c->redirect_to('login') unless $c->session('user');
@@ -752,11 +750,6 @@ of the response, which is C<text/html;charset=UTF-8> by default.
 Finalize response and emit C<after_dispatch> plugin hook, defaults to using a
 C<200> response code.
 
-  # Stream content directly from file
-  $c->res->content->asset(Mojo::Asset::File->new(path => '/etc/passwd'));
-  $c->res->headers->content_type('text/plain');
-  $c->rendered(200);
-
 =head2 C<req>
 
   my $req = $c->req;
@@ -795,9 +788,10 @@ Get L<Mojo::Message::Response> object from L<Mojo::Transaction/"res">.
 
 Automatically select best possible representation for resource from C<Accept>
 request header, C<format> stash value or C<format> GET/POST parameter,
-defaults to rendering an empty C<204> response. Unspecific C<Accept> request
-headers that contain more than one MIME type are currently ignored, since
-browsers often don't really know what they actually want.
+defaults to rendering an empty C<204> response. Since browsers often don't
+really know what they actually want, unspecific C<Accept> request headers with
+more than one MIME type will be ignored, unless the C<X-Requested-With> header
+is set to the value C<XMLHttpRequest>.
 
   $c->respond_to(
     json => sub { $c->render_json({just => 'works'}) },
@@ -842,15 +836,15 @@ timeout, which usually defaults to C<15> seconds.
   $c          = $c->session(foo => 'bar');
 
 Persistent data storage, all session data gets serialized with L<Mojo::JSON>
-and stored in C<HMAC-SHA1> signed cookies. Note that cookies usually have a
-4096 byte limit, depending on browser.
+and stored C<Base64> encoded in C<HMAC-SHA1> signed cookies. Note that cookies
+usually have a 4096 byte limit, depending on browser.
 
   # Manipulate session
   $c->session->{foo} = 'bar';
   my $foo = $c->session->{foo};
   delete $c->session->{foo};
 
-  # Expiration date in epoch seconds from now (persists between requests)
+  # Expiration date in seconds from now (persists between requests)
   $c->session(expiration => 604800);
 
   # Expiration date as absolute epoch time (only valid for one request)

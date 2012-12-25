@@ -38,7 +38,7 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Rainbow';
-our $VERSION  = '3.54';
+our $VERSION  = '3.70';
 
 sub AUTOLOAD {
   my $self = shift;
@@ -67,7 +67,7 @@ sub new {
   push @{$self->static->paths},   $home->rel_dir('public');
 
   # Default to application namespace
-  my $r = $self->routes->namespace(ref $self);
+  my $r = $self->routes->namespaces([ref $self]);
 
   # Hide controller attributes/methods and "handler"
   $r->hide(qw(AUTOLOAD DESTROY app cookie finish flash handler on param));
@@ -417,13 +417,15 @@ Add a new helper that will be available as a method of the controller object
 and the application object, as well as a function in C<ep> templates.
 
   # Helper
-  $app->helper(add => sub { $_[1] + $_[2] });
+  $app->helper(cache => sub { state $cache = {} });
 
   # Controller/Application
-  my $result = $self->add(2, 3);
+  $self->cache->{foo} = 'bar';
+  my $result = $self->cache->{foo};
 
   # Template
-  %= add 2, 3
+  % cache->{foo} = 'bar';
+  %= cache->{foo}
 
 =head2 C<hook>
 
@@ -454,8 +456,8 @@ parsed.
   });
 
 This is a very powerful hook and should not be used lightly, it makes some
-rather advanced features such as upload progress bars possible, just note that
-it will not work for embedded applications. (Passed the transaction and
+rather advanced features such as upload progress bars possible. Note that this
+hook will not work for embedded applications. (Passed the transaction and
 application object)
 
 =item C<before_dispatch>
@@ -486,7 +488,9 @@ Mostly used for custom dispatchers and post-processing static file responses.
 =item C<after_dispatch>
 
 Emitted in reverse order after a response has been rendered. Note that this
-hook can trigger before C<after_static_dispatch> due to its dynamic nature.
+hook can trigger before C<after_static_dispatch> due to its dynamic nature,
+and with embedded applications will only work for the application rendering
+the response.
 
   $app->hook(after_dispatch => sub {
     my $c = shift;

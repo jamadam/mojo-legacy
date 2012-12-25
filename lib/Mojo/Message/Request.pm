@@ -113,7 +113,7 @@ sub get_start_line_chunk {
     # CONNECT
     my $method = uc $self->method;
     if ($method eq 'CONNECT') {
-      my $port = $url->port || ($url->scheme eq 'https' ? '443' : '80');
+      my $port = $url->port || ($url->protocol eq 'https' ? '443' : '80');
       $path = $url->host . ":$port";
     }
 
@@ -121,8 +121,8 @@ sub get_start_line_chunk {
     elsif ($self->proxy) {
       my $clone = $url = $url->clone->userinfo(undef);
       my $upgrade = lc($self->headers->upgrade || '');
-      my $scheme = $url->scheme || '';
-      $path = $clone unless $upgrade eq 'websocket' || $scheme eq 'https';
+      $path = $clone
+        unless $upgrade eq 'websocket' || $url->protocol eq 'https';
     }
 
     $self->{start_buffer} = "$method $path HTTP/@{[$self->version]}\x0d\x0a";
@@ -137,7 +137,7 @@ sub get_start_line_chunk {
 
 sub is_secure {
   my $url = shift->url;
-  return ($url->scheme || defined $url->base->scheme ? $url->base->scheme : '') eq 'https';
+  return ($url->protocol || $url->base->protocol) eq 'https';
 }
 
 sub is_xhr {
@@ -154,16 +154,17 @@ sub params {
 
 sub parse {
   my $self = shift;
-  my $env  = @_ > 1 ? {@_} : ref $_[0] eq 'HASH' ? $_[0] : undef;
-  my @args = $env ? undef : @_;
 
-  # CGI like environment
+  # Parse CGI environment
+  my $env = @_ > 1 ? {@_} : ref $_[0] eq 'HASH' ? $_[0] : undef;
   $self->env($env)->_parse_env($env) if $env;
-  $self->content($self->content->parse_body(@args))
-    if (defined $self->{state} ? $self->{state} : '') eq 'cgi';
 
-  # Pass through
-  $self->SUPER::parse(@args);
+  # Parse normal message
+  my @args = $env ? () : @_;
+  if ((defined $self->{state} ? $self->{state} : '') ne 'cgi') { $self->SUPER::parse(@args) }
+
+  # Parse CGI content
+  else { $self->content($self->content->parse_body(@args))->SUPER::parse }
 
   # Check if we can fix things that require all headers
   return $self unless $self->is_finished;
@@ -255,13 +256,13 @@ sub _parse_env {
 
     # Remove SCRIPT_NAME prefix if necessary
     my $buffer = $path->to_string;
-    $value  =~ s!^/|/$!!g;
+    $value =~ s!^/|/$!!g;
     $buffer =~ s!^/?\Q$value\E/?!!;
     $buffer =~ s!^/!!;
     $path->parse($buffer);
   }
 
-  # Bypass normal content parser
+  # Bypass normal message parser
   $self->{state} = 'cgi';
 }
 
@@ -364,7 +365,7 @@ Extract request line from string.
 
   $req = $req->fix_headers;
 
-Make sure request has all required headers for the current HTTP version.
+Make sure request has all required headers.
 
 =head2 C<get_start_line_chunk>
 
@@ -395,7 +396,7 @@ so it should not be called before the entire request body has been received.
 
 =head2 C<params>
 
-  my $p = $req->params;
+  my $params = $req->params;
 
 All C<GET> and C<POST> parameters, usually a L<Mojo::Parameters> object. Note
 that this method caches all data, so it should not be called before the entire
@@ -425,7 +426,7 @@ Proxy URL for request.
 
 =head2 C<query_params>
 
-  my $p = $req->query_params;
+  my $params = $req->query_params;
 
 All C<GET> parameters, usually a L<Mojo::Parameters> object.
 

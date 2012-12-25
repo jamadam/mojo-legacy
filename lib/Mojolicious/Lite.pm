@@ -5,6 +5,7 @@ use Mojo::Base 'Mojolicious';
 use File::Basename 'dirname';
 use File::Spec::Functions 'catdir';
 use Mojo::UserAgent;
+use Mojo::Util 'monkey_patch';
 
 sub import {
   my $class = shift;
@@ -17,34 +18,34 @@ sub import {
     unless $ENV{MOJO_HOME};
 
   # Initialize app
-  no strict 'refs';
   my $caller = caller;
+  no strict 'refs';
   push @{"${caller}::ISA"}, 'Mojo';
   my $app = $class->new;
 
   # Initialize routes
-  my $routes = $app->routes->namespace('');
+  my $routes = $app->routes->namespaces([]);
 
   # Default static and template class
   $app->static->classes->[0] = $app->renderer->classes->[0] = $caller;
 
   # Export
-  no warnings 'redefine';
   my $root = $routes;
   for my $name (qw(any get options patch post put websocket)) {
-    *{"${caller}::$name"} = sub { $routes->$name(@_) };
+    monkey_patch $caller, $name, sub { $routes->$name(@_) };
   }
-  *{"${caller}::new"} = *{"${caller}::app"} = sub {$app};
-  *{"${caller}::del"} = sub { $routes->delete(@_) };
-  *{"${caller}::group"} = sub (&) {
+  monkey_patch $caller, $_, sub {$app}
+    for qw(new app);
+  monkey_patch $caller, 'del', sub { $routes->delete(@_) };
+  monkey_patch $caller, 'group', sub (&) {
     my $old = $root;
     $_[0]->($root = $routes);
     ($routes, $root) = ($root, $old);
   };
-  *{"${caller}::helper"} = sub { $app->helper(@_) };
-  *{"${caller}::hook"}   = sub { $app->hook(@_) };
-  *{"${caller}::plugin"} = sub { $app->plugin(@_) };
-  *{"${caller}::under"}  = sub { $routes = $root->under(@_) };
+  monkey_patch $caller, 'helper', sub { $app->helper(@_) };
+  monkey_patch $caller, 'hook',   sub { $app->hook(@_) };
+  monkey_patch $caller, 'plugin', sub { $app->plugin(@_) };
+  monkey_patch $caller, 'under',  sub { $routes = $root->under(@_) };
 
   # Make sure there's a default application for testing
   Mojo::UserAgent->app($app) unless Mojo::UserAgent->app;
@@ -61,7 +62,7 @@ Mojolicious::Lite - Real-time micro web framework
 
 =head1 SYNOPSIS
 
-  # Automatically enables "strict", "warnings" and Perl 5.10 features
+  # Automatically enables "strict", "warnings", "utf8" and Perl 5.10 features
   use Mojolicious::Lite;
 
   # Route with placeholder
@@ -87,10 +88,10 @@ applications.
 
 =head2 Hello World
 
-A simple Hello World application can look like this, L<strict>, L<warnings>
-and Perl 5.10 features are automatically enabled and a few functions imported
-when you use L<Mojolicious::Lite>, turning your script into a full featured
-web application.
+A simple Hello World application can look like this, L<strict>, L<warnings>,
+L<utf8> and Perl 5.10 features are automatically enabled and a few functions
+imported when you use L<Mojolicious::Lite>, turning your script into a full
+featured web application.
 
   #!/usr/bin/env perl
   use Mojolicious::Lite;

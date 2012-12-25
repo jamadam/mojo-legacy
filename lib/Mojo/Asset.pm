@@ -12,6 +12,8 @@ sub get_chunk { croak 'Method "get_chunk" not implemented by subclass' }
 
 sub is_file {undef}
 
+sub is_range { !!($_[0]->end_range || $_[0]->start_range) }
+
 sub move_to { croak 'Method "move_to" not implemented by subclass' }
 sub size    { croak 'Method "size" not implemented by subclass' }
 sub slurp   { croak 'Method "slurp" not implemented by subclass' }
@@ -86,6 +88,12 @@ in a subclass.
   my $false = $asset->is_file;
 
 False.
+
+=head2 C<is_range>
+
+  my $success = $asset->is_range;
+
+Check if asset has a C<start_range> or C<end_range>.
 
 =head2 C<move_to>
 

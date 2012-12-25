@@ -1,21 +1,22 @@
 use Mojo::Base -strict;
 
-use utf8;
-
 use Test::More;
 use Mojo::URL;
 
 # Simple
 my $url = Mojo::URL->new('HtTp://Kraih.Com');
-is $url->scheme, 'HtTp',      'right scheme';
-is $url->host,   'Kraih.Com', 'right host';
+is $url->scheme,   'HtTp',      'right scheme';
+is $url->protocol, 'http',      'right protocol';
+is $url->host,     'Kraih.Com', 'right host';
+is $url->ihost,    'kraih.com', 'right internationalized host';
 is "$url", 'http://kraih.com', 'right format';
 
 # Advanced
 $url = Mojo::URL->new(
-  'http://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#/!%?@3');
+  'https://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#/!%?@3');
 ok $url->is_abs,   'is absolute';
-is $url->scheme,   'http', 'right scheme';
+is $url->scheme,   'https', 'right scheme';
+is $url->protocol, 'https', 'right protocol';
 is $url->userinfo, 'sri:foobar', 'right userinfo';
 is $url->host,     'kraih.com', 'right host';
 is $url->port,     '8080', 'right port';
@@ -23,19 +24,23 @@ is $url->path,     '/test/index.html', 'right path';
 is $url->query,    'monkey=biz&foo=1', 'right query';
 is $url->fragment, '/!%?@3', 'right fragment';
 is "$url",
-  'http://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#/!%?@3',
+  'https://sri:foobar@kraih.com:8080/test/index.html?monkey=biz&foo=1#/!%?@3',
   'right format';
 $url->path('/index.xml');
 is "$url",
-  'http://sri:foobar@kraih.com:8080/index.xml?monkey=biz&foo=1#/!%?@3',
+  'https://sri:foobar@kraih.com:8080/index.xml?monkey=biz&foo=1#/!%?@3',
   'right format';
 
-# Advanced fragment roundtrip
-$url = Mojo::URL->new('http://localhost#AZaz09-._~!$&\'()*+,;=%:@/?');
+# Advanced userinfo and fragment roundtrip
+$url = Mojo::URL->new(
+  'http://AZaz09-._~!$&\'()*+,;=:@localhost#AZaz09-._~!$&\'()*+,;=%:@/?');
 is $url->scheme,   'http',                        'right scheme';
+is $url->userinfo, 'AZaz09-._~!$&\'()*+,;=:',     'right userinfo';
 is $url->host,     'localhost',                   'right host';
 is $url->fragment, 'AZaz09-._~!$&\'()*+,;=%:@/?', 'right fragment';
-is "$url", 'http://localhost#AZaz09-._~!$&\'()*+,;=%:@/?', 'right format';
+is "$url",
+  'http://AZaz09-._~!$&\'()*+,;=:@localhost#AZaz09-._~!$&\'()*+,;=%:@/?',
+  'right format';
 
 # Parameters
 $url = Mojo::URL->new(
@@ -69,6 +74,10 @@ is "$url", 'http://sri:foobar@kraih.com:8080?foo=23&bar=24&baz=25#23',
   'right format';
 $url->query([foo => 26, bar => undef, baz => undef]);
 is "$url", 'http://sri:foobar@kraih.com:8080?foo=26#23', 'right format';
+$url->query(Mojo::Parameters->new('a=1&b=2'));
+is "$url", 'http://sri:foobar@kraih.com:8080?a=1&b=2#23', 'right format';
+$url->query(c => 3);
+is "$url", 'http://sri:foobar@kraih.com:8080?c=3#23', 'right format';
 
 # Query string
 $url = Mojo::URL->new(
@@ -102,8 +111,10 @@ is $url->to_rel, 'foo?foo=bar#23', 'right relative version';
 # Relative without scheme
 $url = Mojo::URL->new('//localhost/23/');
 ok !$url->is_abs, 'is not absolute';
-is $url->host, 'localhost', 'right host';
-is $url->path, '/23/',      'right path';
+is $url->scheme,   undef,       'no scheme';
+is $url->protocol, '',          'no protocol';
+is $url->host,     'localhost', 'right host';
+is $url->path,     '/23/',      'right path';
 is "$url", '//localhost/23/', 'right relative version';
 is $url->to_abs(Mojo::URL->new('http://')), 'http://localhost/23/',
   'right absolute version';
@@ -193,6 +204,14 @@ is $rel, 'c/d/index.html', 'right relative version';
 is $rel->to_abs, 'http://kraih.com/a/b/c/d/index.html',
   'right absolute version';
 is $rel->to_abs->to_rel, 'c/d/index.html', 'right relative version';
+$url = Mojo::URL->new('/foo');
+is $url->base, '', 'no base';
+is $url->to_abs(Mojo::URL->new('http://kraih.com'))->base, 'http://kraih.com',
+  'right base';
+$url = Mojo::URL->new('http://kraih.com/foo');
+is $url->base, '', 'no base';
+is $url->to_rel(Mojo::URL->new('http://kraih.com'))->base, 'http://kraih.com',
+  'right base';
 
 # Relative path
 $url = Mojo::URL->new('http://kraih.com/foo/?foo=bar#23');
@@ -284,7 +303,7 @@ $clone = $url->clone;
 is "$url", '/test/index.html', 'right format';
 ok !$clone->is_abs, 'not absolute';
 is $clone->scheme, undef, 'no scheme';
-is $clone->host,   '',    'no host';
+is $clone->host,   undef, 'no host';
 is $clone->base->scheme, 'http',      'right base scheme';
 is $clone->base->host,   '127.0.0.1', 'right base host';
 is $clone->path, '/test/index.html', 'right path';
@@ -299,7 +318,7 @@ $clone = $url->clone;
 is "$url", 'test/index.html', 'right format';
 ok !$clone->is_abs, 'not absolute';
 is $clone->scheme, undef, 'no scheme';
-is $clone->host,   '',    'no host';
+is $clone->host,   undef, 'no host';
 is $clone->base->scheme, 'http',      'right base scheme';
 is $clone->base->host,   '127.0.0.1', 'right base host';
 is $clone->path, 'test/index.html', 'right path';
@@ -343,6 +362,13 @@ is $url->port, 3000,   'right port';
 is $url->path, '/foo', 'right path';
 is "$url", 'http://xn--bcher-kva.xn--bcher-kva.xn--bcher-kva.ch:3000/foo',
   'right format';
+
+# IDNA (escaped userinfo and host)
+$url = Mojo::URL->new('https://foo:b%E4r@kr%E4ih.com:3000');
+is $url->host,  "kr\xe4ih.com",     'right host';
+is $url->ihost, 'xn--krih-moa.com', 'right internationalized host';
+is $url->port,  3000,               'right port';
+is "$url", 'https://foo:b%E4r@xn--krih-moa.com:3000', 'right format';
 
 # IDNA (snowman)
 $url = Mojo::URL->new('http://☃.net/');
@@ -625,6 +651,24 @@ $url = Mojo::URL->new('http://mojolicio.us/100%25_fun');
 is $url->path->parts->[0], '100%_fun', 'right part';
 is $url->path, '/100%25_fun', 'right path';
 is "$url", 'http://mojolicio.us/100%25_fun', 'right format';
+
+# No charset
+$url = Mojo::URL->new;
+$url->path->charset(undef);
+$url->query->charset(undef);
+$url->parse('HTTP://FOO.BAR/%E4/?%E5=%E4');
+is $url->scheme,   'HTTP',    'right scheme';
+is $url->protocol, 'http',    'right protocol';
+is $url->host,     'FOO.BAR', 'right host';
+is $url->ihost,    'foo.bar', 'right internationalized host';
+is $url->path,     '/%E4/',   'right path';
+is $url->path->parts->[0], "\xe4", 'right part';
+is $url->path->parts->[1], undef,  'no part';
+ok $url->path->leading_slash,  'has leading slash';
+ok $url->path->trailing_slash, 'has trailing slash';
+is $url->query, '%E5=%E4', 'right query';
+is $url->query->param("\xe5"), "\xe4", 'right value';
+is "$url", 'http://foo.bar/%E4/?%E5=%E4', 'right format';
 
 # Resolve RFC 1808 examples
 my $base = Mojo::URL->new('http://a/b/c/d?q#f');

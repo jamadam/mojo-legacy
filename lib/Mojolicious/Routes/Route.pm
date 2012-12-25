@@ -79,10 +79,7 @@ sub has_websocket {
   return $parent->is_websocket;
 }
 
-sub is_endpoint {
-  my $self = shift;
-  return $self->inline ? undef : !@{$self->children};
-}
+sub is_endpoint { $_[0]->inline ? undef : !@{$_[0]->children} }
 
 sub is_websocket { !!shift->{websocket} }
 
@@ -533,7 +530,7 @@ Render route with parameters into a path.
 
   my $root = $r->root;
 
-The L<Mojolicious::Routes> object this route is an ancestor of.
+The L<Mojolicious::Routes> object this route is an descendent of.
 
   $r->root->cache(0);
 

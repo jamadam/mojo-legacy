@@ -57,7 +57,7 @@ used during development.
 
 For bigger applications L<Mojolicious> contains the UNIX optimized preforking
 web server L<Mojo::Server::Hypnotoad> that will allow you to take advantage of
-multiple cpu cores and copy-on-write.
+multiple CPU cores and copy-on-write.
 
   Mojo::Server::Hypnotoad
   |- Mojo::Server::Daemon [1]
@@ -76,7 +76,7 @@ for a full list see L<Mojo::Server::Hypnotoad/"SETTINGS">.
 
   use Mojolicious::Lite;
 
-  app->config(hypnotoad => {listen => ['http://*:3000']});
+  app->config(hypnotoad => {listen => ['http://*:80']});
 
   get '/' => {text => 'Hello Wor...ALL GLORY TO THE HYPNOTOAD!'};
 
@@ -86,7 +86,12 @@ Or just add a C<hypnotoad> section to your L<Mojolicious::Plugin::Config> or
 L<Mojolicious::Plugin::JSONConfig> configuration file.
 
   # myapp.conf
-  {hypnotoad => {listen => ['http://*:80'], workers => 10}};
+  {
+    hypnotoad => {
+      listen  => ['https://*:443?cert=/etc/server.crt&key=/etc/server.key'],
+      workers => 10
+    }
+  };
 
 But one of its biggest advantages is the support for effortless zero downtime
 software upgrades. That means you can upgrade L<Mojolicious>, Perl or even
@@ -173,24 +178,20 @@ simple to deploy with L<Plack>.
   $ plackup ./script/myapp
   HTTP::Server::PSGI: Accepting connections at http://0:5000/
 
-L<Plack> provides many server and protocol adapters for you to choose from
-such as C<FCGI>, C<SCGI> and C<mod_perl>. Make sure to run C<plackup> from
-your applications home directory, otherwise libraries might not be found.
+L<Plack> provides many server and protocol adapters for you to choose from,
+such as C<FCGI>, C<SCGI> and C<mod_perl>.
 
   $ plackup ./script/myapp -s FCGI -l /tmp/myapp.sock
 
-Because of the way C<plackup> loads your script, L<Mojolicious> is not always
-able to detect the applications home directory, if that's the case you can
-simply use the C<MOJO_HOME> environment variable. Also note that
-C<app-E<gt>start> needs to be the last Perl statement in the application
-script for the same reason.
+If an older server adapter is not be able to correctly detect the application
+home directory, you can simply use the C<MOJO_HOME> environment variable.
 
   $ MOJO_HOME=/home/sri/myapp plackup ./script/myapp
   HTTP::Server::PSGI: Accepting connections at http://0:5000/
 
-Some server adapters might ask for a C<.psgi> file, if that's the case you can
-just point them at your application script because it will automatically act
-like one if it detects the presence of a C<PLACK_ENV> environment variable.
+There is no need for a C<.psgi> file, just point the server adapter at your
+application script, it will automatically act like one if it detects the
+presence of a C<PLACK_ENV> environment variable.
 
 =head2 Plack middleware
 
@@ -926,53 +927,22 @@ can keep many parallel connections active at the same time.
 
   use Mojo::UserAgent;
   use Mojo::IOLoop;
-  use Mojo::URL;
 
-  # FIFO queue
-  my @urls = ('google.com');
-
-  # User agent following up to 5 redirects
-  my $ua = Mojo::UserAgent->new(max_redirects => 5);
-
-  # Crawler
-  sub crawl {
-    my $id = shift;
-
-    # Dequeue or wait 2 seconds for more URLs
-    return Mojo::IOLoop->timer(2 => sub { crawl($id) })
-      unless my $url = shift @urls;
-
-    # Fetch non-blocking just by adding a callback
-    $ua->get($url => sub {
-      my ($ua, $tx) = @_;
-
-      # Extract URLs
-      say "[$id] $url";
-      $tx->res->dom('a[href]')->each(sub {
-        my $e = shift;
-
-        # Build absolute URL
-        my $url = Mojo::URL->new($e->{href})->to_abs($tx->req->url);
-        say " -> $url";
-
-        # Enqueue
-        push @urls, $url;
-      });
-
-      # Next
-      crawl($id);
-    });
-  };
-
-  # Start a bunch of parallel crawlers sharing the same user agent
-  crawl($_) for 1 .. 3;
+  # Parallel non-blocking requests
+  my $ua = Mojo::UserAgent->new;
+  $ua->get('http://mojolicio.us' => sub {
+    my ($ua, $tx) = @_;
+    ...
+  });
+  $ua->get('http://mojolicio.us/perldoc' => sub {
+    my ($ua, $tx) = @_;
+    ...
+  });
 
   # Start event loop if necessary
   Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
-You can take full control of the L<Mojo::IOLoop> event loop. Note that real
-web crawlers should respect C<robots.txt> files, and not overwhelm web servers
-with too frequent requests.
+You can take full control of the L<Mojo::IOLoop> event loop.
 
 =head2 Parallel blocking requests
 

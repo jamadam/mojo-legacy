@@ -9,46 +9,16 @@ sub client_read {
   # Skip body for HEAD request
   my $res = $self->res;
   $res->content->skip_body(1) if $self->req->method eq 'HEAD';
+  return unless $res->parse($chunk)->is_finished;
 
-  # Parse response
-  my $state = $self->{state};
-  $self->{state} = 'finished' if $res->parse($chunk)->is_finished;
-
-  # Unexpected 100 Continue
-  $self->res($res->new)->{state} = $state
-    if $self->{state} eq 'finished' && (defined $res->code ? $res->code : '') eq '100';
+  # Unexpected 1xx reponse
+  return $self->{state} = 'finished'
+    if !$res->is_status_class(100) || $res->headers->upgrade;
+  $self->res($res->new)->emit(unexpected => $res);
+  $self->client_read($res->leftovers) if $res->has_leftovers;
 }
 
-sub client_write {
-  my $self = shift;
-
-  # Start writing
-  $self->{$_} ||= 0 for qw(offset write);
-  my $req = $self->req;
-  unless ($self->{state}) {
-
-    # Connection header
-    my $headers = $req->headers;
-    $headers->connection($self->keep_alive ? 'keep-alive' : 'close')
-      unless $headers->connection;
-
-    # Write start line
-    $self->{state} = 'write_start_line';
-    $self->{write} = $req->start_line_size;
-  }
-
-  # Start line
-  my $chunk = '';
-  $chunk .= $self->_start_line($req) if $self->{state} eq 'write_start_line';
-
-  # Headers
-  $chunk .= $self->_headers($req, 0) if $self->{state} eq 'write_headers';
-
-  # Body
-  $chunk .= $self->_body($req, 0) if $self->{state} eq 'write_body';
-
-  return $chunk;
-}
+sub client_write { shift->_write(0) }
 
 sub keep_alive {
   my $self = shift;
@@ -67,11 +37,6 @@ sub keep_alive {
   return !($req->version eq '1.0' || $res->version eq '1.0');
 }
 
-sub server_leftovers {
-  my $req = shift->req;
-  return $req->has_leftovers ? $req->leftovers : undef;
-}
-
 sub server_read {
   my ($self, $chunk) = @_;
 
@@ -81,58 +46,13 @@ sub server_read {
   $self->{state} ||= 'read';
 
   # Generate response
-  if ($req->is_finished && !$self->{handled}++) {
-    $self->emit(
-      upgrade => Mojo::Transaction::WebSocket->new(handshake => $self))
-      if lc($req->headers->upgrade || '') eq 'websocket';
-    $self->emit('request');
-  }
-
-  # Expect 100 Continue
-  elsif ($req->content->is_parsing_body && !defined $self->{continued}) {
-    return unless ($req->headers->expect || '') =~ /100-continue/i;
-    $self->{state} = 'write';
-    $self->res->code(100);
-    $self->{continued} = 0;
-  }
+  return unless $req->is_finished && !$self->{handled}++;
+  $self->emit(upgrade => Mojo::Transaction::WebSocket->new(handshake => $self))
+    if lc($req->headers->upgrade || '') eq 'websocket';
+  $self->emit('request');
 }
 
-sub server_write {
-  my $self = shift;
-
-  # Writing
-  my $chunk = '';
-  $self->{$_} ||= 0 for qw(offset write);
-  my $res = $self->res;
-  if ($self->{state} eq 'write') {
-
-    # Connection header
-    my $headers = $res->headers;
-    $headers->connection($self->keep_alive ? 'keep-alive' : 'close')
-      unless $headers->connection;
-
-    # Write start line
-    $self->{state} = 'write_start_line';
-    $self->{write} = $res->start_line_size;
-  }
-
-  # Start line
-  $chunk .= $self->_start_line($res) if $self->{state} eq 'write_start_line';
-
-  # Headers
-  if ($self->{state} eq 'write_headers') {
-    $chunk .= $self->_headers($res, 1);
-
-    # Continued
-    $self->res($self->res->new)->{continued} = $self->{state} = 'read'
-      if defined $self->{continued} && !$self->{continued};
-  }
-
-  # Body
-  $chunk .= $self->_body($res, 1) if $self->{state} eq 'write_body';
-
-  return $chunk;
-}
+sub server_write { shift->_write(1) }
 
 sub _body {
   my ($self, $msg, $finish) = @_;
@@ -203,6 +123,38 @@ sub _start_line {
   return $buffer;
 }
 
+sub _write {
+  my ($self, $server) = @_;
+
+  # Start writing
+  $self->{$_} ||= 0 for qw(offset write);
+  my $msg = $server ? $self->res : $self->req;
+  if ($server ? ($self->{state} eq 'write') : !$self->{state}) {
+
+    # Connection header
+    my $headers = $msg->headers;
+    $headers->connection($self->keep_alive ? 'keep-alive' : 'close')
+      unless $headers->connection;
+
+    # Write start line
+    $self->{state} = 'write_start_line';
+    $self->{write} = $msg->start_line_size;
+  }
+
+  # Start line
+  my $chunk = '';
+  $chunk .= $self->_start_line($msg) if $self->{state} eq 'write_start_line';
+
+  # Headers
+  $chunk .= $self->_headers($msg, $server)
+    if $self->{state} eq 'write_headers';
+
+  # Body
+  $chunk .= $self->_body($msg, $server) if $self->{state} eq 'write_body';
+
+  return $chunk;
+}
+
 1;
 
 =head1 NAME
@@ -257,6 +209,20 @@ Emitted when a request is ready and needs to be handled.
     $tx->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
   });
 
+=head2 C<unexpected>
+
+  $tx->on(unexpected => sub {
+    my ($tx, $res) = @_;
+    ...
+  });
+
+Emitted for unexpected C<1xx> responses that will be ignored.
+
+  $tx->on(unexpected => sub {
+    my $tx = shift;
+    $tx->res->on(finish => sub { say 'Followup response is finished.' });
+  });
+
 =head2 C<upgrade>
 
   $tx->on(upgrade => sub {
@@ -285,13 +251,13 @@ implements the following new ones.
 
   $tx->client_read($chunk);
 
-Read and process data client-side.
+Read data client-side, used to implement user agents.
 
 =head2 C<client_write>
 
   my $chunk = $tx->client_write;
 
-Write data client-side.
+Write data client-side, used to implement user agents.
 
 =head2 C<keep_alive>
 
@@ -299,23 +265,17 @@ Write data client-side.
 
 Check if connection can be kept alive.
 
-=head2 C<server_leftovers>
-
-  my $leftovers = $tx->server_leftovers;
-
-Leftovers from the request, used for pipelining server-side.
-
 =head2 C<server_read>
 
   $tx->server_read($chunk);
 
-Read and process data server-side.
+Read data server-side, used to implement web servers.
 
 =head2 C<server_write>
 
   my $chunk = $tx->server_write;
 
-Write data server-side.
+Write data server-side, used to implement web servers.
 
 =head1 SEE ALSO
 

@@ -152,7 +152,7 @@ sub _parse_multipart_boundary {
     substr $self->{multipart}, 0, length $end, '';
 
     # Finished
-    $self->{state} = $self->{multi_state} = 'finished';
+    $self->{multi_state} = 'finished';
   }
 
   return undef;
@@ -161,17 +161,14 @@ sub _parse_multipart_boundary {
 sub _parse_multipart_preamble {
   my ($self, $boundary) = @_;
 
-  # Replace preamble with carriage return and line feed
-  my $pos = index $self->{multipart}, "--$boundary";
-  unless ($pos < 0) {
-    substr $self->{multipart}, 0, $pos, "\x0d\x0a";
-
-    # Parse boundary
-    return !!($self->{multi_state} = 'multipart_boundary');
-  }
-
   # No boundary yet
-  return undef;
+  return undef if (my $pos = index $self->{multipart}, "--$boundary") < 0;
+
+  # Replace preamble with carriage return and line feed
+  substr $self->{multipart}, 0, $pos, "\x0d\x0a";
+
+  # Parse boundary
+  return !!($self->{multi_state} = 'multipart_boundary');
 }
 
 sub _read {
@@ -179,22 +176,21 @@ sub _read {
 
   # Parse
   $self->{multipart} .= $chunk;
-  $self->{multi_state} ||= 'multipart_preamble';
   my $boundary = $self->boundary;
-  until ($self->is_finished) {
+  until (($self->{multi_state} = defined $self->{multi_state} ? $self->{multi_state} : 'multipart_preamble') eq 'finished') {
 
     # Preamble
-    if ((defined $self->{multi_state} ? $self->{multi_state} : '') eq 'multipart_preamble') {
+    if ($self->{multi_state} eq 'multipart_preamble') {
       last unless $self->_parse_multipart_preamble($boundary);
     }
 
     # Boundary
-    elsif ((defined $self->{multi_state} ? $self->{multi_state} : '') eq 'multipart_boundary') {
+    elsif ($self->{multi_state} eq 'multipart_boundary') {
       last unless $self->_parse_multipart_boundary($boundary);
     }
 
     # Body
-    elsif ((defined $self->{multi_state} ? $self->{multi_state} : '') eq 'multipart_body') {
+    elsif ($self->{multi_state} eq 'multipart_body') {
       last unless $self->_parse_multipart_body($boundary);
     }
   }
@@ -284,7 +280,7 @@ Content size in bytes.
 
   my $boundary = $multi->build_boundary;
 
-Generate a suitable boundary for content.
+Generate a suitable boundary for content and add it to C<Content-Type> header.
 
 =head2 C<clone>
 

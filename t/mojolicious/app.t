@@ -14,7 +14,6 @@ use lib "$FindBin::Bin/lib";
 
 use File::Spec::Functions 'catdir';
 use Mojo::Date;
-use Mojo::Transaction::HTTP;
 use Mojolicious;
 use Test::Mojo;
 
@@ -240,6 +239,18 @@ $t->get_ok('/test8' => {'X-Test' => 'Hi there!'})->status_is(200)
   ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
   ->content_is("Class works!\n");
 
+# MojoliciousTest3::Bar::index (controller class in development namespace)
+$t->get_ok('/test9')->status_is(200)
+  ->header_is(Server         => 'Mojolicious (Perl)')
+  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->content_is('Development namespace works!');
+
+# MojoliciousTest3::Baz::index (controller class precedence)
+$t->get_ok('/test10')->status_is(200)
+  ->header_is(Server         => 'Mojolicious (Perl)')
+  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->content_is('Development namespace has high precedence!');
+
 # 404
 $t->get_ok('/' => {'X-Test' => 'Hi there!'})->status_is(404)
   ->header_is(Server         => 'Mojolicious (Perl)')
@@ -304,22 +315,16 @@ is $app->mode, 'test', 'right mode';
 
 # Persistent error
 $app = MojoliciousTest->new;
-my $tx = Mojo::Transaction::HTTP->new;
-$tx->req->method('GET');
-$tx->req->url->parse('/foo');
+my $tx = $t->ua->build_tx(GET => '/foo');
 $app->handler($tx);
 is $tx->res->code, 200, 'right status';
 like $tx->res->body, qr|Hello Mojo from the template /foo! Hello World!|,
   'right content';
-$tx = Mojo::Transaction::HTTP->new;
-$tx->req->method('GET');
-$tx->req->url->parse('/foo/willdie');
+$tx = $t->ua->build_tx(GET => '/foo/willdie');
 $app->handler($tx);
 is $tx->res->code,   500,         'right status';
 like $tx->res->body, qr/Foo\.pm/, 'right content';
-$tx = Mojo::Transaction::HTTP->new;
-$tx->req->method('GET');
-$tx->req->url->parse('/foo');
+$tx = $t->ua->build_tx(GET => '/foo');
 $app->handler($tx);
 is $tx->res->code, 200, 'right status';
 like $tx->res->body, qr|Hello Mojo from the template /foo! Hello World!|,

@@ -81,7 +81,7 @@ sub build_frame {
 
 sub client_challenge {
   my $self = shift;
-  return $self->_challenge($self->req->headers->sec_websocket_key) eq
+  return _challenge($self->req->headers->sec_websocket_key) eq
     $self->res->headers->sec_websocket_accept;
 }
 
@@ -224,7 +224,7 @@ sub server_handshake {
   ($req_headers->sec_websocket_protocol || '') =~ /^\s*([^,]+)/
     and $res_headers->sec_websocket_protocol($1);
   $res_headers->sec_websocket_accept(
-    $self->_challenge($req_headers->sec_websocket_key));
+    _challenge($req_headers->sec_websocket_key));
 }
 
 sub server_read {
@@ -254,7 +254,7 @@ sub server_write {
   return $chunk ? $chunk : '';
 }
 
-sub _challenge { b64_encode(sha1_bytes((pop() || '') . GUID), '') }
+sub _challenge { b64_encode(sha1_bytes(($_[0] || '') . GUID), '') }
 
 sub _message {
   my ($self, $frame) = @_;
@@ -434,25 +434,26 @@ Build WebSocket frame.
 
   my $success = $ws->client_challenge;
 
-Check WebSocket handshake challenge client-side.
+Check WebSocket handshake challenge client-side, used to implement user
+agents.
 
 =head2 C<client_handshake>
 
   $ws->client_handshake;
 
-Perform WebSocket handshake client-side.
+Perform WebSocket handshake client-side, used to implement user agents.
 
 =head2 C<client_read>
 
   $ws->client_read($data);
 
-Read and process data client-side.
+Read data client-side, used to implement user agents.
 
 =head2 C<client_write>
 
   my $chunk = $ws->client_write;
 
-Write data client-side.
+Write data client-side, used to implement user agents.
 
 =head2 C<connection>
 
@@ -553,19 +554,19 @@ will be invoked once all data has been written.
 
   $ws->server_handshake;
 
-Perform WebSocket handshake server-side.
+Perform WebSocket handshake server-side, used to implement web servers.
 
 =head2 C<server_read>
 
   $ws->server_read($data);
 
-Read and process data server-side.
+Read data server-side, used to implement web servers.
 
 =head2 C<server_write>
 
   my $chunk = $ws->server_write;
 
-Write data server-side.
+Write data server-side, used to implement web servers.
 
 =head1 DEBUGGING
 

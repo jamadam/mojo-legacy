@@ -77,10 +77,7 @@ sub server_close {
 sub server_read  { croak 'Method "server_read" not implemented by subclass' }
 sub server_write { croak 'Method "server_write" not implemented by subclass' }
 
-sub success {
-  my $self = shift;
-  return $self->error ? undef : $self->res;
-}
+sub success { $_[0]->error ? undef : $_[0]->res }
 
 1;
 
@@ -198,19 +195,21 @@ implements the following new ones.
 
   $tx->client_close;
 
-Transaction closed client-side.
+Transaction closed client-side, used to implement user agents.
 
 =head2 C<client_read>
 
   $tx->client_read($chunk);
 
-Read and process data client-side. Meant to be overloaded in a subclass.
+Read data client-side, used to implement user agents. Meant to be overloaded
+in a subclass.
 
 =head2 C<client_write>
 
   my $chunk = $tx->client_write;
 
-Write data client-side. Meant to be overloaded in a subclass.
+Write data client-side, used to implement user agents. Meant to be overloaded
+in a subclass.
 
 =head2 C<connection>
 
@@ -224,7 +223,7 @@ Connection identifier or socket.
   my $err          = $tx->error;
   my ($err, $code) = $tx->error;
 
-Parser errors and codes.
+Error and code.
 
 =head2 C<is_finished>
 
@@ -261,19 +260,21 @@ Remote interface address.
 
   $tx->server_close;
 
-Transaction closed server-side.
+Transaction closed server-side, used to implement web servers.
 
 =head2 C<server_read>
 
   $tx->server_read($chunk);
 
-Read and process data server-side. Meant to be overloaded in a subclass.
+Read data server-side, used to implement web servers. Meant to be overloaded
+in a subclass.
 
 =head2 C<server_write>
 
   my $chunk = $tx->server_write;
 
-Write data server-side. Meant to be overloaded in a subclass.
+Write data server-side, used to implement web servers. Meant to be overloaded
+in a subclass.
 
 =head2 C<success>
 

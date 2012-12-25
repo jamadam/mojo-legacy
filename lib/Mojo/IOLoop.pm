@@ -10,7 +10,7 @@ use Mojo::IOLoop::Server;
 use Mojo::IOLoop::Stream;
 use Mojo::Reactor::Poll;
 use Mojo::Util 'md5_sum';
-use Scalar::Util qw(blessed weaken);
+use Scalar::Util 'weaken';
 use Time::HiRes 'time';
 
 use constant DEBUG => $ENV{MOJO_IOLOOP_DEBUG} || 0;
@@ -31,6 +31,28 @@ $SIG{PIPE} = 'IGNORE';
 
 # Initialize singleton reactor early
 __PACKAGE__->singleton->reactor;
+
+sub acceptor {
+  my ($self, $acceptor) = @_;
+  $self = $self->singleton unless ref $self;
+
+  # Find acceptor for id
+  return $self->{acceptors}{$acceptor} unless ref $acceptor;
+
+  # Make sure connection manager is running
+  $self->_manager;
+
+  # New acceptor
+  my $id = $self->_id;
+  $self->{acceptors}{$id} = $acceptor;
+  weaken $acceptor->reactor($self->reactor)->{reactor};
+  $self->{accepts} = $self->max_accepts if $self->max_accepts;
+
+  # Stop accepting
+  $self->_not_accepting;
+
+  return $id;
+}
 
 sub client {
   my ($self, $cb) = (shift, pop);
@@ -85,15 +107,8 @@ sub delay {
 
 sub generate_port { Mojo::IOLoop::Server->generate_port }
 
-sub is_running {
-  my $self = shift;
-  return (ref $self ? $self : $self->singleton)->reactor->is_running;
-}
-
-sub one_tick {
-  my $self = shift;
-  (ref $self ? $self : $self->singleton)->reactor->one_tick;
-}
+sub is_running { (ref $_[0] ? $_[0] : $_[0]->singleton)->reactor->is_running }
+sub one_tick   { (ref $_[0] ? $_[0] : $_[0]->singleton)->reactor->one_tick }
 
 sub recurring {
   my ($self, $after, $cb) = @_;
@@ -113,15 +128,8 @@ sub server {
   my ($self, $cb) = (shift, pop);
   $self = $self->singleton unless ref $self;
 
-  # Make sure connection manager is running
-  $self->_manager;
-
   # New server
-  my $id = $self->_id;
-  my $server = $self->{servers}{$id} = Mojo::IOLoop::Server->new;
-  weaken $server->reactor($self->reactor)->{reactor};
-
-  # Listen
+  my $server = Mojo::IOLoop::Server->new;
   weaken $self;
   $server->on(
     accept => sub {
@@ -141,16 +149,12 @@ sub server {
     }
   );
   $server->listen(@_);
-  $self->{accepts} = $self->max_accepts if $self->max_accepts;
 
-  # Stop accepting
-  $self->_not_accepting;
-
-  return $id;
+  return $self->acceptor($server);
 }
 
 our $singleton_loop;
-sub singleton { $singleton_loop ||= shift->SUPER::new }
+sub singleton { $singleton_loop = defined $singleton_loop ? $singleton_loop : shift->SUPER::new }
 
 sub start {
   my $self = shift;
@@ -158,17 +162,14 @@ sub start {
   (ref $self ? $self : $self->singleton)->reactor->start;
 }
 
-sub stop {
-  my $self = shift;
-  (ref $self ? $self : $self->singleton)->reactor->stop;
-}
+sub stop { (ref $_[0] ? $_[0] : $_[0]->singleton)->reactor->stop }
 
 sub stream {
   my ($self, $stream) = @_;
   $self = $self->singleton unless ref $self;
 
   # Connect stream with reactor
-  return $self->_stream($stream, $self->_id) if blessed $stream;
+  return $self->_stream($stream, $self->_id) if ref $stream;
 
   # Find stream for id
   return undef unless my $c = $self->{connections}{$stream};
@@ -187,8 +188,8 @@ sub _accepting {
 
   # Check connection limit
   return if $self->{accepting};
-  my $servers = $self->{servers} ||= {};
-  return unless keys %$servers;
+  my $acceptors = $self->{acceptors} ||= {};
+  return unless keys %$acceptors;
   my $i   = keys %{$self->{connections}};
   my $max = $self->max_connections;
   return unless $i < $max;
@@ -198,7 +199,7 @@ sub _accepting {
 
   # Check if multi-accept is desirable and start accepting
   my $multi = $self->multi_accept;
-  $_->multi_accept($max < $multi ? 1 : $multi)->start for values %$servers;
+  $_->multi_accept($max < $multi ? 1 : $multi)->start for values %$acceptors;
   $self->{accepting}++;
 }
 
@@ -206,7 +207,7 @@ sub _id {
   my $self = shift;
   my $id;
   do { $id = md5_sum('c' . time . rand 999) }
-    while $self->{connections}{$id} || $self->{servers}{$id};
+    while $self->{connections}{$id} || $self->{acceptors}{$id};
   return $id;
 }
 
@@ -225,7 +226,7 @@ sub _manage {
 
   # Graceful stop
   $self->_remove(delete $self->{manager})
-    unless keys %$connections || keys %{$self->{servers}};
+    unless keys %$connections || keys %{$self->{acceptors}};
   $self->stop if $self->max_connections == 0 && keys %$connections == 0;
 }
 
@@ -243,7 +244,7 @@ sub _not_accepting {
   $self->$cb();
 
   # Stop accepting
-  $_->stop for values %{$self->{servers} || {}};
+  $_->stop for values %{$self->{acceptors} || {}};
 }
 
 sub _remove {
@@ -253,8 +254,8 @@ sub _remove {
   return unless my $reactor = $self->reactor;
   return if $reactor->remove($id);
 
-  # Listen socket
-  if (delete $self->{servers}{$id}) { delete $self->{accepting} }
+  # Acceptor
+  if (delete $self->{acceptors}{$id}) { delete $self->{accepting} }
 
   # Connection (stream needs to be deleted first)
   else {
@@ -358,7 +359,7 @@ L<Mojo::IOLoop> implements the following attributes.
 
 Interval in seconds for trying to reacquire the accept mutex and connection
 management, defaults to C<0.025>. Note that changing this value can affect
-performance and idle cpu usage.
+performance and idle CPU usage.
 
 =head2 C<lock>
 
@@ -434,6 +435,14 @@ processes. Note that exceptions in this callback are not captured.
 
 L<Mojo::IOLoop> inherits all methods from L<Mojo::Base> and implements the
 following new ones.
+
+=head2 C<acceptor>
+
+  my $server = Mojo::IOLoop->acceptor($id);
+  my $server = $loop->acceptor($id);
+  my $id     = $loop->acceptor(Mojo::IOLoop::Server->new);
+
+Get L<Mojo::IOLoop::Server> object for id or turn object into an acceptor.
 
 =head2 C<client>
 
@@ -523,7 +532,7 @@ into the reactor, so you need to be careful.
 
 =head2 C<recurring>
 
-  my $id = Mojo::IOLoop->recurring(0 => sub {...});
+  my $id = Mojo::IOLoop->recurring(0.5 => sub {...});
   my $id = $loop->recurring(3 => sub {...});
 
 Create a new recurring timer, invoking the callback repeatedly after a given
@@ -589,7 +598,7 @@ event loop can be restarted by running C<start> again.
 
   my $stream = Mojo::IOLoop->stream($id);
   my $stream = $loop->stream($id);
-  my $id     = $loop->stream($stream);
+  my $id     = $loop->stream(Mojo::IOLoop::Stream->new);
 
 Get L<Mojo::IOLoop::Stream> object for id or turn object into a connection.
 
