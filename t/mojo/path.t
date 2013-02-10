@@ -6,11 +6,14 @@ use Mojo::Path;
 # Basic functionality
 my $path = Mojo::Path->new;
 is $path->parse('/path')->to_string, '/path', 'right path';
+is $path->to_dir, '/', 'right directory';
 is $path->parts->[0], 'path', 'right part';
 is $path->parts->[1], undef,  'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
 is $path->parse('path/')->to_string, 'path/', 'right path';
+is $path->to_dir, 'path/', 'right directory';
+is $path->to_dir->to_abs_string, '/path/', 'right directory';
 is $path->parts->[0], 'path', 'right part';
 is $path->parts->[1], undef,  'no part';
 ok !$path->leading_slash, 'no leading slash';
@@ -29,12 +32,14 @@ is "$path", '/AZaz09-._~!$&\'()*+,;=:@', 'right result';
 
 # Unicode
 is $path->parse('/foo/♥/bar')->to_string, '/foo/%E2%99%A5/bar', 'right path';
+is $path->to_dir, '/foo/%E2%99%A5/', 'right directory';
 is $path->parts->[0], 'foo', 'right part';
 is $path->parts->[1], '♥', 'right part';
 is $path->parts->[2], 'bar', 'right part';
 is $path->parts->[3], undef, 'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
+is $path->to_route, '/foo/♥/bar', 'right route';
 is $path->parse('/foo/%E2%99%A5/~b@a:r+')->to_string,
   '/foo/%E2%99%A5/~b@a:r+', 'right path';
 is $path->parts->[0], 'foo',     'right part';
@@ -43,6 +48,7 @@ is $path->parts->[2], '~b@a:r+', 'right part';
 is $path->parts->[3], undef,     'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
+is $path->to_route, '/foo/♥/~b@a:r+', 'right route';
 
 # Zero in path
 is $path->parse('/path/0')->to_string, '/path/0', 'right path';
@@ -194,16 +200,19 @@ $path->merge('/bar/baz');
 is "$path", '/bar/baz', 'right path';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
+is $path->to_route, '/bar/baz', 'right route';
 $path = Mojo::Path->new('/foo/bar');
 $path->merge('/bar/baz/');
 is "$path", '/bar/baz/', 'right path';
 ok $path->leading_slash,  'has leading slash';
 ok $path->trailing_slash, 'has trailing slash';
+is $path->to_route,       '/bar/baz/', 'right route';
 $path = Mojo::Path->new('foo/bar');
 $path->merge('baz/yada');
 is "$path", 'foo/baz/yada', 'right path';
 ok !$path->leading_slash,  'no leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
+is $path->to_route, '/foo/baz/yada', 'right route';
 
 # Empty path elements
 $path = Mojo::Path->new('//');

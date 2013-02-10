@@ -189,6 +189,19 @@ is $second->render('', {}), '/second', 'right result';
 $target->add_child($first)->add_child($second);
 is $second->render('', {}), '/target/second', 'right result';
 
+# Cached lookup
+my $fast = $r->route('/fast');
+is $r->find('fast'),   $fast, 'fast route found';
+is $r->lookup('fast'), $fast, 'fast route found';
+my $faster = $r->route('/faster')->name('fast');
+is $r->find('fast'),   $faster, 'faster route found';
+is $r->lookup('fast'), $fast,   'fast route found';
+is $r->find('fastest'),   undef, 'fastest route not found';
+is $r->lookup('fastest'), undef, 'fastest route not found';
+my $fastest = $r->route('/fastest');
+is $r->find('fastest'),   $fastest, 'fastest route found';
+is $r->lookup('fastest'), $fastest, 'fastest route found';
+
 # Make sure stash stays clean
 my $c = Mojolicious::Controller->new;
 my $m = Mojolicious::Routes::Match->new(GET => '/clean');
@@ -468,7 +481,14 @@ is $m->stack->[0]{wildcard},   'hello/there', 'right value';
 is $m->path_for, '/wildcards/4/hello/there/foo', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
 
-# Escaped
+# Special characters
+$m = Mojolicious::Routes::Match->new(GET => '/wildcards/1/♥');
+$m->match($r, $c);
+is $m->stack->[0]{controller}, 'wild', 'right value';
+is $m->stack->[0]{action},     'card', 'right value';
+is $m->stack->[0]{wildcard},   '♥',  'right value';
+is $m->path_for, '/wildcards/1/♥', 'right path';
+is @{$m->stack}, 1, 'right number of elements';
 $m = Mojolicious::Routes::Match->new(
   GET => '/wildcards/1/http://www.google.com');
 $m->match($r, $c);
@@ -477,13 +497,12 @@ is $m->stack->[0]{action},     'card',                  'right value';
 is $m->stack->[0]{wildcard},   'http://www.google.com', 'right value';
 is $m->path_for, '/wildcards/1/http://www.google.com', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
-$m = Mojolicious::Routes::Match->new(
-  GET => '/wildcards/1/http%3A%2F%2Fwww.google.com');
+$m = Mojolicious::Routes::Match->new(GET => '/wildcards/1/%foo%bar%');
 $m->match($r, $c);
-is $m->stack->[0]{controller}, 'wild',                  'right value';
-is $m->stack->[0]{action},     'card',                  'right value';
-is $m->stack->[0]{wildcard},   'http://www.google.com', 'right value';
-is $m->path_for, '/wildcards/1/http://www.google.com', 'right path';
+is $m->stack->[0]{controller}, 'wild',      'right value';
+is $m->stack->[0]{action},     'card',      'right value';
+is $m->stack->[0]{wildcard},   '%foo%bar%', 'right value';
+is $m->path_for, '/wildcards/1/%foo%bar%', 'right path';
 is @{$m->stack}, 1, 'right number of elements';
 
 # Format

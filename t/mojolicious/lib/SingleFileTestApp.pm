@@ -5,7 +5,6 @@ sub startup {
   my $self = shift;
 
   # Only log errors to STDERR
-  $self->log->path(undef);
   $self->log->level('fatal');
 
   # Plugins
@@ -28,7 +27,7 @@ sub startup {
     }
   );
 
-  # /*/* - the default route
+  # The default route
   $self->routes->route('/:controller/:action')->to(action => 'index');
 }
 

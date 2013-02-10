@@ -46,6 +46,10 @@ is_deeply $t->app->commands->namespaces,
 is $t->app, $t->app->commands->app, 'applications are equal';
 is $t->app->static->file('hello.txt')->slurp,
   "Hello Mojo from a development static file!\n", 'right content';
+is $t->app->moniker, 'mojolicious_test', 'right moniker';
+
+# MojoliciousTest::Command::test_command (with abbreviation)
+is $t->app->start(qw(test_command --to)), 'works too!', 'right result';
 
 # Plugin::Test::SomePlugin2::register (security violation)
 $t->get_ok('/plugin-test-some_plugin2/register')->status_isnt(500)

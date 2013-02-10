@@ -77,4 +77,10 @@ ok !$content->charset, 'no charset';
 'a' =~ /(.)/;
 ok !$content->boundary, 'no boundary';
 
+# Partial content with 128bit content length
+$content = Mojo::Content::Single->new;
+$content->parse(
+  "Content-Length: 18446744073709551616\x0d\x0a\x0d\x0aHello World!");
+is $content->asset->size, 12, 'right size';
+
 done_testing();

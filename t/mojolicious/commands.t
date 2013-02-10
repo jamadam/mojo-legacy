@@ -34,25 +34,11 @@ is ref Mojolicious::Commands->run('psgi'), 'CODE', 'right reference';
   is ref Mojolicious::Commands->start_app('MojoliciousTest'),
     'MojoliciousTest', 'right class';
 }
-{
-  local $ENV{MOJO_APP_LOADER} = 1;
-  local $ENV{MOJO_APP}        = 'MojoliciousTest';
-  is ref Mojolicious::Commands->start, 'MojoliciousTest', 'right class';
-}
-{
-  local $ENV{MOJO_APP_LOADER} = 1;
-  local $ENV{MOJO_APP};
-  is ref Mojolicious::Commands->start, 'Mojolicious::Lite', 'right class';
-}
 
 # Start application with command
 {
   is ref Mojolicious::Commands->start_app(MojoliciousTest => 'psgi'), 'CODE',
     'right reference';
-}
-{
-  local $ENV{MOJO_APP};
-  is ref Mojolicious::Commands->start('psgi'), 'CODE', 'right reference';
 }
 
 # Start application with application specific command
@@ -132,6 +118,12 @@ require Mojolicious::Command::inflate;
 my $inflate = Mojolicious::Command::inflate->new;
 ok $inflate->description, 'has a description';
 ok $inflate->usage,       'has usage information';
+
+# prefork
+require Mojolicious::Command::prefork;
+my $prefork = Mojolicious::Command::prefork->new;
+ok $prefork->description, 'has a description';
+ok $prefork->usage,       'has usage information';
 
 # psgi
 require Mojolicious::Command::psgi;

@@ -19,3 +19,8 @@ version 1.81 or higher. Please do the following command.
 $ cpanm Socket
 
 To use websocket, you must at least install Digest::SHA.
+
+$ cpanm Digest::SHA
+
+If Compress::Raw::Zlib is not found, some tests may fail. However I guess
+this works without the module in real world use case.
