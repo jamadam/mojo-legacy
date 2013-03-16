@@ -35,7 +35,7 @@ sub import {
     push @{"${caller}::ISA"}, $flag;
     *{"${caller}::has"} = sub { attr($caller, @_) };
   }
-  
+
   my $caller = caller;
   *{"${caller}::say"} = sub { say(@_) };
 
@@ -43,7 +43,6 @@ sub import {
   strict->import;
   warnings->import;
   utf8->import;
-  feature->import(':5.10');
 }
 
 sub new {
@@ -224,13 +223,9 @@ argument.
 K combinator, tap into a method chain to perform operations on an object
 within the chain.
 
-=head2 C<say>
-
-Backported from perl-5.10.1
-
 =head1 DEBUGGING
 
-You can set the C<MOJO_BASE_DEBUG> environment variable to get some advanced
+You can set the MOJO_BASE_DEBUG environment variable to get some advanced
 diagnostics information printed to C<STDERR>.
 
   MOJO_BASE_DEBUG=1

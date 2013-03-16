@@ -201,7 +201,7 @@ L<Mojo::Headers> implements the following attributes.
   $headers = $headers->max_line_size(1024);
 
 Maximum header line size in bytes, defaults to the value of the
-C<MOJO_MAX_LINE_SIZE> environment variable or C<10240>.
+MOJO_MAX_LINE_SIZE environment variable or C<10240>.
 
 =head1 METHODS
 
@@ -500,8 +500,8 @@ Shortcut for the C<Sec-WebSocket-Key> header from RFC 6455.
 
 =head2 sec_websocket_protocol
 
-  my $protocol = $headers->sec_websocket_protocol;
-  $headers     = $headers->sec_websocket_protocol('sample');
+  my $proto = $headers->sec_websocket_protocol;
+  $headers  = $headers->sec_websocket_protocol('sample');
 
 Shortcut for the C<Sec-WebSocket-Protocol> header from RFC 6455.
 

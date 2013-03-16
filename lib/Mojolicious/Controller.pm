@@ -678,8 +678,8 @@ generated, all additional values get merged into the C<stash>.
   $c->render_data($bytes);
   $c->render_data($bytes, format => 'png');
 
-Render the given content as raw bytes, similar to C<render_text> but data will
-not be encoded. All additional values get merged into the C<stash>.
+Render the given content as bytes, similar to C<render_text> but data will not
+be encoded. All additional values get merged into the C<stash>.
 
   # Longer version
   $c->render(data => $bytes);
@@ -748,8 +748,8 @@ method does not protect from traversing to parent directories.
   $c->render_text('Hello World!');
   $c->render_text('Hello World!', layout => 'green');
 
-Render the given content as Perl characters, which will be encoded to bytes.
-All additional values get merged into the C<stash>. See C<render_data> for an
+Render the given content as characters, which will be encoded to bytes. All
+additional values get merged into the C<stash>. See C<render_data> for an
 alternative without encoding. Note that this does not change the content type
 of the response, which is C<text/html;charset=UTF-8> by default.
 
@@ -777,7 +777,8 @@ Get L<Mojo::Message::Request> object from L<Mojo::Transaction/"req">.
   my $req = $c->tx->req;
 
   # Extract request information
-  my $userinfo = $c->req->url->userinfo;
+  my $url      = $c->req->url->to_abs;
+  my $userinfo = $c->req->url->to_abs->userinfo;
   my $agent    = $c->req->headers->user_agent;
   my $body     = $c->req->body;
   my $foo      = $c->req->json('/23/foo');
@@ -913,7 +914,7 @@ Get L<Mojo::UserAgent> object from L<Mojo/"ua">.
 
   # Blocking
   my $tx = $c->ua->get('http://mojolicio.us');
-  my $tx = $c->ua->post_form('http://kraih.com/login' => {user => 'mojo'});
+  my $tx = $c->ua->post('http://kraih.com/login' => form => {user => 'mojo'});
 
   # Non-blocking
   $c->ua->get('http://mojolicio.us' => sub {

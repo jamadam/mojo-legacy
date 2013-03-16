@@ -1,7 +1,7 @@
 package Mojo::Util;
 use Mojo::Base 'Exporter';
 
-use Carp 'croak';
+use Carp qw(carp croak);
 use Digest::MD5 qw(md5 md5_hex);
 BEGIN {eval {require Digest::SHA; import Digest::SHA qw(sha1 sha1_hex)}}
 use Encode 'find_encoding';
@@ -42,10 +42,10 @@ my %CACHE;
 
 our @EXPORT_OK = (
   qw(b64_decode b64_encode camelize class_to_file class_to_path decamelize),
-  qw(decode encode get_line hmac_md5_sum hmac_sha1_sum html_unescape),
-  qw(md5_bytes md5_sum monkey_patch punycode_decode punycode_encode quote),
-  qw(secure_compare sha1_bytes sha1_sum slurp spurt squish trim unquote),
-  qw(url_escape url_unescape xml_escape xor_encode)
+  qw(decode deprecated encode get_line hmac_md5_sum hmac_sha1_sum),
+  qw(html_unescape md5_bytes md5_sum monkey_patch punycode_decode),
+  qw(punycode_encode quote secure_compare sha1_bytes sha1_sum slurp spurt),
+  qw(squish trim unquote url_escape url_unescape xml_escape xor_encode)
 );
 
 # DEPRECATED in Rainbow!
@@ -98,6 +98,11 @@ sub decode {
   return $bytes;
 }
 
+sub deprecated {
+  local $Carp::CarpLevel = 1;
+  $ENV{MOJO_FATAL_DEPRECATIONS} ? croak(@_) : carp(@_);
+}
+
 sub encode { _encoding($_[0])->encode("$_[1]") }
 
 sub get_line {
@@ -117,9 +122,8 @@ sub hmac_sha1_sum { _hmac(\&sha1, @_) }
 
 # DEPRECATED in Rainbow!
 sub html_escape {
-  warn <<EOF;
-Mojo::Util->html_escape is DEPRECATED in favor of Mojo::Util->xml_escape!!!
-EOF
+  deprecated 'Mojo::Util::html_escape is DEPRECATED in favor of '
+    . 'Mojo::Util::xml_escape';
   my ($string, $pattern) = @_;
   $pattern ||= '^\n\r\t !#$%(-;=?-~';
   return $string unless $string =~ /[^$pattern]/;
@@ -330,6 +334,7 @@ sub xml_escape {
   return $string;
 }
 
+
 sub xor_encode {
   my ($input, $key) = @_;
 
@@ -484,6 +489,13 @@ Convert camel case string to snake case and replace C<::> with C<->.
   my $chars = decode 'UTF-8', $bytes;
 
 Decode bytes to characters and return C<undef> if decoding failed.
+
+=head2 deprecated
+
+  deprecated 'foo is DEPRECATED in favor of bar';
+
+Warn about deprecated feature from perspective of caller. You can also set the
+MOJO_FATAL_DEPRECATIONS environment variable to make them die instead.
 
 =head2 encode
 

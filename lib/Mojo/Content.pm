@@ -72,7 +72,7 @@ sub is_chunked { !!shift->headers->transfer_encoding }
 
 sub is_compressed { (shift->headers->content_encoding || '') =~ /^gzip$/i }
 
-sub is_dynamic { $_[0]->{dynamic} && !defined $_[0]->headers->content_length }
+sub is_dynamic { $_[0]{dynamic} && !defined $_[0]->headers->content_length }
 
 sub is_finished { my $tmp = shift->{state}; (defined $tmp ? $tmp : '') eq 'finished' }
 
@@ -293,13 +293,13 @@ sub _uncompress {
   # Uncompress
   $self->{post_buffer} .= $chunk;
   my $gz = $self->{gz} = defined $self->{gz} ? $self->{gz} : 
-    Compress::Raw::Zlib::Inflate->new(WindowBits => WANT_GZIP());
+    Compress::Raw::Zlib::Inflate->new(WindowBits => WANT_GZIP);
   my $status = $gz->inflate(\$self->{post_buffer}, my $out);
   $self->emit(read => $out) if defined $out;
 
   # Replace Content-Encoding with Content-Length
   $self->headers->content_length($gz->total_out)->remove('Content-Encoding')
-    if $status == Z_STREAM_END();
+    if $status == Z_STREAM_END;
 
   # Check buffer size
   $self->{limit} = $self->{state} = 'finished'
@@ -398,7 +398,7 @@ Content headers, defaults to a L<Mojo::Headers> object.
   $content = $content->max_buffer_size(1024);
 
 Maximum size in bytes of buffer for content parser, defaults to the value of
-the C<MOJO_MAX_BUFFER_SIZE> environment variable or C<262144>.
+the MOJO_MAX_BUFFER_SIZE environment variable or C<262144>.
 
 =head2 max_leftover_size
 
@@ -406,7 +406,7 @@ the C<MOJO_MAX_BUFFER_SIZE> environment variable or C<262144>.
   $content = $content->max_leftover_size(1024);
 
 Maximum size in bytes of buffer for pipelined HTTP requests, defaults to the
-value of the C<MOJO_MAX_LEFTOVER_SIZE> environment variable or C<262144>.
+value of the MOJO_MAX_LEFTOVER_SIZE environment variable or C<262144>.
 
 =head2 relaxed
 
