@@ -1,6 +1,9 @@
 use Mojo::Base -strict;
 
 use Test::More;
+use File::Basename 'dirname';
+use File::Spec::Functions 'catdir';
+use File::Temp 'tempdir';
 use Mojo::Asset::File;
 use Mojo::Asset::Memory;
 
@@ -53,35 +56,37 @@ is $mem->contains('db'),    -1, 'does not contain "db"';
 $file = Mojo::Asset::File->new(start_range => 2, end_range => 8);
 ok $file->is_range, 'has range';
 $file->add_chunk('abcdefghijk');
-is $file->contains('cdefghi'), 0,  '"cdefghi" at position 0';
-is $file->contains('fghi'),    3,  '"fghi" at position 3';
-is $file->contains('f'),       3,  '"f" at position 3';
-is $file->contains('hi'),      5,  '"hi" at position 5';
-is $mem->contains('ij'),       -1, 'does not contain "ij"';
-is $file->contains('db'),      -1, 'does not contain "db"';
-my $chunk = $file->get_chunk(0);
-is $chunk, 'cdefghi', 'chunk from position 0';
-$chunk = $file->get_chunk(1);
-is $chunk, 'defghi', 'chunk from position 1';
-$chunk = $file->get_chunk(5);
-is $chunk, 'hi', 'chunk from position 5';
+is $file->contains('cdefghi'), 0,         '"cdefghi" at position 0';
+is $file->contains('fghi'),    3,         '"fghi" at position 3';
+is $file->contains('f'),       3,         '"f" at position 3';
+is $file->contains('hi'),      5,         '"hi" at position 5';
+is $mem->contains('ij'),       -1,        'does not contain "ij"';
+is $file->contains('db'),      -1,        'does not contain "db"';
+is $file->get_chunk(0),        'cdefghi', 'chunk from position 0';
+is $file->get_chunk(1),        'defghi',  'chunk from position 1';
+is $file->get_chunk(5),        'hi',      'chunk from position 5';
+is $file->get_chunk(0, 2), 'cd',  'chunk from position 0 (2 bytes)';
+is $file->get_chunk(1, 3), 'def', 'chunk from position 1 (3 bytes)';
+is $file->get_chunk(5, 1), 'h',   'chunk from position 5 (1 byte)';
+is $file->get_chunk(5, 3), 'hi',  'chunk from position 5 (2 byte)';
 
 # Memory asset range support (ab[cdefghi]jk)
 $mem = Mojo::Asset::Memory->new(start_range => 2, end_range => 8);
 ok $mem->is_range, 'has range';
 $mem->add_chunk('abcdefghijk');
-is $mem->contains('cdefghi'), 0,  '"cdefghi" at position 0';
-is $mem->contains('fghi'),    3,  '"fghi" at position 3';
-is $mem->contains('f'),       3,  '"f" at position 3';
-is $mem->contains('hi'),      5,  '"hi" at position 5';
-is $mem->contains('ij'),      -1, 'does not contain "ij"';
-is $mem->contains('db'),      -1, 'does not contain "db"';
-$chunk = $mem->get_chunk(0);
-is $chunk, 'cdefghi', 'chunk from position 0';
-$chunk = $mem->get_chunk(1);
-is $chunk, 'defghi', 'chunk from position 1';
-$chunk = $mem->get_chunk(5);
-is $chunk, 'hi', 'chunk from position 5';
+is $mem->contains('cdefghi'), 0,         '"cdefghi" at position 0';
+is $mem->contains('fghi'),    3,         '"fghi" at position 3';
+is $mem->contains('f'),       3,         '"f" at position 3';
+is $mem->contains('hi'),      5,         '"hi" at position 5';
+is $mem->contains('ij'),      -1,        'does not contain "ij"';
+is $mem->contains('db'),      -1,        'does not contain "db"';
+is $mem->get_chunk(0),        'cdefghi', 'chunk from position 0';
+is $mem->get_chunk(1),        'defghi',  'chunk from position 1';
+is $mem->get_chunk(5),        'hi',      'chunk from position 5';
+is $mem->get_chunk(0, 2), 'cd',  'chunk from position 0 (2 bytes)';
+is $mem->get_chunk(1, 3), 'def', 'chunk from position 1 (3 bytes)';
+is $mem->get_chunk(5, 1), 'h',   'chunk from position 5 (1 byte)';
+is $mem->get_chunk(5, 3), 'hi',  'chunk from position 5 (2 byte)';
 
 # Huge file asset
 $file = Mojo::Asset::File->new;
@@ -168,8 +173,13 @@ ok !$asset->is_file, 'stored in memory';
 
 # Temporary directory
 {
-  local $ENV{MOJO_TMPDIR} = '/does/not/exist';
-  is(Mojo::Asset::File->new->tmpdir, '/does/not/exist', 'right value');
+  my $tmpdir = tempdir CLEANUP => 1;
+  local $ENV{MOJO_TMPDIR} = $tmpdir;
+  $file = Mojo::Asset::File->new;
+  is($file->tmpdir, $tmpdir, 'same directory');
+  $file->add_chunk('works!');
+  is $file->slurp, 'works!', 'right content';
+  is dirname($file->path), $tmpdir, 'same directory';
 }
 
 # Temporary file without cleanup

@@ -19,16 +19,18 @@ is $path->parts->[1], undef,  'no part';
 ok !$path->leading_slash, 'no leading slash';
 ok $path->trailing_slash, 'has trailing slash';
 $path = Mojo::Path->new;
-is $path->to_string,     '',  'right result';
-is $path->to_abs_string, '/', 'right result';
+is $path->to_string,     '',  'right path';
+is $path->to_abs_string, '/', 'right absolute path';
 
 # Advanced
 $path = Mojo::Path->new('/AZaz09-._~!$&\'()*+,;=:@');
-is $path->parts->[0], 'AZaz09-._~!$&\'()*+,;=:@', 'right part';
-is $path->parts->[1], undef, 'no part';
+is $path->[0], 'AZaz09-._~!$&\'()*+,;=:@', 'right part';
+is $path->[1], undef, 'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
-is "$path", '/AZaz09-._~!$&\'()*+,;=:@', 'right result';
+is "$path", '/AZaz09-._~!$&\'()*+,;=:@', 'right path';
+push @$path, 'f/oo';
+is "$path", '/AZaz09-._~!$&\'()*+,;=:@/f%2Foo', 'right path';
 
 # Unicode
 is $path->parse('/foo/♥/bar')->to_string, '/foo/%E2%99%A5/bar', 'right path';
@@ -60,13 +62,16 @@ ok !$path->trailing_slash, 'no trailing slash';
 $path = Mojo::Path->new('0');
 is $path->parts->[0], '0',   'right part';
 is $path->parts->[1], undef, 'no part';
-is $path->to_string,     '0',  'right result';
-is $path->to_abs_string, '/0', 'right result';
+is $path->to_string,     '0',  'right path';
+is $path->to_abs_string, '/0', 'right absolute path';
+is $path->to_route,      '/0', 'right route';
 
 # Canonicalizing
 $path = Mojo::Path->new(
   '/%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fetc%2fpasswd');
-is "$path", '//../../../../../../../../../../etc/passwd', 'right result';
+is "$path",
+  '/%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fetc%2fpasswd',
+  'same path';
 is $path->parts->[0],  '',       'right part';
 is $path->parts->[1],  '..',     'right part';
 is $path->parts->[2],  '..',     'right part';
@@ -81,8 +86,9 @@ is $path->parts->[10], '..',     'right part';
 is $path->parts->[11], 'etc',    'right part';
 is $path->parts->[12], 'passwd', 'right part';
 is $path->parts->[13], undef,    'no part';
+is "$path", '//../../../../../../../../../../etc/passwd', 'normalized path';
 is $path->canonicalize, '/../../../../../../../../../../etc/passwd',
-  'right result';
+  'canonicalized path';
 is $path->parts->[0],  '..',     'right part';
 is $path->parts->[1],  '..',     'right part';
 is $path->parts->[2],  '..',     'right part';
@@ -102,7 +108,9 @@ ok !$path->trailing_slash, 'no trailing slash';
 # Canonicalizing (alternative)
 $path = Mojo::Path->new(
   '%2ftest%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fetc%2fpasswd');
-is "$path", '/test/../../../../../../../../../etc/passwd', 'right result';
+is "$path",
+  '%2ftest%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2f..%2fetc%2fpasswd',
+  'same path';
 is $path->parts->[0],  'test',   'right part';
 is $path->parts->[1],  '..',     'right part';
 is $path->parts->[2],  '..',     'right part';
@@ -116,7 +124,9 @@ is $path->parts->[9],  '..',     'right part';
 is $path->parts->[10], 'etc',    'right part';
 is $path->parts->[11], 'passwd', 'right part';
 is $path->parts->[12], undef,    'no part';
-is $path->canonicalize, '/../../../../../../../../etc/passwd', 'right result';
+is "$path", '/test/../../../../../../../../../etc/passwd', 'normalized path';
+is $path->canonicalize, '/../../../../../../../../etc/passwd',
+  'canonicalized path';
 is $path->parts->[0],  '..',     'right part';
 is $path->parts->[1],  '..',     'right part';
 is $path->parts->[2],  '..',     'right part';
@@ -133,7 +143,7 @@ ok !$path->trailing_slash, 'no trailing slash';
 
 # Canonicalizing (with escaped "%")
 $path = Mojo::Path->new('%2ftest%2f..%252f..%2f..%2f..%2f..%2fetc%2fpasswd');
-is "$path", '/test/..%252f../../../../etc/passwd', 'right result';
+is "$path", '%2ftest%2f..%252f..%2f..%2f..%2f..%2fetc%2fpasswd', 'same path';
 is $path->parts->[0], 'test',    'right part';
 is $path->parts->[1], '..%2f..', 'right part';
 is $path->parts->[2], '..',      'right part';
@@ -142,7 +152,8 @@ is $path->parts->[4], '..',      'right part';
 is $path->parts->[5], 'etc',     'right part';
 is $path->parts->[6], 'passwd',  'right part';
 is $path->parts->[7], undef,     'no part';
-is $path->canonicalize, '/../etc/passwd', 'right result';
+is "$path", '/test/..%252f../../../../etc/passwd', 'normalized path';
+is $path->canonicalize, '/../etc/passwd', 'canonicalized path';
 is $path->parts->[0], '..',     'right part';
 is $path->parts->[1], 'etc',    'right part';
 is $path->parts->[2], 'passwd', 'right part';
@@ -216,12 +227,19 @@ is $path->to_route, '/foo/baz/yada', 'right route';
 
 # Empty path elements
 $path = Mojo::Path->new('//');
-is "$path", '//', 'right result';
+is "$path", '//', 'right path';
 is $path->parts->[0], undef, 'no part';
 ok $path->leading_slash,  'has leading slash';
 ok $path->trailing_slash, 'has trailing slash';
+is "$path", '//', 'right normalized path';
+$path = Mojo::Path->new('%2F%2f');
+is "$path", '%2F%2f', 'right path';
+is $path->parts->[0], undef, 'no part';
+ok $path->leading_slash,  'has leading slash';
+ok $path->trailing_slash, 'has trailing slash';
+is "$path", '//', 'right normalized path';
 $path = Mojo::Path->new('/foo//bar/23/');
-is "$path", '/foo//bar/23/', 'right result';
+is "$path", '/foo//bar/23/', 'right path';
 is $path->parts->[0], 'foo', 'right part';
 is $path->parts->[1], '',    'right part';
 is $path->parts->[2], 'bar', 'right part';
@@ -230,7 +248,7 @@ is $path->parts->[4], undef, 'no part';
 ok $path->leading_slash,  'has leading slash';
 ok $path->trailing_slash, 'has trailing slash';
 $path = Mojo::Path->new('//foo/bar/23/');
-is "$path", '//foo/bar/23/', 'right result';
+is "$path", '//foo/bar/23/', 'right path';
 is $path->parts->[0], '',    'right part';
 is $path->parts->[1], 'foo', 'right part';
 is $path->parts->[2], 'bar', 'right part';
@@ -239,7 +257,7 @@ is $path->parts->[4], undef, 'no part';
 ok $path->leading_slash,  'has leading slash';
 ok $path->trailing_slash, 'has trailing slash';
 $path = Mojo::Path->new('/foo///bar/23/');
-is "$path", '/foo///bar/23/', 'right result';
+is "$path", '/foo///bar/23/', 'right path';
 is $path->parts->[0], 'foo', 'right part';
 is $path->parts->[1], '',    'right part';
 is $path->parts->[2], '',    'right part';
@@ -249,7 +267,7 @@ is $path->parts->[5], undef, 'no part';
 ok $path->leading_slash,  'has leading slash';
 ok $path->trailing_slash, 'has trailing slash';
 $path = Mojo::Path->new('///foo/bar/23/');
-is "$path", '///foo/bar/23/', 'right result';
+is "$path", '///foo/bar/23/', 'right path';
 is $path->parts->[0], '',    'right part';
 is $path->parts->[1], '',    'right part';
 is $path->parts->[2], 'foo', 'right part';
@@ -259,7 +277,7 @@ is $path->parts->[5], undef, 'no part';
 ok $path->leading_slash,  'has leading slash';
 ok $path->trailing_slash, 'has trailing slash';
 $path = Mojo::Path->new('///foo///bar/23///');
-is "$path", '///foo///bar/23///', 'right result';
+is "$path", '///foo///bar/23///', 'right path';
 is $path->parts->[0], '',    'right part';
 is $path->parts->[1], '',    'right part';
 is $path->parts->[2], 'foo', 'right part';
@@ -277,9 +295,36 @@ ok $path->trailing_slash, 'has trailing slash';
 $path = Mojo::Path->new->parts(['foo/bar']);
 is $path->parts->[0], 'foo/bar', 'right part';
 is $path->parts->[1], undef,     'no part';
-is "$path", 'foo%2Fbar', 'right result';
-is $path->to_string,     'foo%2Fbar',  'right result';
-is $path->to_abs_string, '/foo%2Fbar', 'right result';
+is "$path", 'foo%2Fbar', 'right path';
+is $path->to_string,     'foo%2Fbar',  'right path';
+is $path->to_abs_string, '/foo%2Fbar', 'right absolute path';
+is $path->to_route,      '/foo/bar',   'right route';
+
+# Unchanged path
+$path = Mojo::Path->new('/foob%E4r/-._~!$&\'()*+,;=:@');
+is $path->clone->parts->[0], "foob\xe4r",          'right part';
+is $path->clone->parts->[1], '-._~!$&\'()*+,;=:@', 'right part';
+is $path->clone->parts->[2], undef,                'no part';
+ok $path->contains("/foob\xe4r"),                    'contains path';
+ok $path->contains("/foob\xe4r/-._~!\$&'()*+,;=:@"), 'contains path';
+ok !$path->contains("/foob\xe4r/-._~!\$&'()*+,;=:."), 'does not contain path';
+is $path->to_string,     '/foob%E4r/-._~!$&\'()*+,;=:@', 'right path';
+is $path->to_abs_string, '/foob%E4r/-._~!$&\'()*+,;=:@', 'right absolute path';
+is $path->to_route, "/foob\xe4r/-._~!\$&'()*+,;=:@", 'right route';
+is $path->clone->to_string, '/foob%E4r/-._~!$&\'()*+,;=:@', 'right path';
+is $path->clone->to_abs_string, '/foob%E4r/-._~!$&\'()*+,;=:@',
+  'right absolute path';
+is $path->clone->to_route, "/foob\xe4r/-._~!\$&'()*+,;=:@", 'right route';
+
+# Reuse path
+$path = Mojo::Path->new('/foob%E4r');
+is $path->to_string, '/foob%E4r', 'right path';
+is $path->parts->[0], "foob\xe4r", 'right part';
+is $path->parts->[1], undef,       'no part';
+$path->parse('/foob%E4r');
+is $path->to_string, '/foob%E4r', 'right path';
+is $path->parts->[0], "foob\xe4r", 'right part';
+is $path->parts->[1], undef,       'no part';
 
 # Latin-1
 $path = Mojo::Path->new->charset('Latin-1')->parse('/foob%E4r');
@@ -287,10 +332,11 @@ is $path->parts->[0], 'foobär', 'right part';
 is $path->parts->[1], undef,     'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
-is "$path", '/foob%E4r', 'right result';
-is $path->to_string,     '/foob%E4r', 'right result';
-is $path->to_abs_string, '/foob%E4r', 'right result';
-is $path->clone->to_string, '/foob%E4r', 'right result';
+is "$path", '/foob%E4r', 'right path';
+is $path->to_string,     '/foob%E4r', 'right path';
+is $path->to_abs_string, '/foob%E4r', 'right absolute path';
+is $path->to_route,      '/foobär',  'right route';
+is $path->clone->to_string, '/foob%E4r', 'right path';
 
 # No charset
 $path = Mojo::Path->new->charset(undef)->parse('/%E4');
@@ -298,7 +344,8 @@ is $path->parts->[0], "\xe4", 'right part';
 is $path->parts->[1], undef,  'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
-is "$path", '/%E4', 'right result';
-is $path->clone->to_string, '/%E4', 'right result';
+is "$path", '/%E4', 'right path';
+is $path->to_route, "/\xe4", 'right route';
+is $path->clone->to_string, '/%E4', 'right path';
 
 done_testing();

@@ -1,15 +1,18 @@
 use Mojo::Base -strict;
 
+use FindBin;
+use lib "$FindBin::Bin/lib";
+
 use Test::More;
 use File::Spec::Functions qw(catfile splitdir);
 use File::Temp 'tempdir';
-use FindBin;
+use Mojo::DeprecationTest;
 
 use Mojo::Util
   qw(b64_decode b64_encode camelize class_to_file class_to_path decamelize),
   qw(decode encode get_line hmac_md5_sum hmac_sha1_sum html_unescape),
-  qw(md5_bytes md5_sum monkey_patch punycode_decode punycode_encode quote),
-  qw(squish trim unquote secure_compare sha1_bytes sha1_sum slurp spurt),
+  qw(md5_bytes md5_sum monkey_patch punycode_decode squish trim unquote),
+  qw(secure_compare sha1_bytes sha1_sum slurp spurt punycode_encode quote),
   qw(url_escape url_unescape xml_escape xor_encode);
 
 # camelize
@@ -399,5 +402,20 @@ ok !!MojoMonkeyTest->can('yin'), 'function "yin" exists';
 is MojoMonkeyTest::yin(), 'yin', 'right result';
 ok !!MojoMonkeyTest->can('yang'), 'function "yang" exists';
 is MojoMonkeyTest::yang(), 'yang', 'right result';
+
+# deprecated
+{
+  my ($warn, $die) = @_;
+  local $SIG{__WARN__} = sub { $warn = shift };
+  local $SIG{__DIE__}  = sub { $die  = shift };
+  is Mojo::DeprecationTest::foo(), 'bar', 'right result';
+  like $warn, qr/foo is DEPRECATED at .*util\.t line \d+/, 'right warning';
+  ok !$die, 'no exception';
+  $warn = $die = undef;
+  local $ENV{MOJO_FATAL_DEPRECATIONS} = 1;
+  ok !eval { Mojo::DeprecationTest::foo() }, 'no result';
+  ok !$warn, 'no warning';
+  like $die, qr/foo is DEPRECATED at .*util\.t line \d+/, 'right exception';
+}
 
 done_testing();

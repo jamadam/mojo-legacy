@@ -11,22 +11,32 @@ is $params->to_string,      'foo=b%3Bar&baz=23', 'right format';
 is $params2->to_string,     'x=1&y=2',           'right format';
 is $params->to_string,      'foo=b%3Bar&baz=23', 'right format';
 is_deeply $params->params, ['foo', 'b;ar', 'baz', 23], 'right structure';
+is $params->[0], 'foo',  'right value';
+is $params->[1], 'b;ar', 'right value';
+is $params->[2], 'baz',  'right value';
+is $params->[3], 23,     'right value';
+is $params->[4], undef,  'no value';
 $params->pair_separator(';');
 is $params->to_string, 'foo=b%3Bar;baz=23', 'right format';
 is "$params", 'foo=b%3Bar;baz=23', 'right format';
 
 # Append
 is_deeply $params->params, ['foo', 'b;ar', 'baz', 23], 'right structure';
-$params->append('a', 4, 'a', 5, 'b', 6, 'b', 7);
+$params->append(a => 4, a => 5, b => 6, b => 7);
 is $params->to_string, "foo=b%3Bar;baz=23;a=4;a=5;b=6;b=7", 'right format';
+push @$params, c => 'f;oo';
+is $params->to_string, "foo=b%3Bar;baz=23;a=4;a=5;b=6;b=7;c=f%3Boo",
+  'right format';
 
 # Clone
 my $clone = $params->clone;
-is "$params", "$clone", 'equal results';
+is "$params", "$clone", 'equal parameters';
+push @$clone, c => 9;
+isnt "$params", "$clone", 'unequal parameters';
 
 # Merge
 $params->merge($params2);
-is $params->to_string, 'foo=b%3Bar;baz=23;a=4;a=5;b=6;b=7;x=1;y=2',
+is $params->to_string, 'foo=b%3Bar;baz=23;a=4;a=5;b=6;b=7;c=f%3Boo;x=1;y=2',
   'right format';
 is $params2->to_string, 'x=1&y=2', 'right format';
 

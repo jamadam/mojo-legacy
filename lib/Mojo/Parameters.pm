@@ -1,6 +1,7 @@
 package Mojo::Parameters;
 use Mojo::Base -base;
 use overload
+  '@{}'    => sub { shift->params },
   'bool'   => sub {1},
   '""'     => sub { shift->to_string },
   fallback => 1;
@@ -187,6 +188,8 @@ sub to_string {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Parameters - Parameters
@@ -201,11 +204,12 @@ Mojo::Parameters - Parameters
 
   # Build
   my $params = Mojo::Parameters->new(foo => 'bar', baz => 23);
+  push @$params, i => '♥ mojolicious';
   say "$params";
 
 =head1 DESCRIPTION
 
-L<Mojo::Parameters> is a container for form parameters.
+L<Mojo::Parameters> is a container for form parameters used by L<Mojo::URL>.
 
 =head1 ATTRIBUTES
 
@@ -249,7 +253,7 @@ Construct a new L<Mojo::Parameters> object.
   $params = $params->append(foo => ['ba;r', 'b;az']);
   $params = $params->append(foo => ['ba;r', 'b;az'], bar => 23);
 
-Append parameters.
+Append parameters. Note that this method will normalize the parameters.
 
   # "foo=bar&foo=baz"
   Mojo::Parameters->new('foo=bar')->append(foo => 'baz');
@@ -270,7 +274,8 @@ Clone parameters.
 
   $params = $params->merge(Mojo::Parameters->new(foo => 'b;ar', baz => 23));
 
-Merge L<Mojo::Parameters> objects.
+Merge L<Mojo::Parameters> objects. Note that this method will normalize the
+parameters.
 
 =head2 param
 
@@ -280,14 +285,18 @@ Merge L<Mojo::Parameters> objects.
   my $foo   = $params->param(foo => 'ba;r');
   my @foo   = $params->param(foo => qw(ba;r ba;z));
 
-Check and replace parameter values.
+Check and replace parameter value. Be aware that if you request a parameter by
+name in scalar context, you will receive only the I<first> value for that
+parameter, if there are multiple values for that name. In list context you
+will receive I<all> of the values for that name. Note that this method will
+normalize the parameters.
 
 =head2 params
 
   my $array = $params->params;
   $params   = $params->params([foo => 'b;ar', baz => 23]);
 
-Parsed parameters.
+Parsed parameters. Note that this method will normalize the parameters.
 
 =head2 parse
 
@@ -299,7 +308,7 @@ Parse parameters.
 
   $params = $params->remove('foo');
 
-Remove parameters.
+Remove parameters. Note that this method will normalize the parameters.
 
   # "bar=yada"
   Mojo::Parameters->new('foo=bar&foo=baz&bar=yada')->remove('foo');
@@ -308,7 +317,8 @@ Remove parameters.
 
   my $hash = $params->to_hash;
 
-Turn parameters into a hash reference.
+Turn parameters into a hash reference. Note that this method will normalize
+the parameters.
 
   # "baz"
   Mojo::Parameters->new('foo=bar&foo=baz')->to_hash->{foo}[1];
@@ -319,6 +329,14 @@ Turn parameters into a hash reference.
   my $string = "$params";
 
 Turn parameters into a string.
+
+=head1 PARAMETERS
+
+Direct array reference access to the parsed parameters is also possible. Note
+that this will normalize the parameters.
+
+  say $params->[0];
+  say for @$params;
 
 =head1 SEE ALSO
 

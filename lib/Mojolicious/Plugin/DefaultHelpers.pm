@@ -57,14 +57,6 @@ sub register {
     }
   );
 
-  # DEPRECATED in Rainbow!
-  $app->helper(
-    render_content => sub {
-      warn "Mojolicious::Controller->render_content is DEPRECATED!\n";
-      shift->content(@_);
-    }
-  );
-
   $app->helper(url_with => \&_url_with);
 }
 
@@ -94,7 +86,10 @@ sub _current_route {
   return $endpoint->name eq shift;
 }
 
-sub _dumper { shift; Data::Dumper->new([@_])->Indent(1)->Terse(1)->Dump }
+sub _dumper {
+  my $self = shift;
+  return Data::Dumper->new([@_])->Indent(1)->Sortkeys(1)->Terse(1)->Dump;
+}
 
 sub _include {
   my $self     = shift;

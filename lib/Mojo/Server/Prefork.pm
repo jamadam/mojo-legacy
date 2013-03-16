@@ -73,7 +73,7 @@ sub run {
     $self->{pool}{shuffle keys %{$self->{pool}}}{graceful} ||= time;
   };
 
-  # Preload application and start accepting connections
+  # Preload application before starting workers
   $self->start->app->log->info("Manager $$ started.");
   $self->{running} = 1;
   $self->_manage while $self->{running};
@@ -208,7 +208,6 @@ sub _spawn {
   $SIG{QUIT} = sub { $loop->max_connections(0) };
   delete $self->{$_} for qw(poll reader);
 
-  # Start event loop
   $self->app->log->debug("Worker $$ started.");
   $loop->start;
   exit 0;
@@ -261,7 +260,7 @@ applications.
 Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
 L<IO::Socket::SSL> (1.75+) are supported transparently through
 L<Mojo::IOLoop>, and used if installed. Individual features can also be
-disabled with the C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
+disabled with the MOJO_NO_IPV6 and MOJO_NO_TLS environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for more.
 

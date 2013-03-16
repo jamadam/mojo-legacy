@@ -6,7 +6,7 @@ use Mojo::Collection 'c';
 use Mojo::DOM;
 use Mojo::JSON 'j';
 use Mojo::UserAgent;
-use Mojo::Util 'monkey_patch';
+use Mojo::Util qw(deprecated monkey_patch);
 
 # Silent oneliners
 $ENV{MOJO_LOG_LEVEL} ||= 'fatal';
@@ -29,18 +29,27 @@ sub import {
     a => sub { $caller->can('any')->(@_) and return $UA->app },
     b => \&b,
     c => \&c,
-    d => sub { _request($UA->build_tx(DELETE => @_)) },
-    f => sub { _request($UA->build_form_tx(@_)) },
-    g => sub { _request($UA->build_tx(GET    => @_)) },
-    h => sub { _request($UA->build_tx(HEAD   => @_)) },
+    d => sub { _request($UA->build_tx(DELETE  => @_)) },
+    g => sub { _request($UA->build_tx(GET     => @_)) },
+    h => sub { _request($UA->build_tx(HEAD    => @_)) },
     j => \&j,
-    n => sub { _request($UA->build_json_tx(@_)) },
     o => sub { _request($UA->build_tx(OPTIONS => @_)) },
-    p => sub { _request($UA->build_tx(POST => @_)) },
+    p => sub { _request($UA->build_tx(POST    => @_)) },
     r => sub { $UA->app->dumper(@_) },
     t => sub { _request($UA->build_tx(PATCH => @_)) },
     u => sub { _request($UA->build_tx(PUT => @_)) },
     x => sub { Mojo::DOM->new(@_) };
+
+  # DEPRECATED in Rainbow!
+  my $f = sub {
+    deprecated 'ojo::f is DEPRECATED in favor of ojo::p';
+    _request($UA->build_form_tx(@_));
+  };
+  my $n = sub {
+    deprecated 'ojo::n is DEPRECATED in favor of ojo::p';
+    _request($UA->build_json_tx(@_));
+  };
+  monkey_patch $caller, f => $f, n => $n;
 }
 
 sub _request {
@@ -65,12 +74,12 @@ ojo - Fun oneliners with Mojo!
 
 A collection of automatically exported functions for fun Perl oneliners. Ten
 redirects will be followed by default, you can change this behavior with the
-C<MOJO_MAX_REDIRECTS> environment variable.
+MOJO_MAX_REDIRECTS environment variable.
 
   $ MOJO_MAX_REDIRECTS=0 perl -Mojo -E 'say g("mojolicio.us")->code'
 
 Proxy detection is enabled by default, but you can disable it with the
-C<MOJO_PROXY> environment variable.
+MOJO_PROXY environment variable.
 
   $ MOJO_PROXY=0 perl -Mojo -E 'say g("mojolicio.us")->body'
 
@@ -110,14 +119,6 @@ Turn list into a L<Mojo::Collection> object.
 Perform C<DELETE> request with L<Mojo::UserAgent/"delete"> and return
 resulting L<Mojo::Message::Response> object.
 
-=head2 f
-
-  my $res = f('http://kraih.com' => {a => 'b'});
-  my $res = f('kraih.com' => 'UTF-8' => {a => 'b'} => {DNT => 1});
-
-Perform C<POST> request with L<Mojo::UserAgent/"post_form"> and return
-resulting L<Mojo::Message::Response> object.
-
 =head2 g
 
   my $res = g('mojolicio.us');
@@ -145,14 +146,6 @@ L<Mojo::Message::Response> object.
 Encode Perl data structure or decode JSON with L<Mojo::JSON>.
 
   $ perl -Mojo -E 'b(j({hello => "world!"}))->spurt("hello.json")'
-
-=head2 n
-
-  my $res = n('http://kraih.com' => {a => 'b'});
-  my $res = n('kraih.com' => {a => 'b'} => {DNT => 1});
-
-Perform C<POST> request with L<Mojo::UserAgent/"post_json"> and return
-resulting L<Mojo::Message::Response> object.
 
 =head2 o
 

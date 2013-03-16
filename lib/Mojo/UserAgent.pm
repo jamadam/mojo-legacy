@@ -8,7 +8,7 @@ use List::Util 'first';
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
 use Mojo::URL;
-use Mojo::Util 'monkey_patch';
+use Mojo::Util qw(deprecated monkey_patch);
 use Mojo::UserAgent::CookieJar;
 use Mojo::UserAgent::Transactor;
 use Scalar::Util 'weaken';
@@ -59,8 +59,20 @@ sub app_url {
   return Mojo::URL->new("$self->{proto}://localhost:$self->{port}/");
 }
 
-sub build_form_tx      { shift->transactor->form(@_) }
-sub build_json_tx      { shift->transactor->json(@_) }
+# DEPRECATED in Rainbow!
+sub build_form_tx {
+  deprecated 'Mojo::UserAgent::build_form_tx is DEPRECATED in favor of '
+    . 'Mojo::UserAgent::build_tx';
+  shift->transactor->form(@_);
+}
+
+# DEPRECATED in Rainbow!
+sub build_json_tx {
+  deprecated 'Mojo::UserAgent::build_json_tx is DEPRECATED in favor of '
+    . 'Mojo::UserAgent::build_tx';
+  shift->transactor->json(@_);
+}
+
 sub build_tx           { shift->transactor->tx(@_) }
 sub build_websocket_tx { shift->transactor->websocket(@_) }
 
@@ -76,13 +88,19 @@ sub need_proxy {
   return !first { $host =~ /\Q$_\E$/ } @{$self->no_proxy || []};
 }
 
+# DEPRECATED in Rainbow!
 sub post_form {
+  deprecated 'Mojo::UserAgent::post_form is DEPRECATED in favor of '
+    . 'Mojo::UserAgent::post';
   my $self = shift;
   my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
   return $self->start($self->build_form_tx(@_), $cb);
 }
 
+# DEPRECATED in Rainbow!
 sub post_json {
+  deprecated 'Mojo::UserAgent::post_json is DEPRECATED in favor of '
+    . 'Mojo::UserAgent::post';
   my $self = shift;
   my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
   return $self->start($self->build_json_tx(@_), $cb);
@@ -93,8 +111,6 @@ sub start {
 
   # Non-blocking
   if ($cb) {
-
-    # Start non-blocking
     warn "-- Non-blocking request (@{[$tx->req->url->to_abs]})\n" if DEBUG;
     unless ($self->{nb}) {
       croak 'Blocking request in progress' if keys %{$self->{connections}};
@@ -105,7 +121,7 @@ sub start {
     return $self->_start($tx, $cb);
   }
 
-  # Start blocking
+  # Blocking
   warn "-- Blocking request (@{[$tx->req->url->to_abs]})\n" if DEBUG;
   if ($self->{nb}) {
     croak 'Non-blocking requests in progress' if keys %{$self->{connections}};
@@ -114,8 +130,6 @@ sub start {
     delete $self->{nb};
   }
   $self->_start($tx => sub { $tx = pop });
-
-  # Start event loop
   $self->ioloop->start;
 
   return $tx;
@@ -352,7 +366,7 @@ sub _handle {
   }
 }
 
-sub _loop { $_[0]->{nb} ? Mojo::IOLoop->singleton : $_[0]->ioloop }
+sub _loop { $_[0]{nb} ? Mojo::IOLoop->singleton : $_[0]->ioloop }
 
 sub _read {
   my ($self, $id, $chunk) = @_;
@@ -421,7 +435,8 @@ sub _start {
   my $url = $req->url;
   if ($self->{port} || !$url->is_abs) {
     if (my $app = $self->app) { $self->_server->app($app) }
-    $url = $req->url($url->base($self->app_url)->to_abs)->url
+    my $base = $self->app_url;
+    $url->scheme($base->scheme)->authority($base->authority)
       unless $url->is_abs;
   }
 
@@ -504,7 +519,7 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   say $ua->get('www.☃.net?hello=there' => {DNT => 1})->res->body;
 
   # Form POST with exception handling
-  my $tx = $ua->post_form('search.cpan.org/search' => {q => 'mojo'});
+  my $tx = $ua->post('search.cpan.org/search' => form => {q => 'mojo'});
   if (my $res = $tx->success) { say $res->body }
   else {
     my ($err, $code) = $tx->error;
@@ -532,12 +547,7 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
 
   # TLS certificate authentication and JSON POST
   my $tx = $ua->cert('tls.crt')->key('tls.key')
-    ->post_json('https://mojolicio.us' => {top => 'secret'});
-
-  # Custom JSON PUT request
-  my $tx = $ua->build_json_tx('http://mojolicious/foo' => {hi => 'there'});
-  $tx->req->method('PUT');
-  say $ua->start($tx)->res->body;
+    ->post('https://mojolicio.us' => json => {top => 'secret'});
 
   # Blocking parallel requests (does not work inside a running event loop)
   my $delay = Mojo::IOLoop->delay;
@@ -586,7 +596,7 @@ compression and multiple event loop support.
 Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
 L<IO::Socket::SSL> (1.75+) are supported transparently through
 L<Mojo::IOLoop>, and used if installed. Individual features can also be
-disabled with the C<MOJO_NO_IPV6> and C<MOJO_NO_TLS> environment variables.
+disabled with the MOJO_NO_IPV6 and MOJO_NO_TLS environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for more.
 
@@ -634,7 +644,7 @@ L<Mojo::UserAgent> implements the following attributes.
   $ua    = $ua->ca('/etc/tls/ca.crt');
 
 Path to TLS certificate authority file, defaults to the value of the
-C<MOJO_CA_FILE> environment variable. Also activates hostname verification.
+MOJO_CA_FILE environment variable. Also activates hostname verification.
 
   # Show certificate authorities for debugging
   IO::Socket::SSL::set_defaults(
@@ -645,7 +655,7 @@ C<MOJO_CA_FILE> environment variable. Also activates hostname verification.
   my $cert = $ua->cert;
   $ua      = $ua->cert('/etc/tls/client.crt');
 
-Path to TLS certificate file, defaults to the value of the C<MOJO_CERT_FILE>
+Path to TLS certificate file, defaults to the value of the MOJO_CERT_FILE
 environment variable.
 
 =head2 connect_timeout
@@ -654,7 +664,7 @@ environment variable.
   $ua         = $ua->connect_timeout(5);
 
 Maximum amount of time in seconds establishing a connection may take before
-getting canceled, defaults to the value of the C<MOJO_CONNECT_TIMEOUT>
+getting canceled, defaults to the value of the MOJO_CONNECT_TIMEOUT
 environment variable or C<10>.
 
 =head2 cookie_jar
@@ -688,7 +698,7 @@ Proxy server to use for HTTPS and WebSocket requests.
   $ua         = $ua->inactivity_timeout(15);
 
 Maximum amount of time in seconds a connection can be inactive before getting
-closed, defaults to the value of the C<MOJO_INACTIVITY_TIMEOUT> environment
+closed, defaults to the value of the MOJO_INACTIVITY_TIMEOUT environment
 variable or C<20>. Setting the value to C<0> will allow connections to be
 inactive indefinitely.
 
@@ -705,8 +715,8 @@ L<Mojo::IOLoop> object.
   my $key = $ua->key;
   $ua     = $ua->key('/etc/tls/client.crt');
 
-Path to TLS key file, defaults to the value of the C<MOJO_KEY_FILE>
-environment variable.
+Path to TLS key file, defaults to the value of the MOJO_KEY_FILE environment
+variable.
 
 =head2 local_address
 
@@ -729,8 +739,7 @@ before it starts closing the oldest cached ones, defaults to C<5>.
   $ua     = $ua->max_redirects(3);
 
 Maximum number of redirects the user agent will follow before it fails,
-defaults to the value of the C<MOJO_MAX_REDIRECTS> environment variable or
-C<0>.
+defaults to the value of the MOJO_MAX_REDIRECTS environment variable or C<0>.
 
 =head2 name
 
@@ -753,7 +762,7 @@ Domains that don't require a proxy server to be used.
 
 Maximum amount of time in seconds establishing a connection, sending the
 request and receiving a whole response may take before getting canceled,
-defaults to the value of the C<MOJO_REQUEST_TIMEOUT> environment variable or
+defaults to the value of the MOJO_REQUEST_TIMEOUT environment variable or
 C<0>. Setting the value to C<0> will allow the user agent to wait
 indefinitely. The timeout will reset for every followed redirect.
 
@@ -802,26 +811,14 @@ Get absolute L<Mojo::URL> object for C<app> and switch protocol if necessary.
   # Port currently used for processing relative URLs
   say $ua->app_url->port;
 
-=head2 build_form_tx
-
-  my $tx = $ua->build_form_tx('http://kraih.com' => {a => 'b'});
-  my $tx = $ua->build_form_tx('kraih.com', 'UTF-8', {a => 'b'}, {DNT => 1});
-
-Generate L<Mojo::Transaction::HTTP> object with
-L<Mojo::UserAgent::Transactor/"form">.
-
-=head2 build_json_tx
-
-  my $tx = $ua->build_json_tx('http://kraih.com' => {a => 'b'});
-  my $tx = $ua->build_json_tx('kraih.com' => {a => 'b'} => {DNT => 1});
-
-Generate L<Mojo::Transaction::HTTP> object with
-L<Mojo::UserAgent::Transactor/"json">.
-
 =head2 build_tx
 
   my $tx = $ua->build_tx(GET => 'kraih.com');
   my $tx = $ua->build_tx(PUT => 'http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->build_tx(
+    PUT => 'http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->build_tx(
+    PUT => 'http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Generate L<Mojo::Transaction::HTTP> object with
 L<Mojo::UserAgent::Transactor/"tx">.
@@ -843,6 +840,10 @@ L<Mojo::UserAgent::Transactor/"websocket">.
 
   my $tx = $ua->delete('kraih.com');
   my $tx = $ua->delete('http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->delete(
+    'http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->delete(
+    'http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Perform blocking HTTP C<DELETE> request and return resulting
 L<Mojo::Transaction::HTTP> object, takes the same arguments as
@@ -859,14 +860,16 @@ append a callback to perform requests non-blocking.
 
   $ua = $ua->detect_proxy;
 
-Check environment variables C<HTTP_PROXY>, C<http_proxy>, C<HTTPS_PROXY>,
-C<https_proxy>, C<NO_PROXY> and C<no_proxy> for proxy information. Automatic
-proxy detection can be enabled with the C<MOJO_PROXY> environment variable.
+Check environment variables HTTP_PROXY, http_proxy, HTTPS_PROXY, https_proxy,
+NO_PROXY and no_proxy for proxy information. Automatic proxy detection can be
+enabled with the MOJO_PROXY environment variable.
 
 =head2 get
 
   my $tx = $ua->get('kraih.com');
   my $tx = $ua->get('http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->get('http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->get('http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Perform blocking HTTP C<GET> request and return resulting
 L<Mojo::Transaction::HTTP> object, takes the same arguments as
@@ -883,6 +886,8 @@ append a callback to perform requests non-blocking.
 
   my $tx = $ua->head('kraih.com');
   my $tx = $ua->head('http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->head('http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->head('http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Perform blocking HTTP C<HEAD> request and return resulting
 L<Mojo::Transaction::HTTP> object, takes the same arguments as
@@ -905,6 +910,10 @@ Check if request for domain would use a proxy server.
 
   my $tx = $ua->options('kraih.com');
   my $tx = $ua->options('http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->options(
+    'http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->options(
+    'http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Perform blocking HTTP C<OPTIONS> request and return resulting
 L<Mojo::Transaction::HTTP> object, takes the same arguments as
@@ -921,6 +930,8 @@ append a callback to perform requests non-blocking.
 
   my $tx = $ua->patch('kraih.com');
   my $tx = $ua->patch('http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->patch('http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->patch('http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Perform blocking HTTP C<PATCH> request and return resulting
 L<Mojo::Transaction::HTTP> object, takes the same arguments as
@@ -937,6 +948,8 @@ append a callback to perform requests non-blocking.
 
   my $tx = $ua->post('kraih.com');
   my $tx = $ua->post('http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->post('http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->post('http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Perform blocking HTTP C<POST> request and return resulting
 L<Mojo::Transaction::HTTP> object, takes the same arguments as
@@ -949,42 +962,12 @@ append a callback to perform requests non-blocking.
   });
   Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
-=head2 post_form
-
-  my $tx = $ua->post_form('http://kraih.com' => {a => 'b'});
-  my $tx = $ua->post_form('kraih.com', 'UTF-8', {a => 'b'}, {DNT => 1});
-
-Perform blocking HTTP C<POST> request with form data and return resulting
-L<Mojo::Transaction::HTTP> object, takes the same arguments as
-L<Mojo::UserAgent::Transactor/"form">. You can also append a callback to
-perform requests non-blocking.
-
-  $ua->post_form('http://kraih.com' => {q => 'test'} => sub {
-    my ($ua, $tx) = @_;
-    say $tx->res->body;
-  });
-  Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
-
-=head2 post_json
-
-  my $tx = $ua->post_json('http://kraih.com' => {a => 'b'});
-  my $tx = $ua->post_json('kraih.com' => {a => 'b'} => {DNT => 1});
-
-Perform blocking HTTP C<POST> request with JSON data and return resulting
-L<Mojo::Transaction::HTTP> object, takes the same arguments as
-L<Mojo::UserAgent::Transactor/"json">. You can also append a callback to
-perform requests non-blocking.
-
-  $ua->post_json('http://kraih.com' => {q => 'test'} => sub {
-    my ($ua, $tx) = @_;
-    say $tx->res->body;
-  });
-  Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
-
 =head2 put
 
   my $tx = $ua->put('kraih.com');
   my $tx = $ua->put('http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $ua->put('http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $ua->put('http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Perform blocking HTTP C<PUT> request and return resulting
 L<Mojo::Transaction::HTTP> object, takes the same arguments as
@@ -1031,8 +1014,8 @@ same arguments as L<Mojo::UserAgent::Transactor/"websocket">.
 
 =head1 DEBUGGING
 
-You can set the C<MOJO_USERAGENT_DEBUG> environment variable to get some
-advanced diagnostics information printed to C<STDERR>.
+You can set the MOJO_USERAGENT_DEBUG environment variable to get some advanced
+diagnostics information printed to C<STDERR>.
 
   MOJO_USERAGENT_DEBUG=1
 
