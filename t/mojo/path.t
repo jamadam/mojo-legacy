@@ -24,11 +24,13 @@ is $path->to_abs_string, '/', 'right absolute path';
 
 # Advanced
 $path = Mojo::Path->new('/AZaz09-._~!$&\'()*+,;=:@');
-is $path->parts->[0], 'AZaz09-._~!$&\'()*+,;=:@', 'right part';
-is $path->parts->[1], undef, 'no part';
+is $path->[0], 'AZaz09-._~!$&\'()*+,;=:@', 'right part';
+is $path->[1], undef, 'no part';
 ok $path->leading_slash, 'has leading slash';
 ok !$path->trailing_slash, 'no trailing slash';
 is "$path", '/AZaz09-._~!$&\'()*+,;=:@', 'right path';
+push @$path, 'f/oo';
+is "$path", '/AZaz09-._~!$&\'()*+,;=:@/f%2Foo', 'right path';
 
 # Unicode
 is $path->parse('/foo/♥/bar')->to_string, '/foo/%E2%99%A5/bar', 'right path';
@@ -229,6 +231,13 @@ is "$path", '//', 'right path';
 is $path->parts->[0], undef, 'no part';
 ok $path->leading_slash,  'has leading slash';
 ok $path->trailing_slash, 'has trailing slash';
+is "$path", '//', 'right normalized path';
+$path = Mojo::Path->new('%2F%2f');
+is "$path", '%2F%2f', 'right path';
+is $path->parts->[0], undef, 'no part';
+ok $path->leading_slash,  'has leading slash';
+ok $path->trailing_slash, 'has trailing slash';
+is "$path", '//', 'right normalized path';
 $path = Mojo::Path->new('/foo//bar/23/');
 is "$path", '/foo//bar/23/', 'right path';
 is $path->parts->[0], 'foo', 'right part';

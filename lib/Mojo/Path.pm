@@ -1,6 +1,7 @@
 package Mojo::Path;
 use Mojo::Base -base;
 use overload
+  '@{}'    => sub { shift->parts },
   'bool'   => sub {1},
   '""'     => sub { shift->to_string },
   fallback => 1;
@@ -144,15 +145,18 @@ Mojo::Path - Path
 
   use Mojo::Path;
 
+  # Parse
   my $path = Mojo::Path->new('/foo%2Fbar%3B/baz.html');
-  shift @{$path->parts};
+  say $path->[0];
+
+  # Build
+  my $path = Mojo::Path->new('/i/♥');
+  push @$path, 'mojolicious';
   say "$path";
 
 =head1 DESCRIPTION
 
-L<Mojo::Path> is a container for URL paths. Note that C<%2F> will be treated
-as C</> for security reasons if the path has to be normalized for an
-operation.
+L<Mojo::Path> is a container for paths used by L<Mojo::URL>.
 
 =head1 ATTRIBUTES
 
@@ -187,7 +191,7 @@ Construct a new L<Mojo::Path> object.
 Canonicalize path.
 
   # "/foo/baz"
-  Mojo::Path->new('/foo/bar/../baz')->canonicalize;
+  Mojo::Path->new('/foo/./bar/../baz')->canonicalize;
 
 =head2 clone
 
@@ -216,7 +220,8 @@ Check if path contains given prefix.
   my $slash = $path->leading_slash;
   $path     = $path->leading_slash(1);
 
-Path has a leading slash.
+Path has a leading slash. Note that this method will normalize the path and
+that C<%2F> will be treated as C</> for security reasons.
 
 =head2 merge
 
@@ -224,7 +229,8 @@ Path has a leading slash.
   $path = $path->merge('foo/bar');
   $path = $path->merge(Mojo::Path->new('foo/bar'));
 
-Merge paths.
+Merge paths. Note that this method will normalize both paths if necessary and
+that C<%2F> will be treated as C</> for security reasons.
 
   # "/baz/yada"
   Mojo::Path->new('/foo/bar')->merge('/baz/yada');
@@ -248,6 +254,7 @@ Parse path.
 Turn path into an absolute string.
 
   # "/i/%E2%99%A5/mojolicious"
+  Mojo::Path->new('/i/%E2%99%A5/mojolicious')->to_abs_string;
   Mojo::Path->new('i/%E2%99%A5/mojolicious')->to_abs_string;
 
 =head2 parts
@@ -255,7 +262,8 @@ Turn path into an absolute string.
   my $parts = $path->parts;
   $path     = $path->parts([qw(foo bar baz)]);
 
-The path parts.
+The path parts. Note that this method will normalize the path and that C<%2F>
+will be treated as C</> for security reasons.
 
   # Part with slash
   push @{$path->parts}, 'foo/bar';
@@ -267,6 +275,9 @@ The path parts.
 Clone path and remove everything after the right-most slash.
 
   # "/i/%E2%99%A5/"
+  Mojo::Path->new('/i/%E2%99%A5/mojolicious')->to_dir->to_abs_string;
+
+  # "i/%E2%99%A5/"
   Mojo::Path->new('i/%E2%99%A5/mojolicious')->to_dir->to_abs_string;
 
 =head2 to_route
@@ -276,6 +287,7 @@ Clone path and remove everything after the right-most slash.
 Turn path into a route.
 
   # "/i/♥/mojolicious"
+  Mojo::Path->new('/i/%E2%99%A5/mojolicious')->to_route;
   Mojo::Path->new('i/%E2%99%A5/mojolicious')->to_route;
 
 =head2 to_string
@@ -285,6 +297,9 @@ Turn path into a route.
 
 Turn path into a string.
 
+  # "/i/%E2%99%A5/mojolicious"
+  Mojo::Path->new('/i/%E2%99%A5/mojolicious')->to_string;
+
   # "i/%E2%99%A5/mojolicious"
   Mojo::Path->new('i/%E2%99%A5/mojolicious')->to_string;
 
@@ -293,7 +308,17 @@ Turn path into a string.
   my $slash = $path->trailing_slash;
   $path     = $path->trailing_slash(1);
 
-Path has a trailing slash.
+Path has a trailing slash. Note that this method will normalize the path and
+that C<%2F> will be treated as C</> for security reasons.
+
+=head1 PATH PARTS
+
+Direct array reference access to path parts is also possible. Note that this
+will normalize the path and that C<%2F> will be treated as C</> for security
+reasons.
+
+  say $path->[0];
+  say for @$path;
 
 =head1 SEE ALSO
 
