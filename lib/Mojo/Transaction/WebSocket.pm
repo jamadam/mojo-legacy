@@ -7,8 +7,9 @@ use Mojo::Util qw(b64_encode decode encode sha1_bytes xor_encode);
 
 use constant DEBUG => $ENV{MOJO_WEBSOCKET_DEBUG} || 0;
 
-# 64bit Perl
-use constant MODERN => $Config{ivsize} > 4;
+# Perl with support for quads
+use constant MODERN =>
+  ((defined $Config{use64bitint} ? $Config{use64bitint} : '') eq 'define' || $Config{longsize} >= 8);
 
 # Unique value from the spec
 use constant GUID => '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -416,7 +417,7 @@ Mask outgoing frames with XOR cipher and a random 32bit key.
   $ws      = $ws->max_websocket_size(1024);
 
 Maximum WebSocket message size in bytes, defaults to the value of the
-C<MOJO_MAX_WEBSOCKET_SIZE> environment variable or C<262144>.
+MOJO_MAX_WEBSOCKET_SIZE environment variable or C<262144>.
 
 =head1 METHODS
 
@@ -425,7 +426,7 @@ L<Mojo::Transaction> and implements the following new ones.
 
 =head2 new
 
-  my $multi = Mojo::Content::MultiPart->new;
+  my $ws = Mojo::Transaction::WebSocket->new;
 
 Construct a new L<Mojo::Transaction::WebSocket> object and subscribe to
 C<frame> event with default message parser, which also handles C<PING> and
@@ -595,8 +596,8 @@ Write data server-side, used to implement web servers.
 
 =head1 DEBUGGING
 
-You can set the C<MOJO_WEBSOCKET_DEBUG> environment variable to get some
-advanced diagnostics information printed to C<STDERR>.
+You can set the MOJO_WEBSOCKET_DEBUG environment variable to get some advanced
+diagnostics information printed to C<STDERR>.
 
   MOJO_WEBSOCKET_DEBUG=1
 

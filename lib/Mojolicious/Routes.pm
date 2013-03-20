@@ -4,7 +4,7 @@ use Mojo::Base 'Mojolicious::Routes::Route';
 use List::Util 'first';
 use Mojo::Cache;
 use Mojo::Loader;
-use Mojo::Util 'camelize';
+use Mojo::Util qw(camelize deprecated);
 use Mojolicious::Routes::Match;
 use Scalar::Util 'weaken';
 
@@ -20,7 +20,7 @@ sub add_shortcut  { shift->_add(shortcuts  => @_) }
 sub auto_render {
   my ($self, $c) = @_;
   my $stash = $c->stash;
-  return undef if $stash->{'mojo.rendered'} || $c->tx->is_websocket;
+  return undef if $stash->{'mojo.rendered'};
   $c->render or ($stash->{'mojo.routed'} or $c->render_not_found);
 }
 
@@ -81,10 +81,8 @@ sub lookup {
 
 # DEPRECATED in Rainbow!
 sub namespace {
-  warn <<EOF;
-Mojolicious::Routes->namespace is DEPRECATED in favor of
-Mojolicious::Routes->namespaces!
-EOF
+  deprecated 'Mojolicious::Routes::namespace is DEPRECATED in favor of '
+    . 'Mojolicious::Routes::namespaces';
   my $self = shift;
   return $self->namespaces->[0] unless @_;
   $self->namespaces->[0] = shift;

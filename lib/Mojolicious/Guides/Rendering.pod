@@ -66,7 +66,7 @@ start characters.
   % Perl code line, treated as "<% line =%>"
   %= Perl expression line, treated as "<%= line %>"
   %== Perl expression line, treated as "<%== line %>"
-  %# Comment line, treated as "<%# line =%>"
+  %# Comment line, useful for debugging
   %% Replaced with "%", useful for generating templates
 
 Tags and lines work pretty much the same, but depending on context one will
@@ -196,14 +196,14 @@ too.
 
 =head2 Rendering text
 
-Perl characters can be rendered with the C<text> stash value, the given
+Characters can be rendered to bytes with the C<text> stash value, the given
 content will be automatically encoded to bytes.
 
   $self->render(text => 'Hello Wörld!');
 
 =head2 Rendering data
 
-Raw bytes can be rendered with the C<data> stash value, no encoding will be
+Bytes can be rendered with the C<data> stash value, no encoding will be
 performed.
 
   $self->render(data => $octets);
@@ -217,8 +217,9 @@ renderer which get directly encoded to JSON.
 
 =head2 Partial rendering
 
-Sometimes you might want to access the rendered result, for example to
-generate emails, this can be done using the C<partial> stash value.
+Sometimes you might want to use the rendered result directly instead of
+generating a response, for example to send emails, this can be done using the
+C<partial> stash value.
 
   my $html = $self->render('mail', partial => 1);
 
@@ -328,10 +329,10 @@ used or an empty C<204> response rendered automatically.
 
 By now you've probably already encountered the built-in 404 (Not Found) and
 500 (Server Error) pages, that get rendered automatically when you make a
-mistake. Especially during development they can be a great help, the methods
+mistake. Especially during development they can be a great help, you can
+render them manually with the methods
 L<Mojolicious::Controller/"render_exception"> and
-L<Mojolicious::Controller/"render_not_found"> can be used to render them
-manually.
+L<Mojolicious::Controller/"render_not_found">.
 
   use Mojolicious::Lite;
   use Scalar::Util 'looks_like_number';

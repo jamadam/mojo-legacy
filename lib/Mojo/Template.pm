@@ -140,7 +140,6 @@ sub parse {
   my $end     = $self->tag_end;
   my $start   = $self->line_start;
 
-  # Precompile
   my $token_re = qr/
     (
       \Q$tag$replace\E                       # Replace
@@ -177,25 +176,20 @@ sub parse {
   for my $line (split /\n/, $tmpl) {
     $trimming = 0 if $state eq 'text';
 
-    # Perl line
+    # Turn Perl line into mixed line
     if ($state eq 'text' && $line !~ s/^(\s*)\Q$start$replace\E/$1$start/) {
-      $line =~ s/^(\s*)\Q$start\E(\Q$expr\E)?//
-        and $line = $2 ? "$1$tag$2$line $end" : "$tag$line $trim$end";
+      if ($line =~ s/^(\s*)\Q$start\E(?:(\Q$cmnt\E)|(\Q$expr\E))?//) {
+
+        # Comment
+        if ($2) { $line = "$tag$2 $trim$end" }
+
+        # Expression or code
+        else { $line = $3 ? "$1$tag$3$line $end" : "$tag$line $trim$end" }
+      }
     }
 
     # Escaped line ending
-    if ($line =~ /(\\+)$/) {
-      my $len = length $1;
-
-      # Newline
-      if ($len == 1) { $line =~ s/\\$// }
-
-      # Backslash
-      elsif ($len > 1) { $line =~ s/\\\\$/\\\n/ }
-    }
-
-    # Normal line ending
-    else { $line .= "\n" }
+    $line .= "\n" unless $line =~ s/\\\\$/\\\n/ || $line =~ s/\\$//;
 
     # Mixed line
     my @token;
@@ -233,7 +227,7 @@ sub parse {
       # Comment
       elsif ($token =~ /^\Q$tag$cmnt\E$/) { $state = 'cmnt' }
 
-      # Value
+      # Text
       else {
 
         # Replace
@@ -280,7 +274,7 @@ sub _trim {
   # Walk line backwards
   for (my $j = @$line - 4; $j >= 0; $j -= 2) {
 
-    # Skip capture
+    # Skip captures
     next if grep { $_ eq $line->[$j] } qw(cpst cpen);
 
     # Only trim text
@@ -383,7 +377,7 @@ automatically enabled.
   % Perl code line, treated as "<% line =%>"
   %= Perl expression line, treated as "<%= line %>"
   %== Perl expression line, treated as "<%== line %>"
-  %# Comment line, treated as "<%# line =%>"
+  %# Comment line, useful for debugging
   %% Replaced with "%", useful for generating templates
 
 Escaping behavior can be reversed with the C<auto_escape> attribute, this is
@@ -693,8 +687,8 @@ Render template file.
 
 =head1 DEBUGGING
 
-You can set the C<MOJO_TEMPLATE_DEBUG> environment variable to get some
-advanced diagnostics information printed to C<STDERR>.
+You can set the MOJO_TEMPLATE_DEBUG environment variable to get some advanced
+diagnostics information printed to C<STDERR>.
 
   MOJO_TEMPLATE_DEBUG=1
 

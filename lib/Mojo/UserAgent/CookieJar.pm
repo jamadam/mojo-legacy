@@ -46,8 +46,8 @@ sub extract {
     my $host = lc $url->ihost;
     my $domain = lc(defined $cookie->domain ? $cookie->domain : $host);
     $domain =~ s/^\.//;
-    next unless $host eq $domain || $host =~ /\Q.$domain\E$/;
-    next if $host =~ /\.\d+$/;
+    next
+      if $host ne $domain && ($host !~ /\Q.$domain\E$/ || $host =~ /\.\d+$/);
     $cookie->domain($domain);
 
     # Validate path

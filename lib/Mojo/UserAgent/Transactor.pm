@@ -11,7 +11,22 @@ use Mojo::Parameters;
 use Mojo::Transaction::HTTP;
 use Mojo::Transaction::WebSocket;
 use Mojo::URL;
-use Mojo::Util 'encode';
+use Mojo::Util qw(deprecated encode);
+
+has generators => sub { {} };
+
+sub new {
+  my $self = shift->SUPER::new(@_);
+  $self->add_generator(form => \&_form);
+  $self->add_generator(json => \&_json);
+  return $self;
+}
+
+sub add_generator {
+  my ($self, $name, $cb) = @_;
+  $self->generators->{$name} = $cb;
+  return $self;
+}
 
 sub endpoint {
   my ($self, $tx) = @_;
@@ -30,47 +45,22 @@ sub endpoint {
   return $proto, $host, $port;
 }
 
+# DEPRECATED in Rainbow!
 sub form {
-  my ($self, $url, $encoding) = (shift, shift, shift);
-  my $form = ref $encoding ? $encoding : shift;
-  $encoding = undef if ref $encoding;
-
-  # Start with normal POST transaction
-  my $tx = $self->tx(POST => $url, @_);
-
-  # Check for uploads and force multipart if necessary
-  my $multipart;
-  for my $value (map { ref $_ eq 'ARRAY' ? @$_ : $_ } values %$form) {
-    ++$multipart and last if ref $value eq 'HASH';
-  }
-  my $req     = $tx->req;
-  my $headers = $req->headers;
-  $headers->content_type('multipart/form-data') if $multipart;
-
-  # Multipart
-  if ((defined $headers->content_type ? $headers->content_type : '') eq 'multipart/form-data') {
-    my $parts = $self->_multipart($encoding, $form);
-    $req->content(
-      Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
-  }
-
-  # Urlencoded
-  else {
-    $headers->content_type('application/x-www-form-urlencoded');
-    my $p = Mojo::Parameters->new(map { $_ => $form->{$_} } sort keys %$form);
-    $p->charset($encoding) if defined $encoding;
-    $req->body($p->to_string);
-  }
-
-  return $tx;
+  deprecated 'Mojo::UserAgent::Transactor::form is DEPRECATED in favor of '
+    . 'Mojo::UserAgent::Transactor::tx';
+  my ($self, $url, $charset) = (shift, shift, shift);
+  my $form = ref $charset ? $charset : shift;
+  $charset = undef if ref $charset;
+  return $self->tx(POST => $url, @_, form => $form, charset => $charset);
 }
 
+# DEPRECATED in Rainbow!
 sub json {
+  deprecated 'Mojo::UserAgent::Transactor::json is DEPRECATED in favor of '
+    . 'Mojo::UserAgent::Transactor::tx';
   my ($self, $url, $data) = (shift, shift, shift);
-  my $tx = $self->tx(POST => $url, @_, Mojo::JSON->new->encode($data));
-  my $headers = $tx->req->headers;
-  $headers->content_type('application/json') unless $headers->content_type;
-  return $tx;
+  return $self->tx(POST => $url, @_, json => $data);
 }
 
 sub peer {
@@ -140,8 +130,14 @@ sub tx {
   # Headers
   $req->headers->from_hash(shift) if ref $_[0] eq 'HASH';
 
+  # Generator
+  if (@_ > 1) {
+    return $tx unless my $generator = $self->generators->{shift()};
+    $self->$generator($tx, @_);
+  }
+
   # Body
-  $req->body(shift) if @_;
+  elsif (@_) { $req->body(shift) }
 
   return $tx;
 }
@@ -159,10 +155,9 @@ sub websocket {
 
   # New WebSocket transaction
   my $tx    = $self->tx(GET => @_);
-  my $req   = $tx->req;
-  my $abs   = $req->url->to_abs;
-  my $proto = $abs->protocol;
-  $req->url($abs->scheme($proto eq 'wss' ? 'https' : 'http')) if $proto;
+  my $url   = $tx->req->url;
+  my $proto = $url->protocol;
+  $url->scheme($proto eq 'wss' ? 'https' : 'http') if $proto;
 
   # Handshake
   Mojo::Transaction::WebSocket->new(handshake => $tx)->client_handshake;
@@ -170,8 +165,46 @@ sub websocket {
   return $tx;
 }
 
+sub _form {
+  my ($self, $tx, $form, %options) = @_;
+
+  # Check for uploads and force multipart if necessary
+  my $multipart;
+  for my $value (map { ref $_ eq 'ARRAY' ? @$_ : $_ } values %$form) {
+    ++$multipart and last if ref $value eq 'HASH';
+  }
+  my $req     = $tx->req;
+  my $headers = $req->headers;
+  $headers->content_type('multipart/form-data') if $multipart;
+
+  # Multipart
+  if ((defined $headers->content_type ? $headers->content_type : '') eq 'multipart/form-data') {
+    my $parts = $self->_multipart($options{charset}, $form);
+    $req->content(
+      Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
+  }
+
+  # Urlencoded
+  else {
+    $headers->content_type('application/x-www-form-urlencoded');
+    my $p = Mojo::Parameters->new(map { $_ => $form->{$_} } sort keys %$form);
+    $p->charset($options{charset}) if defined $options{charset};
+    $req->body($p->to_string);
+  }
+
+  return $tx;
+}
+
+sub _json {
+  my ($self, $tx, $data) = @_;
+  $tx->req->body(Mojo::JSON->new->encode($data));
+  my $headers = $tx->req->headers;
+  $headers->content_type('application/json') unless $headers->content_type;
+  return $tx;
+}
+
 sub _multipart {
-  my ($self, $encoding, $form) = @_;
+  my ($self, $charset, $form) = @_;
 
   my @parts;
   for my $name (sort keys %$form) {
@@ -199,18 +232,18 @@ sub _multipart {
 
         # Filename and headers
         $filename = delete $value->{filename} || $name;
-        $filename = encode $encoding, $filename if $encoding;
+        $filename = encode $charset, $filename if $charset;
         $headers->from_hash($value);
       }
 
       # Field
       else {
-        $value = encode $encoding, $value if $encoding;
+        $value = encode $charset, $value if $charset;
         $part->asset(Mojo::Asset::Memory->new->add_chunk($value));
       }
 
       # Content-Disposition
-      $name = encode $encoding, $name if $encoding;
+      $name = encode $charset, $name if $charset;
       my $disposition = qq{form-data; name="$name"};
       $disposition .= qq{; filename="$filename"} if $filename;
       $headers->content_disposition($disposition);
@@ -251,81 +284,49 @@ Mojo::UserAgent::Transactor - User agent transactor
   say $t->tx(PATCH => 'mojolicio.us' => {DNT => 1} => 'Hi!')->req->to_string;
 
   # POST request with form data
-  say $t->form('http://kraih.com' => {a => [1, 2], b => 3})->req->to_string;
+  say $t->tx(POST => 'kraih.com' => form => {a => 'b'})->req->to_string;
 
-  # POST request with JSON data
-  say $t->json('http://kraih.com' => {a => [1, 2], b => 3})->req->to_string;
+  # PUT request with JSON data
+  say $t->tx(PUT => 'http://kraih.com' => json => {a => 'b'})->req->to_string;
 
 =head1 DESCRIPTION
 
 L<Mojo::UserAgent::Transactor> is the transaction building and manipulation
 framework used by L<Mojo::UserAgent>.
 
+=head1 ATTRIBUTES
+
+L<Mojo::UserAgent::Transactor> implements the following attributes.
+
+=head2 generators
+
+  my $generators = $t->generators;
+  $t             = $t->generators({foo => sub {...}});
+
+Registered generators.
+
 =head1 METHODS
 
 L<Mojo::UserAgent::Transactor> inherits all methods from L<Mojo::Base> and
 implements the following new ones.
+
+=head2 new
+
+  my $t = Mojo::UserAgent::Transactor->new;
+
+Construct a new transactor and register C<form> and C<json> generators.
+
+=head2 add_generator
+
+  $t = $t->add_generator(foo => sub {...});
+
+Register a new generator.
 
 =head2 endpoint
 
   my ($proto, $host, $port) = $t->endpoint(Mojo::Transaction::HTTP->new);
 
 Actual endpoint for transaction.
-
-=head2 form
-
-  my $tx = $t->form('kraih.com' => {a => 'b'});
-  my $tx = $t->form('http://kraih.com' => {a => 'b'});
-  my $tx = $t->form('http://kraih.com' => {a => [qw(b c d)]});
-  my $tx = $t->form('http://kraih.com' => {mytext => {file => '/foo.txt'}});
-  my $tx = $t->form('http://kraih.com' => {mytext => {content => 'lalala'}});
-  my $tx = $t->form('http://kraih.com' =>
-    {mytexts => [{content => 'first'}, {content => 'second'}]});
-  my $tx = $t->form('http://kraih.com' => {
-    myzip => {
-      file     => Mojo::Asset::Memory->new->add_chunk('lalala'),
-      filename => 'foo.zip',
-      DNT      => 1
-    }
-  });
-  my $tx = $t->form('http://kraih.com' => 'UTF-8' => {a => 'b'});
-  my $tx = $t->form('http://kraih.com' => {a => 'b'} => {DNT => 1});
-  my $tx = $t->form('http://kraih.com', 'UTF-8', {a => 'b'}, {DNT => 1});
-
-Versatile L<Mojo::Transaction::HTTP> transaction builder for C<POST> requests
-with form data.
-
-  # Multipart upload with filename
-  my $tx = $t->form(
-    'mojolicio.us' => {fun => {content => 'Hello!', filename => 'test.txt'}});
-
-  # Multipart upload streamed from file
-  my $tx = $t->form('mojolicio.us' => {fun => {file => '/etc/passwd'}});
-
-While the "multipart/form-data" content type will be automatically used
-instead of "application/x-www-form-urlencoded" when necessary, you can also
-enforce it by setting the header manually.
-
-  # Force multipart
-  my $tx = $t->form(
-    'http://kraih.com/foo',
-    {a => 'b'},
-    {'Content-Type' => 'multipart/form-data'}
-  );
-
-=head2 json
-
-  my $tx = $t->json('kraih.com' => {a => 'b'});
-  my $tx = $t->json('http://kraih.com' => [1, 2, 3]);
-  my $tx = $t->json('http://kraih.com' => {a => 'b'} => {DNT => 1});
-  my $tx = $t->json('http://kraih.com' => [1, 2, 3] => {DNT => 1});
-
-Versatile L<Mojo::Transaction::HTTP> transaction builder for C<POST> requests
-with JSON data.
-
-  # Change method
-  my $tx = $t->json('mojolicio.us/hello', {hello => 'world'});
-  $tx->req->method('PATCH');
 
 =head2 peer
 
@@ -353,10 +354,16 @@ C<307> or C<308> redirect response if possible.
   my $tx = $t->tx(POST => 'http://kraih.com');
   my $tx = $t->tx(GET  => 'http://kraih.com' => {DNT => 1});
   my $tx = $t->tx(PUT  => 'http://kraih.com' => 'Hi!');
+  my $tx = $t->tx(PUT  => 'http://kraih.com' => form => {a => 'b'});
+  my $tx = $t->tx(PUT  => 'http://kraih.com' => json => {a => 'b'});
   my $tx = $t->tx(POST => 'http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $t->tx(
+    PUT  => 'http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+  my $tx = $t->tx(
+    PUT  => 'http://kraih.com' => {DNT => 1} => json => {a => 'b'});
 
 Versatile general purpose L<Mojo::Transaction::HTTP> transaction builder for
-requests.
+requests, with support for generators.
 
   # Inspect generated request
   say $t->tx(GET => 'mojolicio.us' => {DNT => 1} => 'Bye!')->req->to_string;
@@ -368,6 +375,38 @@ requests.
   # Custom socket
   my $tx = $t->tx(GET => 'http://mojolicio.us');
   $tx->connection($sock);
+
+  # Use form generator with custom charset
+  my $tx = $t->tx(
+    PUT => 'http://kraih.com' => form => {a => 'b'} => charset => 'UTF-8');
+
+  # Multiple form values with the same name
+  my $tx = $t->tx(PUT => 'http://kraih.com' => form => {a => [qw(b c d)]});
+
+  # Multipart upload streamed from file
+  my $tx = $t->tx(
+    PUT => 'http://kraih.com' => form => {mytext => {file => '/foo.txt'}});
+
+  # Multipart upload with in-memory content
+  my $tx = $t->tx(
+    POST => 'http://kraih.com' => form => {mytext => {content => 'lalala'}});
+
+  # Upload multiple files
+  my $tx = $t->tx(POST => 'http://kraih.com' =>
+    form => {mytext => [{content => 'first'}, {content => 'second'}]});
+
+  # Customized upload with filename and header
+  my $tx = $t->tx(POST => 'http://kraih.com' => form => {
+    myzip => {
+      file     => Mojo::Asset::Memory->new->add_chunk('lalala'),
+      filename => 'foo.zip',
+      DNT      => 1
+    }
+  });
+
+While the "multipart/form-data" content type will be automatically used
+instead of "application/x-www-form-urlencoded" when necessary, you can also
+enforce it by setting the header manually.
 
 =head2 upgrade
 
