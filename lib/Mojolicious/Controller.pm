@@ -822,6 +822,7 @@ is set to the value C<XMLHttpRequest>.
   $c = $c->send({binary => $bytes});
   $c = $c->send({text   => $bytes});
   $c = $c->send([$fin, $rsv1, $rsv2, $rsv3, $op, $bytes]);
+  $c = $c->send(Mojo::ByteStream->new($chars));
   $c = $c->send($chars);
   $c = $c->send($chars => sub {...});
 
@@ -928,10 +929,10 @@ Get L<Mojo::UserAgent> object from L<Mojo/"ua">.
     $c->render_json(\@titles);
   });
   for my $url ('http://mojolicio.us', 'https://metacpan.org') {
-    $delay->begin;
+    my $end = $delay->begin(0);
     $c->ua->get($url => sub {
       my ($ua, $tx) = @_;
-      $delay->end($tx->res->dom->html->head->title->text);
+      $end->($tx->res->dom->html->head->title->text);
     });
   }
 

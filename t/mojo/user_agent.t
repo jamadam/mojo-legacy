@@ -63,7 +63,7 @@ post '/echo' => sub {
   ok !$ua->need_proxy('dummy.mojolicio.us'), 'no proxy needed';
   ok $ua->need_proxy('icio.us'),   'proxy needed';
   ok $ua->need_proxy('localhost'), 'proxy needed';
-  $ENV{HTTP_PROXY} = $ENV{HTTPS_PROXY} = $ENV{NO_PROXY} = undef;
+  ($ENV{HTTP_PROXY}, $ENV{HTTPS_PROXY}, $ENV{NO_PROXY}) = ();
   local $ENV{http_proxy}  = 'proxy.kraih.com';
   local $ENV{https_proxy} = 'tunnel.kraih.com';
   local $ENV{no_proxy}    = 'localhost,localdomain,foo.com,kraih.com';
@@ -139,7 +139,7 @@ $ua = Mojo::UserAgent->new(ioloop => Mojo::IOLoop->singleton);
 my ($success, $code, $body);
 $ua->get(
   '/' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $success = $tx->success;
     $code    = $tx->res->code;
     $body    = $tx->res->body;

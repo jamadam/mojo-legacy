@@ -2,16 +2,23 @@ package Mojo::IOLoop::Delay;
 use Mojo::Base 'Mojo::EventEmitter';
 
 use Mojo::IOLoop;
+use Mojo::Util 'deprecated';
 
 has ioloop => sub { Mojo::IOLoop->singleton };
 
 sub begin {
-  my $self = shift;
-  my $id   = $self->{counter}++;
-  return sub { shift; $self->_step($id, @_) };
+  my ($self, $ignore) = @_;
+  $self->{pending}++;
+  my $id = $self->{counter}++;
+  return sub { (defined $ignore ? $ignore : 1) and shift; $self->_step($id, @_) };
 }
 
-sub end { shift->_step(undef, @_) }
+# DEPRECATED in Rainbow!
+sub end {
+  deprecated
+    'Mojo::IOLoop::Delay::end is DEPRECATED in favor of generated callbacks';
+  shift->_step(undef, @_);
+}
 
 sub steps {
   my $self = shift;
@@ -31,25 +38,24 @@ sub wait {
 sub _step {
   my ($self, $id) = (shift, shift);
 
-  # Arguments
-  my $ordered   = $self->{ordered}   ||= [];
-  my $unordered = $self->{unordered} ||= [];
-  if (defined $id) { $ordered->[$id] = [@_] }
-  else             { push @$unordered, @_ }
+  if (defined $id) { $self->{args}[$id] = [@_] }
 
-  # Wait for more events
-  return $self->{counter} if --$self->{counter};
+  # DEPRECATED in Rainbow!
+  else { push @{$self->{unordered}}, @_ }
 
-  # Next step
-  my $cb = shift @{$self->{steps} ||= []};
-  $self->{$_} = [] for qw(ordered unordered);
-  my @args = ((map {@$_} grep {defined} @$ordered), @$unordered);
-  $self->$cb(@args) if $cb;
+  return $self->{pending} if --$self->{pending} || $self->{lock};
+  local $self->{lock} = 1;
+  my @args = (map {@$_} grep {defined} @{delete($self->{args}) || []});
 
-  # Finished
-  $self->emit('finish', @args)
-    if !$self->{counter} && !@{$self->{steps}} && !$self->{finished}++;
+  # DEPRECATED in Rainbow!
+  push @args, @{delete($self->{unordered}) || []};
 
+  $self->{counter} = 0;
+  if (my $cb = shift @{$self->{steps} ||= []}) { $self->$cb(@args) }
+
+  return 0 if $self->{pending};
+  if ($self->{counter}) { $self->ioloop->timer(0 => $self->begin) }
+  else                  { $self->emit(finish => @args) }
   return 0;
 }
 
@@ -67,10 +73,10 @@ Mojo::IOLoop::Delay - Control the flow of events
   my $delay = Mojo::IOLoop::Delay->new;
   $delay->on(finish => sub { say 'BOOM!' });
   for my $i (1 .. 10) {
-    $delay->begin;
+    my $end = $delay->begin;
     Mojo::IOLoop->timer($i => sub {
       say 10 - $i;
-      $delay->end;
+      $end->();
     });
   }
 
@@ -142,22 +148,17 @@ implements the following new ones.
 =head2 begin
 
   my $cb = $delay->begin;
+  my $cb = $delay->begin(0);
 
-Increment active event counter, the returned callback can be used instead of
-C<end>, which has the advantage of preserving the order of arguments. Note
-that the first argument passed to the callback will be ignored.
+Increment active event counter, the returned callback can be used to decrement
+the active event counter again. Arguments passed to the callback are queued in
+the right order for the next step or C<finish> event and C<wait> method, the
+first argument will be ignored by default.
 
+  # Capture all arguments
   my $delay = Mojo::IOLoop->delay;
-  Mojo::UserAgent->new->get('mojolicio.us' => $delay->begin);
-  my $tx = $delay->wait;
-
-=head2 end
-
-  my $remaining = $delay->end;
-  my $remaining = $delay->end(@args);
-
-Decrement active event counter, all arguments are queued for the next step or
-C<finish> event and C<wait> method.
+  Mojo::IOLoop->client({port => 3000} => $delay->begin(0));
+  my ($loop, $err, $stream) = $delay->wait;
 
 =head2 steps
 
@@ -165,7 +166,8 @@ C<finish> event and C<wait> method.
 
 Sequentialize multiple events, the first callback will run right away, and the
 next one once the active event counter reaches zero, this chain will continue
-until there are no more callbacks left.
+until there are no more callbacks or a callback does not increment the active
+event counter.
 
 =head2 wait
 

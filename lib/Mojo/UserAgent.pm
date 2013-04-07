@@ -460,10 +460,10 @@ sub _start {
 
   # Connect and add request timeout if necessary
   my $id = $self->emit(start => $tx)->_connection($tx, $cb);
-  if (my $t = $self->request_timeout) {
+  if (my $timeout = $self->request_timeout) {
     weaken $self;
     $self->{connections}{$id}{timeout} = $self->_loop->timer(
-      $t => sub { $self->_error($id => 'Request timeout') });
+      $timeout => sub { $self->_error($id => 'Request timeout') });
   }
 
   return $id;
@@ -550,10 +550,10 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   # Blocking parallel requests (does not work inside a running event loop)
   my $delay = Mojo::IOLoop->delay;
   for my $url ('mojolicio.us', 'cpan.org') {
-    $delay->begin;
+    my $end = $delay->begin(0);
     $ua->get($url => sub {
       my ($ua, $tx) = @_;
-      $delay->end($tx->res->dom->at('title')->text);
+      $end->($tx->res->dom->at('title')->text);
     });
   }
   my @titles = $delay->wait;
@@ -564,24 +564,26 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
     ...
   });
   for my $url ('mojolicio.us', 'cpan.org') {
-    $delay->begin;
+    my $end = $delay->begin(0);
     $ua->get($url => sub {
       my ($ua, $tx) = @_;
-      $delay->end($tx->res->dom->at('title')->text);
+      $end->($tx->res->dom->at('title')->text);
     });
   }
   $delay->wait unless Mojo::IOLoop->is_running;
 
-  # Non-blocking WebSocket connection
-  $ua->websocket('ws://websockets.org:8787' => sub {
+  # Non-blocking WebSocket connection sending and receiving JSON text messages
+  use Mojo::JSON 'j';
+  $ua->websocket('ws://localhost:3000/echo.json' => sub {
     my ($ua, $tx) = @_;
-    $tx->on(finish  => sub { say 'WebSocket closed.' });
-    $tx->on(message => sub {
-      my ($tx, $msg) = @_;
-      say "WebSocket message: $msg";
+    say 'WebSocket handshake failed!' and return unless $tx->is_websocket;
+    $tx->on(text => sub {
+      my ($tx, $bytes) = @_;
+      my $hash = j($bytes);
+      say "WebSocket message via JSON: $hash->{msg}";
       $tx->finish;
     });
-    $tx->send('hi there!');
+    $tx->send({text => j({msg => 'Hello World!'})});
   });
   Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
@@ -998,13 +1000,18 @@ non-blocking.
   $ua->websocket('ws://localhost:3000' => {DNT => 1} => sub {...});
 
 Open a non-blocking WebSocket connection with transparent handshake, takes the
-same arguments as L<Mojo::UserAgent::Transactor/"websocket">.
+same arguments as L<Mojo::UserAgent::Transactor/"websocket">. The callback
+will receive either a L<Mojo::Transaction::WebSocket> or
+L<Mojo::Transaction::HTTP> object.
 
   $ua->websocket('ws://localhost:3000/echo' => sub {
     my ($ua, $tx) = @_;
+    say 'WebSocket handshake failed!' and return unless $tx->is_websocket;
+    $tx->on(finish  => sub { say 'WebSocket closed.' });
     $tx->on(message => sub {
       my ($tx, $msg) = @_;
-      say $msg;
+      say "WebSocket message: $msg";
+      $tx->finish;
     });
     $tx->send('Hi!');
   });

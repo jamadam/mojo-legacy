@@ -30,7 +30,7 @@ sub add {
 
   # Make sure we have a normal case entry for name
   my $lcname = lc $name;
-  $self->{normalcase}{$lcname} = $self->{normalcase}{$lcname} ? $self->{normalcase}{$lcname} : $name unless $NORMALCASE{$lcname};
+  $self->{normalcase}{$lcname} = defined $self->{normalcase}{$lcname} ? $self->{normalcase}{$lcname} : $name unless $NORMALCASE{$lcname};
 
   # Add lines
   push @{$self->{headers}{$lcname}}, map { ref $_ eq 'ARRAY' ? $_ : [$_] } @_;

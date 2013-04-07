@@ -3,8 +3,8 @@ use Mojo::Base 'Mojo::Reactor';
 
 use IO::Poll qw(POLLERR POLLHUP POLLIN POLLOUT);
 use List::Util 'min';
-use Mojo::Util 'md5_sum';
-use Time::HiRes qw(time usleep);
+use Mojo::Util qw(md5_sum steady_time);
+use Time::HiRes 'usleep';
 
 sub io {
   my ($self, $handle, $cb) = @_;
@@ -31,7 +31,7 @@ sub one_tick {
 
     # Calculate ideal timeout based on timers
     my $min = min map { $_->{time} } values %{$self->{timers}};
-    my $timeout = defined $min ? ($min - time) : 0.5;
+    my $timeout = defined $min ? ($min - steady_time) : 0.5;
     $timeout = 0 if $timeout < 0;
 
     # I/O
@@ -48,7 +48,7 @@ sub one_tick {
 
     # Timers
     while (my ($id, $t) = each %{$self->{timers} || {}}) {
-      next unless $t->{time} <= (my $time = time);
+      next unless $t->{time} <= (my $time = steady_time);
 
       # Recurring timer
       if (exists $t->{recurring}) { $t->{time} = $time + $t->{recurring} }
@@ -105,10 +105,11 @@ sub _sandbox {
 sub _timer {
   my ($self, $recurring, $after, $cb) = @_;
 
+  my $timers = defined $self->{timers} ? $self->{timers} : $self->{timers} = {};
   my $id;
-  do { $id = md5_sum('t' . time . rand 999) } while $self->{timers}{$id};
-  my $t = $self->{timers}{$id} = {cb => $cb, time => time + $after};
-  $t->{recurring} = $after if $recurring;
+  do { $id = md5_sum('t' . steady_time . rand 999) } while $timers->{$id};
+  my $timer = $timers->{$id} = {cb => $cb, time => steady_time + $after};
+  $timer->{recurring} = $after if $recurring;
 
   return $id;
 }

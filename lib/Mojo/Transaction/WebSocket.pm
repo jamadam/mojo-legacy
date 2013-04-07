@@ -195,15 +195,15 @@ sub send {
   my ($self, $frame, $cb) = @_;
 
   # Binary or raw text
-  if (ref $frame eq 'HASH') {
-    $frame
-      = exists $frame->{text}
-      ? [1, 0, 0, 0, TEXT, $frame->{text}]
-      : [1, 0, 0, 0, BINARY, $frame->{binary}];
-  }
+  $frame
+    = exists $frame->{text}
+    ? [1, 0, 0, 0, TEXT, $frame->{text}]
+    : [1, 0, 0, 0, BINARY, $frame->{binary}]
+    if ref $frame eq 'HASH';
 
-  # Text
-  elsif (!ref $frame) { $frame = [1, 0, 0, 0, TEXT, encode('UTF-8', $frame)] }
+  # Text or object (forcing stringification)
+  $frame = [1, 0, 0, 0, TEXT, encode('UTF-8', "$frame")]
+    if ref $frame ne 'ARRAY';
 
   $self->once(drain => $cb) if $cb;
   $self->{write} .= $self->build_frame(@$frame);
@@ -567,6 +567,7 @@ Resume C<handshake> transaction.
   $ws = $ws->send({binary => $bytes});
   $ws = $ws->send({text   => $bytes});
   $ws = $ws->send([$fin, $rsv1, $rsv2, $rsv3, $op, $bytes]);
+  $ws = $ws->send(Mojo::ByteStream->new($chars));
   $ws = $ws->send($chars);
   $ws = $ws->send($chars => sub {...});
 

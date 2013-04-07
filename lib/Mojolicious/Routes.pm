@@ -4,7 +4,7 @@ use Mojo::Base 'Mojolicious::Routes::Route';
 use List::Util 'first';
 use Mojo::Cache;
 use Mojo::Loader;
-use Mojo::Util qw(camelize deprecated);
+use Mojo::Util 'camelize';
 use Mojolicious::Routes::Match;
 use Scalar::Util 'weaken';
 
@@ -77,16 +77,6 @@ sub lookup {
   return $reverse->{$name} if exists $reverse->{$name};
   return undef unless my $route = $self->find($name);
   return $reverse->{$name} = $route;
-}
-
-# DEPRECATED in Rainbow!
-sub namespace {
-  deprecated 'Mojolicious::Routes::namespace is DEPRECATED in favor of '
-    . 'Mojolicious::Routes::namespaces';
-  my $self = shift;
-  return $self->namespaces->[0] unless @_;
-  $self->namespaces->[0] = shift;
-  return $self;
 }
 
 sub route {
