@@ -105,7 +105,7 @@ sub _sandbox {
 sub _timer {
   my ($self, $recurring, $after, $cb) = @_;
 
-  my $timers = defined $self->{timers} ? $self->{timers} : $self->{timers} = {};
+  my $timers = defined $self->{timers} ? $self->{timers} : ($self->{timers} = {});
   my $id;
   do { $id = md5_sum('t' . steady_time . rand 999) } while $timers->{$id};
   my $timer = $timers->{$id} = {cb => $cb, time => steady_time + $after};
