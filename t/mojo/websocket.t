@@ -8,6 +8,7 @@ BEGIN {
 
 use Test::More;
 use IO::Socket::INET;
+use Mojo::ByteStream 'b';
 use Mojo::IOLoop;
 use Mojo::Transaction::WebSocket;
 use Mojo::UserAgent;
@@ -58,7 +59,7 @@ websocket '/socket' => sub {
     $self->req->headers->host => sub {
       my $self = shift;
       $self->send(Mojo::IOLoop->stream($self->tx->connection)->timeout);
-      $self->finish;
+      $self->finish(1000 => 'I ♥ Mojolicious!');
     }
   );
 };
@@ -87,7 +88,7 @@ websocket '/subreq' => sub {
   my $self = shift;
   $self->ua->websocket(
     '/echo' => sub {
-      my $tx = pop;
+      my ($ua, $tx) = @_;
       $tx->on(
         message => sub {
           my ($tx, $msg) = @_;
@@ -104,13 +105,7 @@ websocket '/subreq' => sub {
 };
 
 websocket '/echo' => sub {
-  my $self = shift;
-  $self->on(
-    message => sub {
-      my ($self, $msg) = @_;
-      $self->send($msg);
-    }
-  );
+  shift->on(message => sub { shift->send(shift) });
 };
 
 my $buffer = '';
@@ -123,14 +118,17 @@ websocket '/double_echo' => sub {
   );
 };
 
+websocket '/squish' => sub {
+  shift->on(message => sub { shift->send(b(shift)->squish) });
+};
+
 websocket '/dead' => sub { die 'i see dead processes' };
 
 websocket '/foo' =>
   sub { shift->rendered->res->code('403')->message("i'm a teapot") };
 
-websocket '/deadcallback' => sub {
-  my $self = shift;
-  $self->on(message => sub { die 'i see dead callbacks' });
+websocket '/close' => sub {
+  shift->on(message => sub { Mojo::IOLoop->remove(shift->tx->connection) });
 };
 
 my $timeout;
@@ -140,6 +138,7 @@ websocket '/timeout' => sub {
   $self->on(finish => sub { $timeout = 'works!' });
 };
 
+# URL for WebSocket
 my $ua  = app->ua;
 my $res = $ua->get('/link')->success;
 is $res->code, 200, 'right status';
@@ -151,12 +150,11 @@ is $res->code, 404, 'right status';
 like $res->body, qr/Page not found/, 'right content';
 
 # Plain WebSocket
-my $loop = Mojo::IOLoop->singleton;
 my $result;
 $ua->websocket(
   '/' => sub {
-    my $tx = pop;
-    $tx->on(finish => sub { $loop->stop });
+    my ($ua, $tx) = @_;
+    $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
         my ($tx, $msg) = @_;
@@ -167,21 +165,21 @@ $ua->websocket(
     $tx->send('test1');
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 like $result, qr!test1test2ws://localhost:\d+/!, 'right result';
 
-# Failed websocket connection
+# Failed WebSocket connection
 my ($code, $body, $ws);
 $ua->websocket(
   '/something/else' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $ws   = $tx->is_websocket;
     $code = $tx->res->code;
     $body = $tx->res->body;
-    $loop->stop;
+    Mojo::IOLoop->stop;
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 ok !$ws, 'not a WebSocket';
 is $code, 426, 'right code';
 ok $body =~ /^(\d+)failed!$/, 'right content';
@@ -196,40 +194,44 @@ my $sock = IO::Socket::INET->new(PeerAddr => '127.0.0.1', PeerPort => $port);
 $sock->blocking(0);
 $tx->connection($sock);
 $result = '';
-my ($local, $early);
+my ($local, $early, $status, $msg);
 $ua->start(
   $tx => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $early = $finished;
-    $tx->on(finish => sub { $loop->stop });
     $tx->on(
-      message => sub {
-        my ($tx, $msg) = @_;
-        $tx->finish if length $result;
-        $result .= $msg;
+      finish => sub {
+        my ($tx, $code, $reason) = @_;
+        $status = $code;
+        $msg    = $reason;
+        Mojo::IOLoop->stop;
       }
     );
-    $local = $loop->stream($tx->connection)->handle->sockport;
+    $tx->on(message => sub { $result .= pop });
+    $local = Mojo::IOLoop->stream($tx->connection)->handle->sockport;
   }
 );
-$loop->start;
-is $finished, 1, 'finish event has been emitted';
-is $early,    1, 'finish event has been emitted at the right time';
+Mojo::IOLoop->start;
+is $finished, 1,    'finish event has been emitted';
+is $early,    1,    'finish event has been emitted at the right time';
+is $status,   1000, 'right status';
+is $msg, 'I ♥ Mojolicious!', 'right message';
 ok $result =~ /^lalala(\d+)$/, 'right result';
 is $1, 15, 'right timeout';
 ok $local, 'local port';
-is $loop->stream($tx->connection)->handle, $sock, 'right connection id';
+is(Mojo::IOLoop->stream($tx->connection)->handle, $sock,
+  'right connection id');
 
 # Server directly sends a message
 $result = undef;
 my $client;
 $ua->websocket(
   '/early_start' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $tx->on(
       finish => sub {
         $client += 2;
-        $loop->stop;
+        Mojo::IOLoop->stop;
       }
     );
     $tx->on(
@@ -242,21 +244,21 @@ $ua->websocket(
     );
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 is $result, 'test3test2', 'right result';
 is $client, 3,            'finish event has been emitted';
 
 # Connection denied
-$code = $ws = undef;
+($code, $ws) = ();
 $ua->websocket(
   '/denied' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $ws   = $tx->is_websocket;
     $code = $tx->res->code;
-    $loop->stop;
+    Mojo::IOLoop->stop;
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 ok !$ws, 'not a WebSocket';
 is $code,      403, 'right status';
 is $handshake, 1,   'finished handshake';
@@ -267,24 +269,18 @@ $finished = 0;
 ($code, $result) = ();
 $ua->websocket(
   '/subreq' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $code = $tx->res->code;
-    $tx->on(
-      message => sub {
-        my ($tx, $msg) = @_;
-        $result .= $msg;
-        $tx->finish if $msg eq 'test1';
-      }
-    );
+    $tx->on(message => sub { $result .= pop });
     $tx->on(
       finish => sub {
         $finished += 4;
-        $loop->stop;
+        Mojo::IOLoop->stop;
       }
     );
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 is $code,     101,          'right status';
 is $result,   'test0test1', 'right result';
 is $finished, 4,            'finished client websocket';
@@ -295,10 +291,10 @@ my $delay = Mojo::IOLoop->delay;
 $finished = 0;
 ($code, $result) = ();
 my ($code2, $result2);
-$delay->begin;
+my $end = $delay->begin;
 $ua->websocket(
   '/subreq' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $code = $tx->res->code;
     $tx->on(
       message => sub {
@@ -310,27 +306,21 @@ $ua->websocket(
     $tx->on(
       finish => sub {
         $finished += 1;
-        $delay->end;
+        $end->();
       }
     );
   }
 );
-$delay->begin;
+my $end2 = $delay->begin;
 $ua->websocket(
   '/subreq' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $code2 = $tx->res->code;
-    $tx->on(
-      message => sub {
-        my ($tx, $msg) = @_;
-        $result2 .= $msg;
-        $tx->finish if $msg eq 'test1';
-      }
-    );
+    $tx->on(message => sub { $result2 .= pop });
     $tx->on(
       finish => sub {
         $finished += 2;
-        $delay->end;
+        $end2->();
       }
     );
   }
@@ -349,11 +339,11 @@ $client = 0;
 my ($drain, $counter);
 $ua->websocket(
   '/echo' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $tx->on(
       finish => sub {
         $client += 2;
-        $loop->stop;
+        Mojo::IOLoop->stop;
       }
     );
     $tx->on(
@@ -373,7 +363,7 @@ $ua->websocket(
     );
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 is $result, 'hi!there!', 'right result';
 is $client, 3,           'finish event has been emitted';
 is $drain,  1,           'no leaking subscribers';
@@ -383,11 +373,11 @@ $result = '';
 $counter = $client = 0;
 $ua->websocket(
   '/double_echo' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $tx->on(
       finish => sub {
         $client += 2;
-        $loop->stop;
+        Mojo::IOLoop->stop;
       }
     );
     $tx->on(
@@ -401,24 +391,43 @@ $ua->websocket(
     $tx->send('hi!');
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 is $result, 'hi!hi!', 'right result';
 is $client, 3,        'finish event has been emitted';
 
+# Sending objects
+$result = undef;
+$ua->websocket(
+  '/squish' => sub {
+    my ($ua, $tx) = @_;
+    $tx->on(finish => sub { Mojo::IOLoop->stop });
+    $tx->on(
+      message => sub {
+        my ($tx, $msg) = @_;
+        $result = $msg;
+        $tx->finish;
+      }
+    );
+    $tx->send(b(' foo bar '));
+  }
+);
+Mojo::IOLoop->start;
+is $result, 'foo bar', 'right result';
+
 # Dies
-$finished = $code = undef;
-my ($websocket, $msg);
+($finished, $code, $msg) = ();
+my $websocket;
 $ua->websocket(
   '/dead' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $finished  = $tx->is_finished;
     $websocket = $tx->is_websocket;
     $code      = $tx->res->code;
     $msg       = $tx->res->message;
-    $loop->stop;
+    Mojo::IOLoop->stop;
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 ok $finished, 'transaction is finished';
 ok !$websocket, 'no websocket';
 is $code, 500, 'right status';
@@ -428,33 +437,42 @@ is $msg, 'Internal Server Error', 'right message';
 ($websocket, $code, $msg) = ();
 $ua->websocket(
   '/foo' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $websocket = $tx->is_websocket;
     $code      = $tx->res->code;
     $msg       = $tx->res->message;
-    $loop->stop;
+    Mojo::IOLoop->stop;
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 ok !$websocket, 'no websocket';
 is $code, 403,            'right status';
 is $msg,  "i'm a teapot", 'right message';
 
-# Dies in callback
+# Connection close
+$status = undef;
 $ua->websocket(
-  '/deadcallback' => sub {
-    pop->send('test1');
-    $loop->stop;
+  '/close' => sub {
+    my ($ua, $tx) = @_;
+    $tx->on(
+      finish => sub {
+        my ($tx, $code) = @_;
+        $status = $code;
+        Mojo::IOLoop->stop;
+      }
+    );
+    $tx->send('test1');
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
+is $status, 1006, 'right status';
 
 # 16bit length
 $result = undef;
 $ua->websocket(
   '/echo' => sub {
-    my $tx = pop;
-    $tx->on(finish => sub { $loop->stop });
+    my ($ua, $tx) = @_;
+    $tx->on(finish => sub { Mojo::IOLoop->stop });
     $tx->on(
       message => sub {
         my ($tx, $msg) = @_;
@@ -465,7 +483,7 @@ $ua->websocket(
     $tx->send('hi!' x 100);
   }
 );
-$loop->start;
+Mojo::IOLoop->start;
 is $result, 'hi!' x 100, 'right result';
 
 # Timeout
@@ -485,7 +503,7 @@ like $log, qr/Inactivity timeout\./, 'right log message';
 my $pong;
 $ua->websocket(
   '/echo' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $tx->on(
       frame => sub {
         my ($tx, $frame) = @_;

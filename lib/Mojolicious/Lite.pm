@@ -61,6 +61,8 @@ sub import {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojolicious::Lite - Real-time micro web framework
@@ -108,8 +110,6 @@ featured web application.
 
   app->start;
 
-=head2 Generator
-
 There is also a helper command to generate a small example application.
 
   $ mojo generate lite_app
@@ -132,9 +132,8 @@ just work without commands.
   $ ./myapp.pl
   ...List of available commands (or automatically detected environment)...
 
-=head2 Start
-
-The app->start call that starts the L<Mojolicious> command system can be
+The C<app-E<gt>start> call that starts the L<Mojolicious> command system
+should usually be the last expression in your application and can be
 customized to override normal C<@ARGV> use.
 
   app->start('cgi');
@@ -214,11 +213,13 @@ full access to all HTTP features and information.
 
   use Mojolicious::Lite;
 
-  # Access response and request headers
+  # Access request and reponse information
   get '/agent' => sub {
     my $self = shift;
+    my $host = $self->req->url->to_abs->host;
+    my $ua   = $self->req->headers->user_agent;
     $self->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
-    $self->render(text => $self->req->headers->user_agent);
+    $self->render(text => "Request by $ua reached $host.");
   };
 
   app->start;
@@ -691,6 +692,47 @@ L<Mojolicious/"types">.
 
   app->types->type(rdf => 'application/rdf+xml');
 
+=head2 Static files
+
+Similar to templates, but with only a single file extension and optional
+Base64 encoding, static files can be inlined in the C<DATA> section and are
+served automatically.
+
+  use Mojolicious::Lite;
+
+  app->start;
+  __DATA__
+
+  @@ something.js
+  alert('hello!');
+
+  @@ test.txt (base64)
+  dGVzdCAxMjMKbGFsYWxh
+
+External static files are not limited to a single file extension and will be
+served automatically from a C<public> directory if it exists.
+
+  $ mkdir public
+  $ mv something.js public/something.js
+  $ mv mojolicious.tar.gz public/mojolicious.tar.gz
+
+Both have a higher precedence than routes.
+
+=head2 External templates
+
+External templates will be searched by the renderer in a C<templates>
+directory if it exists.
+
+  use Mojolicious::Lite;
+
+  # Render template "templates/foo/bar.html.ep"
+  any '/external' => sub {
+    my $self = shift;
+    $self->render('foo/bar');
+  };
+
+  app->start;
+
 =head2 Conditions
 
 Conditions such as C<agent> and C<host> from
@@ -723,7 +765,8 @@ constructs.
 
 Signed cookie based sessions just work out of the box as soon as you start
 using them through the helper
-L<Mojolicious::Plugin::DefaultHelpers/"session">.
+L<Mojolicious::Plugin::DefaultHelpers/"session">, just be aware that all
+session data gets serialized with L<Mojo::JSON>.
 
   use Mojolicious::Lite;
 
@@ -738,10 +781,6 @@ L<Mojolicious::Plugin::DefaultHelpers/"session">.
 
   @@ counter.html.ep
   Counter: <%= session 'counter' %>
-
-Just be aware that all session data gets serialized with L<Mojo::JSON>.
-
-=head2 Secret
 
 Note that you should use a custom L<Mojolicious/"secret"> to make signed
 cookies really secure.
@@ -806,16 +845,21 @@ L<Mojo::JSON> and L<Mojo::DOM> this can be a very powerful tool.
 
   use Mojolicious::Lite;
 
-  get '/test' => sub {
+  get '/headers' => sub {
     my $self = shift;
-    $self->render(data => $self->ua->get('http://mojolicio.us')->res->body);
+    my $url  = $self->param('url') || 'http://mojolicio.us';
+    my $dom  = $self->ua->get($url)->res->dom;
+    $self->render(json => [$dom->find('h1, h2, h3')->pluck('text')->each]);
   };
 
   app->start;
 
 =head2 WebSockets
 
-WebSocket applications have never been this easy before.
+WebSocket applications have never been this simple before. Just receive
+messages by subscribing to the event L<Mojo::Transaction::WebSocket/"message">
+with L<Mojolicious::Controller/"on"> and return them with
+L<Mojolicious::Controller/"send">.
 
   use Mojolicious::Lite;
 
@@ -827,45 +871,52 @@ WebSocket applications have never been this easy before.
     });
   };
 
-  app->start;
-
-The event L<Mojo::Transaction::WebSocket/"message">, which you can subscribe
-to with L<Mojolicious::Controller/"on">, will be emitted for every new
-WebSocket message that is received.
-
-=head2 External templates
-
-External templates will be searched by the renderer in a C<templates>
-directory.
-
-  use Mojolicious::Lite;
-
-  # Render template "templates/foo/bar.html.ep"
-  any '/external' => sub {
-    my $self = shift;
-    $self->render('foo/bar');
-  };
+  get '/' => 'index';
 
   app->start;
+  __DATA__
 
-=head2 Static files
+  @@ index.html.ep
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <title>Echo</title>
+      %= javascript begin
+        var ws = new WebSocket('<%= url_for('echo')->to_abs %>');
+        ws.onmessage = function (event) {
+          document.body.innerHTML += event.data + '<br/>';
+        };
+        ws.onopen = function (event) {
+          ws.send('I ♥ Mojolicious!');
+        };
+      % end
+    </head>
+  </html>
 
-Static files will be automatically served from the C<DATA> section (even
-Base64 encoded) or a C<public> directory if it exists.
+For more information about real-time web features see also
+L<Mojolicious::Guides::Cookbook/"REAL-TIME WEB">.
 
-  @@ something.js
-  alert('hello!');
+=head2 Mode
 
-  @@ test.txt (base64)
-  dGVzdCAxMjMKbGFsYWxh
+To disable debug messages later in a production setup, you can change the
+L<Mojolicious> operating mode with command line options or the MOJO_MODE
+environment variable, the default will usually be C<development>.
 
-  $ mkdir public
-  $ mv something.js public/something.js
+  $ ./myapp.pl daemon -m production
+
+L<Mojo::Log> messages will be automatically written to C<STDERR> or a
+C<log/$mode.log> file if a C<log> directory exists.
+
+  $ mkdir log
+
+Mode changes also affects many other aspects of the framework, such as mode
+specific C<exception> and C<not_found> templates.
 
 =head2 Testing
 
 Testing your application is as easy as creating a C<t> directory and filling
-it with normal Perl unit tests.
+it with normal Perl unit tests, which can be a lot of fun thanks to
+L<Test::Mojo>.
 
   use Test::More;
   use Test::Mojo;
@@ -881,42 +932,7 @@ it with normal Perl unit tests.
 Run all unit tests with the C<test> command.
 
   $ ./myapp.pl test
-
-To make your tests more noisy and show you all log messages you can also
-change the application log level directly in your test files.
-
-  $t->app->log->level('debug');
-
-=head2 Mode
-
-To disable debug messages later in a production setup, you can change the
-L<Mojolicious> operating mode with command line options or the MOJO_MODE
-environment variable, the default will usually be C<development>.
-
-  $ ./myapp.pl daemon -m production
-
-This also affects many other aspects of the framework, such as mode specific
-C<exception> and C<not_found> templates.
-
-=head2 Logging
-
-L<Mojo::Log> messages will be automatically written to C<STDERR> or a
-C<log/$mode.log> file if a C<log> directory exists.
-
-  $ mkdir log
-
-For more control the L<Mojolicious> object can be accessed directly.
-
-  use Mojolicious::Lite;
-
-  app->log->level('error');
-  app->routes->get('/foo/:bar' => sub {
-    my $self = shift;
-    $self->app->log->debug('Got a request for "Hello Mojo!".');
-    $self->render(text => 'Hello Mojo!');
-  });
-
-  app->start;
+  $ ./myapp.pl test -v
 
 =head2 More
 
@@ -1023,7 +1039,7 @@ more argument variations.
   my $route = websocket '/:foo' => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"websocket">, matching only
-C<WebSocket> handshakes. See also the tutorial above for more argument
+WebSocket handshakes. See also the tutorial above for more argument
 variations.
 
 =head1 ATTRIBUTES

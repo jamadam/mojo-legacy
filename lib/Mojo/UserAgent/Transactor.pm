@@ -40,7 +40,7 @@ sub endpoint {
 
   # Proxy for normal HTTP requests
   return $self->_proxy($tx, $proto, $host, $port)
-    if $proto eq 'http' && lc($req->headers->upgrade || '') ne 'websocket';
+    if $proto eq 'http' && lc(defined $req->headers->upgrade ? $req->headers->upgrade : '') ne 'websocket';
 
   return $proto, $host, $port;
 }
@@ -73,14 +73,14 @@ sub proxy_connect {
 
   # Already a CONNECT request
   my $req = $old->req;
-  return undef if $req->method eq 'CONNECT';
+  return undef if uc $req->method eq 'CONNECT';
 
   # No proxy
   return undef unless my $proxy = $req->proxy;
 
   # WebSocket and/or HTTPS
   my $url = $req->url;
-  my $upgrade = lc($req->headers->upgrade || '');
+  my $upgrade = lc(defined $req->headers->upgrade ? $req->headers->upgrade : '');
   return undef unless $upgrade eq 'websocket' || $url->protocol eq 'https';
 
   # CONNECT request
@@ -106,7 +106,7 @@ sub redirect {
   # Clone request if necessary
   my $new    = Mojo::Transaction::HTTP->new;
   my $req    = $old->req;
-  my $method = $req->method;
+  my $method = uc $req->method;
   if (grep { $_ eq $code } 301, 307, 308) {
     return undef unless my $req = $req->clone;
     $new->req($req);
@@ -182,16 +182,18 @@ sub _form {
     my $parts = $self->_multipart($options{charset}, $form);
     $req->content(
       Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
+    return $tx;
   }
 
-  # Urlencoded
+  # Query parameters or urlencoded
+  my $p = Mojo::Parameters->new(map { $_ => $form->{$_} } sort keys %$form);
+  $p->charset($options{charset}) if defined $options{charset};
+  my $method = uc $req->method;
+  if ($method eq 'GET' || $method eq 'HEAD') { $req->url->query->merge($p) }
   else {
-    $headers->content_type('application/x-www-form-urlencoded');
-    my $p = Mojo::Parameters->new(map { $_ => $form->{$_} } sort keys %$form);
-    $p->charset($options{charset}) if defined $options{charset};
     $req->body($p->to_string);
+    $headers->content_type('application/x-www-form-urlencoded');
   }
-
   return $tx;
 }
 
@@ -284,10 +286,10 @@ Mojo::UserAgent::Transactor - User agent transactor
   say $t->tx(PATCH => 'mojolicio.us' => {DNT => 1} => 'Hi!')->req->to_string;
 
   # POST request with form data
-  say $t->tx(POST => 'kraih.com' => form => {a => 'b'})->req->to_string;
+  say $t->tx(POST => 'example.com' => form => {a => 'b'})->req->to_string;
 
   # PUT request with JSON data
-  say $t->tx(PUT => 'http://kraih.com' => json => {a => 'b'})->req->to_string;
+  say $t->tx(PUT => 'example.com' => json => {a => 'b'})->req->to_string;
 
 =head1 DESCRIPTION
 
@@ -303,7 +305,7 @@ L<Mojo::UserAgent::Transactor> implements the following attributes.
   my $generators = $t->generators;
   $t             = $t->generators({foo => sub {...}});
 
-Registered generators.
+Registered content generators.
 
 =head1 METHODS
 
@@ -314,13 +316,14 @@ implements the following new ones.
 
   my $t = Mojo::UserAgent::Transactor->new;
 
-Construct a new transactor and register C<form> and C<json> generators.
+Construct a new transactor and register C<form> and C<json> content
+generators.
 
 =head2 add_generator
 
   $t = $t->add_generator(foo => sub {...});
 
-Register a new generator.
+Register a new content generator.
 
 =head2 endpoint
 
@@ -350,20 +353,20 @@ C<307> or C<308> redirect response if possible.
 
 =head2 tx
 
-  my $tx = $t->tx(GET  => 'kraih.com');
-  my $tx = $t->tx(POST => 'http://kraih.com');
-  my $tx = $t->tx(GET  => 'http://kraih.com' => {DNT => 1});
-  my $tx = $t->tx(PUT  => 'http://kraih.com' => 'Hi!');
-  my $tx = $t->tx(PUT  => 'http://kraih.com' => form => {a => 'b'});
-  my $tx = $t->tx(PUT  => 'http://kraih.com' => json => {a => 'b'});
-  my $tx = $t->tx(POST => 'http://kraih.com' => {DNT => 1} => 'Hi!');
+  my $tx = $t->tx(GET  => 'example.com');
+  my $tx = $t->tx(POST => 'http://example.com');
+  my $tx = $t->tx(GET  => 'http://example.com' => {DNT => 1});
+  my $tx = $t->tx(PUT  => 'http://example.com' => 'Hi!');
+  my $tx = $t->tx(PUT  => 'http://example.com' => form => {a => 'b'});
+  my $tx = $t->tx(PUT  => 'http://example.com' => json => {a => 'b'});
+  my $tx = $t->tx(POST => 'http://example.com' => {DNT => 1} => 'Hi!');
   my $tx = $t->tx(
-    PUT  => 'http://kraih.com' => {DNT => 1} => form => {a => 'b'});
+    PUT  => 'http://example.com' => {DNT => 1} => form => {a => 'b'});
   my $tx = $t->tx(
-    PUT  => 'http://kraih.com' => {DNT => 1} => json => {a => 'b'});
+    PUT  => 'http://example.com' => {DNT => 1} => json => {a => 'b'});
 
 Versatile general purpose L<Mojo::Transaction::HTTP> transaction builder for
-requests, with support for generators.
+requests, with support for content generators.
 
   # Inspect generated request
   say $t->tx(GET => 'mojolicio.us' => {DNT => 1} => 'Bye!')->req->to_string;
@@ -376,27 +379,30 @@ requests, with support for generators.
   my $tx = $t->tx(GET => 'http://mojolicio.us');
   $tx->connection($sock);
 
+  # Generate query parameters
+  my $tx = $t->tx(GET => 'http://example.com' => form => {a => 'b'});
+
   # Use form generator with custom charset
   my $tx = $t->tx(
-    PUT => 'http://kraih.com' => form => {a => 'b'} => charset => 'UTF-8');
+    PUT => 'http://example.com' => form => {a => 'b'} => charset => 'UTF-8');
 
   # Multiple form values with the same name
-  my $tx = $t->tx(PUT => 'http://kraih.com' => form => {a => [qw(b c d)]});
+  my $tx = $t->tx(PUT => 'http://example.com' => form => {a => [qw(b c d)]});
 
   # Multipart upload streamed from file
   my $tx = $t->tx(
-    PUT => 'http://kraih.com' => form => {mytext => {file => '/foo.txt'}});
+    PUT => 'http://example.com' => form => {mytext => {file => '/foo.txt'}});
 
   # Multipart upload with in-memory content
   my $tx = $t->tx(
-    POST => 'http://kraih.com' => form => {mytext => {content => 'lalala'}});
+    POST => 'http://example.com' => form => {mytext => {content => 'lala'}});
 
   # Upload multiple files
-  my $tx = $t->tx(POST => 'http://kraih.com' =>
+  my $tx = $t->tx(POST => 'http://example.com' =>
     form => {mytext => [{content => 'first'}, {content => 'second'}]});
 
   # Customized upload with filename and header
-  my $tx = $t->tx(POST => 'http://kraih.com' => form => {
+  my $tx = $t->tx(POST => 'http://example.com' => form => {
     myzip => {
       file     => Mojo::Asset::Memory->new->add_chunk('lalala'),
       filename => 'foo.zip',
@@ -404,9 +410,11 @@ requests, with support for generators.
     }
   });
 
-While the "multipart/form-data" content type will be automatically used
-instead of "application/x-www-form-urlencoded" when necessary, you can also
-enforce it by setting the header manually.
+The C<form> content generator will automatically use query parameters for
+C<GET>/C<HEAD> requests and the "application/x-www-form-urlencoded" content
+type for everything else. Both get upgraded automatically to using the
+"multipart/form-data" content type when necessary or when the header has been
+set manually.
 
 =head2 upgrade
 

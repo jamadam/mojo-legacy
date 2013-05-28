@@ -8,6 +8,11 @@ use Encode 'find_encoding';
 use File::Basename 'dirname';
 use File::Spec::Functions 'catfile';
 use MIME::Base64 qw(decode_base64 encode_base64);
+use Time::HiRes ();
+
+# Check for monotonic clock support
+use constant MONOTONIC => eval
+  '!!Time::HiRes::clock_gettime(Time::HiRes::CLOCK_MONOTONIC())';
 
 # Punycode bootstring parameters
 use constant {
@@ -23,19 +28,10 @@ use constant {
 # To update HTML5 entities run this command
 # perl examples/entities.pl > lib/Mojo/entities.txt
 my %ENTITIES;
-{
-  open my $entities, '<', catfile(dirname(__FILE__), 'entities.txt');
-  for my $entity (<$entities>) {
-    next unless $entity =~ /^(\S+)\s+U\+(\S+)(?:\s+U\+(\S+))?/;
-    $ENTITIES{$1} = defined $3 ? (chr(hex $2) . chr(hex $3)) : chr(hex $2);
-  }
+for my $line (split "\x0a", slurp(catfile dirname(__FILE__), 'entities.txt')) {
+  next unless $line =~ /^(\S+)\s+U\+(\S+)(?:\s+U\+(\S+))?/;
+  $ENTITIES{$1} = defined $3 ? (chr(hex $2) . chr(hex $3)) : chr(hex $2);
 }
-
-# DEPRECATED in Rainbow!
-my %REVERSE = ("\x{0027}" => '#39;');
-$REVERSE{$ENTITIES{$_}} = defined $REVERSE{$ENTITIES{$_}} ? $REVERSE{$ENTITIES{$_}} : $_
-  for sort  { @{[$a =~ /[A-Z]/g]} <=> @{[$b =~ /[A-Z]/g]} }
-  sort grep {/;/} keys %ENTITIES;
 
 # Encoding cache
 my %CACHE;
@@ -45,11 +41,9 @@ our @EXPORT_OK = (
   qw(decode deprecated encode get_line hmac_md5_sum hmac_sha1_sum),
   qw(html_unescape md5_bytes md5_sum monkey_patch punycode_decode),
   qw(punycode_encode quote secure_compare sha1_bytes sha1_sum slurp spurt),
-  qw(squish trim unquote url_escape url_unescape xml_escape xor_encode)
+  qw(squish steady_time trim unquote url_escape url_unescape xml_escape),
+  qw(xor_encode)
 );
-
-# DEPRECATED in Rainbow!
-push @EXPORT_OK, 'html_escape';
 
 sub b64_decode { decode_base64($_[0]) }
 
@@ -119,17 +113,6 @@ sub get_line {
 
 sub hmac_md5_sum  { _hmac(\&md5,  @_) }
 sub hmac_sha1_sum { _hmac(\&sha1, @_) }
-
-# DEPRECATED in Rainbow!
-sub html_escape {
-  deprecated 'Mojo::Util::html_escape is DEPRECATED in favor of '
-    . 'Mojo::Util::xml_escape';
-  my ($string, $pattern) = @_;
-  $pattern ||= '^\n\r\t !#$%(-;=?-~';
-  return $string unless $string =~ /[^$pattern]/;
-  $string =~ s/([$pattern])/_encode($1)/ge;
-  return $string;
-}
 
 sub html_unescape {
   my $string = shift;
@@ -294,6 +277,12 @@ sub squish {
   return $string;
 }
 
+sub steady_time () {
+  MONOTONIC
+    ? Time::HiRes::clock_gettime(Time::HiRes::CLOCK_MONOTONIC())
+    : Time::HiRes::time;
+}
+
 sub trim {
   my $string = shift;
   $string =~ s/^\s+|\s+$//g;
@@ -362,23 +351,18 @@ sub _adapt {
 }
 
 sub _decode {
+  my ($point, $name) = @_;
 
-  # Numeric
-  return substr($_[0], 0, 1) eq 'x' ? chr(hex $_[0]) : chr($_[0]) unless $_[1];
+  # Code point
+  return chr($point !~ /^x/ ? $point : hex $point) unless defined $name;
 
   # Find entity name
-  my $rest   = '';
-  my $entity = $_[1];
-  while (length $entity) {
-    return "$ENTITIES{$entity}$rest" if exists $ENTITIES{$entity};
-    $rest = chop($entity) . $rest;
+  my $rest = '';
+  while (length $name) {
+    return "$ENTITIES{$name}$rest" if exists $ENTITIES{$name};
+    $rest = chop($name) . $rest;
   }
-  return "&$_[1]";
-}
-
-# DEPRECATED in Rainbow!
-sub _encode {
-  return exists $REVERSE{$_[0]} ? "&$REVERSE{$_[0]}" : "&#@{[ord($_[0])]};";
+  return "&$rest";
 }
 
 sub _encoding {
@@ -606,6 +590,13 @@ Write all data at once to file.
 
 Trim whitespace characters from both ends of string and then change all
 consecutive groups of whitespace into one space each.
+
+=head2 steady_time
+
+  my $time = steady_time;
+
+High resolution time, resilient to time jumps if a monotonic clock is
+available through L<Time::HiRes>.
 
 =head2 trim
 

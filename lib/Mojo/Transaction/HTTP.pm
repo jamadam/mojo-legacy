@@ -8,7 +8,7 @@ sub client_read {
 
   # Skip body for HEAD request
   my $res = $self->res;
-  $res->content->skip_body(1) if $self->req->method eq 'HEAD';
+  $res->content->skip_body(1) if uc $self->req->method eq 'HEAD';
   return unless $res->parse($chunk)->is_finished;
 
   # Unexpected 1xx reponse
@@ -26,14 +26,14 @@ sub keep_alive {
   # Close
   my $req      = $self->req;
   my $res      = $self->res;
-  my $req_conn = lc($req->headers->connection || '');
-  my $res_conn = lc($res->headers->connection || '');
+  my $req_conn = lc(defined $req->headers->connection ? $req->headers->connection : '');
+  my $res_conn = lc(defined $res->headers->connection ? $res->headers->connection : '');
   return undef if $req_conn eq 'close' || $res_conn eq 'close';
 
-  # Keep alive
+  # Keep-alive
   return 1 if $req_conn eq 'keep-alive' || $res_conn eq 'keep-alive';
 
-  # No keep alive for 1.0
+  # No keep-alive for 1.0
   return !($req->version eq '1.0' || $res->version eq '1.0');
 }
 
@@ -48,7 +48,7 @@ sub server_read {
   # Generate response
   return unless $req->is_finished && !$self->{handled}++;
   $self->emit(upgrade => Mojo::Transaction::WebSocket->new(handshake => $self))
-    if lc($req->headers->upgrade || '') eq 'websocket';
+    if lc(defined $req->headers->upgrade ? $req->headers->upgrade : '') eq 'websocket';
   $self->emit('request');
 }
 
@@ -57,7 +57,7 @@ sub server_write { shift->_write(1) }
 sub _body {
   my ($self, $msg, $finish) = @_;
 
-  # Prepare chunk
+  # Prepare body chunk
   my $buffer = $msg->get_body_chunk($self->{offset});
   my $written = defined $buffer ? length $buffer : 0;
   $self->{write} = $msg->is_dynamic ? 1 : ($self->{write} - $written);
@@ -80,18 +80,18 @@ sub _body {
 sub _headers {
   my ($self, $msg, $head) = @_;
 
-  # Prepare chunk
+  # Prepare header chunk
   my $buffer = $msg->get_header_chunk($self->{offset});
   my $written = defined $buffer ? length $buffer : 0;
   $self->{write}  = $self->{write} - $written;
   $self->{offset} = $self->{offset} + $written;
 
-  # Write body
+  # Switch to body
   if ($self->{write} <= 0) {
     $self->{offset} = 0;
 
     # Response without body
-    $head = $head && ($self->req->method eq 'HEAD' || $msg->is_empty);
+    $head = $head && (uc $self->req->method eq 'HEAD' || $msg->is_empty);
     if ($head) { $self->{state} = 'finished' }
 
     # Body
@@ -107,13 +107,13 @@ sub _headers {
 sub _start_line {
   my ($self, $msg) = @_;
 
-  # Prepare chunk
+  # Prepare start line chunk
   my $buffer = $msg->get_start_line_chunk($self->{offset});
   my $written = defined $buffer ? length $buffer : 0;
   $self->{write}  = $self->{write} - $written;
   $self->{offset} = $self->{offset} + $written;
 
-  # Write headers
+  # Switch to headers
   if ($self->{write} <= 0) {
     $self->{state}  = 'write_headers';
     $self->{write}  = $msg->header_size;
@@ -126,7 +126,7 @@ sub _start_line {
 sub _write {
   my ($self, $server) = @_;
 
-  # Start writing
+  # Nothing written yet
   $self->{$_} ||= 0 for qw(offset write);
   my $msg = $server ? $self->res : $self->req;
   if ($server ? ($self->{state} eq 'write') : !$self->{state}) {
@@ -136,7 +136,7 @@ sub _write {
     $headers->connection($self->keep_alive ? 'keep-alive' : 'close')
       unless $headers->connection;
 
-    # Write start line
+    # Switch to start line
     $self->{state} = 'write_start_line';
     $self->{write} = $msg->start_line_size;
   }

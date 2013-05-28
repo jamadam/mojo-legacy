@@ -99,7 +99,7 @@ characters except C</> and C<.>.
   /sebastian23/hello  -> /:name/hello -> {name => 'sebastian23'}
   /sebastian 23/hello -> /:name/hello -> {name => 'sebastian 23'}
 
-A generic placeholder can be surrounded by parentheses to separate it from the
+All placeholders can be surrounded by parentheses to separate them from the
 surrounding text.
 
   /hello             -> /(:name)hello -> undef
@@ -634,7 +634,7 @@ Same for monitoring tasks.
   $self->hook(after_dispatch => sub {
     my $self = shift;
     return unless my $e = $self->stash('exception');
-    $self->ua->post('https://kraih.com/bugs' => form => {exception => $e});
+    $self->ua->post('https://example.com/bugs' => form => {exception => $e});
   });
 
 For a full list of available hooks see L<Mojolicious/"hook">.

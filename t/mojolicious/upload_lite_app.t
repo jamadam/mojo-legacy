@@ -20,8 +20,8 @@ post '/upload' => sub {
   $self->render_text($file->filename
       . $file->asset->slurp
       . $self->param('test')
-      . ($headers->content_type  || '')
-      . ($headers->header('X-X') || '')
+      . (defined $headers->content_type ? $headers->content_type : '')
+      . (defined $headers->header('X-X') ? $headers->header('X-X') : '')
       . join(',', $self->param));
 };
 

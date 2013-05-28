@@ -28,12 +28,11 @@ my %RESERVED = map { $_ => 1 } (
 sub AUTOLOAD {
   my $self = shift;
 
-  # Method
   my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
   Carp::croak "Undefined subroutine &${package}::$method called"
     unless Scalar::Util::blessed $self && $self->isa(__PACKAGE__);
 
-  # Call helper
+  # Call helper with current controller
   Carp::croak qq{Can't locate object method "$method" via package "$package"}
     unless my $helper = $self->app->renderer->helpers->{$method};
   return $self->$helper(@_);
@@ -65,20 +64,20 @@ sub cookie {
 }
 
 sub finish {
-  my ($self, $chunk) = @_;
+  my $self = shift;
 
   # WebSocket
   my $tx = $self->tx;
-  $tx->finish and return $self if $tx->is_websocket;
+  $tx->finish(@_) and return $self if $tx->is_websocket;
 
   # Chunked stream
   if ($tx->res->is_chunked) {
-    $self->write_chunk($chunk) if defined $chunk;
+    $self->write_chunk(@_) if @_;
     return $self->write_chunk('');
   }
 
   # Normal stream
-  $self->write($chunk) if defined $chunk;
+  $self->write(@_) if @_;
   return $self->write('');
 }
 
@@ -553,9 +552,11 @@ Access request cookie values and create new response cookies.
 =head2 finish
 
   $c = $c->finish;
+  $c = $c->finish(1000);
+  $c = $c->finish(1003 => 'Cannot accept data!');
   $c = $c->finish('Bye!');
 
-Gracefully end WebSocket connection or long poll stream.
+Close WebSocket connection or long poll stream gracefully.
 
 =head2 flash
 
@@ -690,7 +691,9 @@ be encoded. All additional values get merged into the C<stash>.
   $c->render_exception(Mojo::Exception->new('Oops!'));
 
 Render the exception template C<exception.$mode.$format.*> or
-C<exception.$format.*> and set the response status code to C<500>.
+C<exception.$format.*> and set the response status code to C<500>. Also sets
+the stash values C<exception> to a L<Mojo::Exception> object and C<snapshot>
+to a copy of the C<stash> for use in the templates.
 
 =head2 render_json
 
@@ -779,6 +782,7 @@ Get L<Mojo::Message::Request> object from L<Mojo::Transaction/"req">.
   # Extract request information
   my $url      = $c->req->url->to_abs;
   my $userinfo = $c->req->url->to_abs->userinfo;
+  my $host     = $c->req->url->to_abs->host;
   my $agent    = $c->req->headers->user_agent;
   my $body     = $c->req->body;
   my $foo      = $c->req->json('/23/foo');
@@ -822,6 +826,7 @@ is set to the value C<XMLHttpRequest>.
   $c = $c->send({binary => $bytes});
   $c = $c->send({text   => $bytes});
   $c = $c->send([$fin, $rsv1, $rsv2, $rsv3, $op, $bytes]);
+  $c = $c->send(Mojo::ByteStream->new($chars));
   $c = $c->send($chars);
   $c = $c->send($chars => sub {...});
 
@@ -914,7 +919,7 @@ Get L<Mojo::UserAgent> object from L<Mojo/"ua">.
 
   # Blocking
   my $tx = $c->ua->get('http://mojolicio.us');
-  my $tx = $c->ua->post('http://kraih.com/login' => form => {user => 'mojo'});
+  my $tx = $c->ua->post('example.com/login' => form => {user => 'mojo'});
 
   # Non-blocking
   $c->ua->get('http://mojolicio.us' => sub {
@@ -928,10 +933,10 @@ Get L<Mojo::UserAgent> object from L<Mojo/"ua">.
     $c->render_json(\@titles);
   });
   for my $url ('http://mojolicio.us', 'https://metacpan.org') {
-    $delay->begin;
+    my $end = $delay->begin(0);
     $c->ua->get($url => sub {
       my ($ua, $tx) = @_;
-      $delay->end($tx->res->dom->html->head->title->text);
+      $end->($tx->res->dom->html->head->title->text);
     });
   }
 

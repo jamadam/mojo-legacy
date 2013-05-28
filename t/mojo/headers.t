@@ -5,8 +5,8 @@ use Mojo::Headers;
 
 # Basic functionality
 my $headers = Mojo::Headers->new;
-$headers->add('Connection', 'close');
-$headers->add('Connection', 'keep-alive');
+$headers->add(Connection => 'close');
+$headers->add(Connection => 'keep-alive');
 is $headers->header('Connection'), 'close, keep-alive', 'right value';
 $headers->remove('Connection');
 is $headers->header('Connection'), undef, 'no value';
@@ -96,8 +96,8 @@ is $headers->www_authenticate('foo')->www_authenticate,   'foo', 'right value';
 
 # Clone
 $headers = Mojo::Headers->new;
-$headers->add('Connection', 'close');
-$headers->add('Connection', 'keep-alive');
+$headers->add(Connection => 'close');
+$headers->add(Connection => 'keep-alive');
 is $headers->header('Connection'), 'close, keep-alive', 'right value';
 my $clone = $headers->clone;
 $headers->connection('nothing');
@@ -110,6 +110,8 @@ $clone = $headers->clone;
 $clone->expect('nothing');
 is $headers->expect, '100-continue', 'right value';
 is $clone->expect,   'nothing',      'right value';
+$clone = Mojo::Headers->new->add(Foo => [qw(bar baz)])->clone;
+is_deeply $clone->to_hash(1)->{Foo}, [[qw(bar baz)]], 'right structure';
 
 # Multiline values
 $headers = Mojo::Headers->new;
@@ -122,8 +124,8 @@ my @array = $headers->header('X-Test');
 is_deeply \@array, [[23, 24], ['single line'], [25, 26]], 'right structure';
 is_deeply $headers->to_hash(1),
   {'X-Test' => [[23, 24], ['single line'], [25, 26]]}, 'right structure';
-is_deeply $headers->to_hash,
-  {'X-Test' => [[23, 24], 'single line', [25, 26]]}, 'right structure';
+is_deeply $headers->to_hash, {'X-Test' => '23, 24, single line, 25, 26'},
+  'right structure';
 my $string = $headers->header('X-Test');
 is $string, "23, 24, single line, 25, 26", 'right format';
 
@@ -142,6 +144,33 @@ is $headers->expect,        '100-continue', 'right value';
 is $headers->cache_control, 'public', 'right value';
 is $headers->expires,       'Thu, 01 Dec 1994 16:00:00 GMT', 'right value';
 
+# Parse multiline headers
+$headers = Mojo::Headers->new;
+$headers->parse(<<'EOF');
+Foo: first
+ second
+ third
+Content-Type: text/plain
+Foo: first again
+  second again
+
+EOF
+ok $headers->is_finished, 'parser is finished';
+my $multi = [['first', 'second', 'third'], ['first again', 'second again']];
+$hash = {'Content-Type' => [['text/plain']], Foo => $multi};
+is_deeply $headers->to_hash(1), $hash, 'right structure';
+is_deeply [$headers->header('Foo')], $multi, 'right structure';
+is scalar $headers->header('Foo'),
+  'first, second, third, first again, second again', 'right value';
+$headers = Mojo::Headers->new->parse($headers->to_string . "\x0d\x0a\x0d\x0a");
+ok $headers->is_finished, 'parser is finished';
+is_deeply $headers->to_hash(1), $hash, 'successful roundtrip';
+$hash = {
+  'Content-Type' => 'text/plain',
+  Foo            => 'first, second, third, first again, second again'
+};
+is_deeply $headers->to_hash, $hash, 'right structure';
+
 # Set headers from hash
 $headers = Mojo::Headers->new;
 $headers->from_hash({Connection => 'close', 'Content-Type' => 'text/html'});
@@ -157,9 +186,8 @@ $headers = Mojo::Headers->new;
 $headers->from_hash(
   {'X-Test' => [[23, 24], ['single line'], [25, 26]], 'X-Test2' => 'foo'});
 $hash = $headers->to_hash;
-is_deeply $hash->{'X-Test'}, [[23, 24], 'single line', [25, 26]],
-  'right structure';
-is_deeply $hash->{'X-Test2'}, 'foo', 'right structure';
+is $hash->{'X-Test'}, '23, 24, single line, 25, 26', 'right value';
+is $hash->{'X-Test2'}, 'foo', 'right value';
 $hash = $headers->to_hash(1);
 is_deeply $hash->{'X-Test'}, [[23, 24], ['single line'], [25, 26]],
   'right structure';

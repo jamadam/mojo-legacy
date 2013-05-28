@@ -384,14 +384,14 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 <rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
   <channel>
     <title>Test Blog</title>
-    <link>http://blog.kraih.com</link>
+    <link>http://blog.example.com</link>
     <description>lalala</description>
     <generator>Mojolicious</generator>
     <item>
       <pubDate>Mon, 12 Jul 2010 20:42:00</pubDate>
       <title>Works!</title>
-      <link>http://blog.kraih.com/test</link>
-      <guid>http://blog.kraih.com/test</guid>
+      <link>http://blog.example.com/test</link>
+      <guid>http://blog.example.com/test</guid>
       <description>
         <![CDATA[<p>trololololo>]]>
       </description>
@@ -2135,11 +2135,32 @@ is $dom->find('div > ul li')->[2], undef, 'no result';
 is $dom->find('div > ul ul')->[0]->text, 'C', 'right text';
 is $dom->find('div > ul ul')->[1], undef, 'no result';
 
+# Extra whitespace
+$dom = Mojo::DOM->new('< span>a< /span><b >b</b><span >c</ span>');
+is $dom->at('span')->text,     'a', 'right text';
+is $dom->at('span + b')->text, 'b', 'right text';
+is $dom->at('b + span')->text, 'c', 'right text';
+is "$dom", '<span>a</span><b>b</b><span>c</span>', 'right result';
+
 # Bad charset
 $dom = Mojo::DOM->new->charset('doesnotexist');
-$dom->parse(qq{<html><div id="a">A</div></html>});
-is $dom->at('#a'), undef, 'no result';
-is "$dom", '', 'right result';
+$dom->parse('<html><div id="a">A</div></html>');
+is $dom->charset, undef, 'no charset';
+is $dom->at('#a')->text, 'A', 'right text';
+is "$dom", '<html><div id="a">A</div></html>', 'right result';
+$dom = Mojo::DOM->new->charset('UTF-8');
+$dom->parse(qq{<div id="invalid">\x89</div>});
+is $dom->charset, undef, 'no charset';
+is $dom->at('#invalid')->text, "\x89", 'right text';
+is "$dom", qq{<div id="invalid">\x89</div>}, 'right result';
+
+# "0" with charset
+$dom = Mojo::DOM->new->charset('UTF-8');
+$dom->parse('0');
+is $dom->charset, 'UTF-8', 'right charset';
+is "$dom", '0', 'right result';
+$dom->append_content('☃');
+is "$dom", encode('UTF-8', '0☃'), 'right result';
 
 # Comments
 $dom = Mojo::DOM->new(<<EOF);

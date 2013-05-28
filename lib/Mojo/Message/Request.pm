@@ -79,11 +79,8 @@ sub fix_headers {
   $headers->authorization('Basic ' . b64_encode($auth, ''))
     if $auth && !$headers->authorization;
 
-  # Proxy
+  # Basic proxy authentication
   if (my $proxy = $self->proxy) {
-    $url = $proxy if $self->method eq 'CONNECT';
-
-    # Basic proxy authentication
     my $proxy_auth = $proxy->userinfo;
     $headers->proxy_authorization('Basic ' . b64_encode($proxy_auth, ''))
       if $proxy_auth && !$headers->proxy_authorization;
@@ -119,7 +116,7 @@ sub get_start_line_chunk {
     # Proxy
     elsif ($self->proxy) {
       my $clone = $url = $url->clone->userinfo(undef);
-      my $upgrade = lc($self->headers->upgrade || '');
+      my $upgrade = lc(defined $self->headers->upgrade ? $self->headers->upgrade : '');
       $path = $clone
         unless $upgrade eq 'websocket' || $url->protocol eq 'https';
     }
@@ -137,7 +134,7 @@ sub is_secure {
 }
 
 sub is_xhr {
-  (shift->headers->header('X-Requested-With') || '') =~ /XMLHttpRequest/i;
+  (do {my $tmp = shift->headers->header('X-Requested-With'); defined $tmp ? $tmp : ''}) =~ /XMLHttpRequest/i;
 }
 
 sub param { shift->params->param(@_) }
@@ -233,7 +230,7 @@ sub _parse_env {
   $self->method($env->{REQUEST_METHOD}) if $env->{REQUEST_METHOD};
 
   # Scheme/Version
-  if (($env->{SERVER_PROTOCOL} || '') =~ m!^([^/]+)/([^/]+)$!) {
+  if ((defined $env->{SERVER_PROTOCOL} ? $env->{SERVER_PROTOCOL} : '') =~ m!^([^/]+)/([^/]+)$!) {
     $base->scheme($1);
     $self->version($2);
   }
@@ -291,7 +288,7 @@ Mojo::Message::Request - HTTP request
 =head1 DESCRIPTION
 
 L<Mojo::Message::Request> is a container for HTTP requests as described in RFC
-2616.
+2616 and RFC 2817.
 
 =head1 EVENTS
 
@@ -329,8 +326,10 @@ HTTP request method, defaults to C<GET>.
 
 HTTP request URL, defaults to a L<Mojo::URL> object.
 
-  # Get request path
-  say $req->url->path;
+  # Get request information
+  say $req->url->to_abs->userinfo;
+  say $req->url->to_abs->host;
+  say $req->url->to_abs->path;
 
 =head1 METHODS
 

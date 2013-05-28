@@ -8,7 +8,6 @@ has [qw(charset xml)];
 has tree => sub { ['root'] };
 
 my $ATTR_RE = qr/
-  \s*
   ([^=\s>]+)       # Key
   (?:
     \s*=\s*
@@ -42,6 +41,7 @@ my $TOKEN_RE = qr/
     <(
       \s*
       [^>\s]+                                       # Tag
+      \s*
       (?:$ATTR_RE)*                                 # Attributes
     )>
   )??
@@ -76,8 +76,10 @@ my %INLINE = map { $_ => 1 } (
 sub parse {
   my ($self, $html) = @_;
 
-  my $charset = $self->charset;
-  defined ($html = decode($charset, $html)) || return $self->charset(undef) if $charset;
+  if (my $charset = $self->charset) {
+    if (defined(my $chars = decode $charset, $html)) { $html = $chars }
+    else                                             { $self->charset(undef) }
+  }
 
   my $tree    = ['root'];
   my $current = $tree;
@@ -403,7 +405,8 @@ Charset used for decoding and encoding HTML/XML.
   my $tree = $html->tree;
   $html    = $html->tree(['root', [qw(text lalala)]]);
 
-Document Object Model.
+Document Object Model. Note that this structure should only be used very
+carefully since it is very dynamic.
 
 =head2 xml
 

@@ -12,7 +12,7 @@ has res => sub { Mojo::Message::Response->new };
 sub client_close {
   my $self = shift;
   $self->res->finish;
-  return $self->server_close(@_);
+  return $self->server_close;
 }
 
 sub client_read  { croak 'Method "client_read" not implemented by subclass' }
@@ -54,7 +54,7 @@ sub remote_address {
   # Reverse proxy
   if ($ENV{MOJO_REVERSE_PROXY}) {
     return $self->{forwarded_for} if $self->{forwarded_for};
-    my $forwarded = $self->req->headers->header('X-Forwarded-For') || '';
+    my $forwarded = defined $self->req->headers->header('X-Forwarded-For') ? $self->req->headers->header('X-Forwarded-For') : '';
     $forwarded =~ /([^,\s]+)$/ and return $self->{forwarded_for} = $1;
   }
 

@@ -338,7 +338,7 @@ get '/subrequest_non_blocking' => sub {
   my $self = shift;
   $self->ua->post(
     '/template' => sub {
-      my $tx = pop;
+      my ($ua, $tx) = @_;
       $self->render_text($tx->res->body . $self->stash->{nb});
       $nb = $self->stash->{nb};
     }
@@ -474,6 +474,12 @@ $t->get_ok('/')->status_is(200)->header_is(Server => 'Mojolicious (Perl)')
 
 # HEAD request
 $t->head_ok('/')->status_is(200)->header_is(Server => 'Mojolicious (Perl)')
+  ->header_is('X-Powered-By'   => 'Mojolicious (Perl)')
+  ->header_is('Content-Length' => 55)->content_is('');
+
+# HEAD request (lowercase)
+my $tx = $t->ua->build_tx(head => '/');
+$t->request_ok($tx)->status_is(200)->header_is(Server => 'Mojolicious (Perl)')
   ->header_is('X-Powered-By'   => 'Mojolicious (Perl)')
   ->header_is('Content-Length' => 55)->content_is('');
 

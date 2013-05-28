@@ -10,7 +10,7 @@ use File::Basename 'dirname';
 use File::Find 'find';
 use File::Spec::Functions qw(abs2rel catdir catfile splitdir);
 use FindBin;
-use Mojo::Util qw(class_to_path deprecated slurp);
+use Mojo::Util qw(class_to_path slurp);
 
 sub new { shift->SUPER::new->parse(@_) }
 
@@ -80,13 +80,6 @@ sub parse {
 sub rel_dir { catdir(@{shift->{parts} || []}, split '/', shift) }
 sub rel_file { catfile(@{shift->{parts} || []}, split '/', shift) }
 
-# DEPRECATED in Rainbow!
-sub slurp_rel_file {
-  deprecated
-    'Mojo::Home::slurp_rel_file is DEPRECATED in favor of Mojo::Util::slurp';
-  slurp shift->rel_file(@_);
-}
-
 sub to_string { catdir(@{shift->{parts} || []}) }
 
 1;
@@ -120,7 +113,7 @@ following new ones.
   my $home = Mojo::Home->new;
   my $home = Mojo::Home->new('/home/sri/myapp');
 
-Construct a new L<Mojo::Home> object.
+Construct a new L<Mojo::Home> object and C<parse> home directory if necessary.
 
 =head2 detect
 

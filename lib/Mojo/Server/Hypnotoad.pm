@@ -7,6 +7,7 @@ use Cwd 'abs_path';
 use File::Basename 'dirname';
 use File::Spec::Functions 'catfile';
 use Mojo::Server::Prefork;
+use Mojo::Util 'steady_time';
 use POSIX 'setsid';
 use Scalar::Util 'weaken';
 
@@ -62,7 +63,7 @@ sub run {
   }
 
   # Start accepting connections
-  local $SIG{USR2} = sub { $self->{upgrade} ||= time };
+  local $SIG{USR2} = sub { $self->{upgrade} ||= steady_time };
   $prefork->run;
 }
 
@@ -123,7 +124,7 @@ sub _manage {
 
     # Timeout
     kill 'KILL', $self->{new}
-      if $self->{upgrade} + $self->{upgrade_timeout} <= time;
+      if $self->{upgrade} + $self->{upgrade_timeout} <= steady_time;
   }
 }
 
@@ -161,9 +162,10 @@ Mojo::Server::Hypnotoad - ALL GLORY TO THE HYPNOTOAD!
 L<Mojo::Server::Hypnotoad> is a full featured, UNIX optimized, preforking
 non-blocking I/O HTTP and WebSocket server, built around the very well tested
 and reliable L<Mojo::Server::Prefork>, with C<IPv6>, C<TLS>, C<Comet> (long
-polling), multiple event loop and hot deployment support that just works. Note
-that the server uses signals for process management, so you should avoid
-modifying signal handlers in your applications.
+polling), C<keep-alive>, connection pooling, timeout, cookie, multipart,
+multiple event loop and hot deployment support that just works. Note that the
+server uses signals for process management, so you should avoid modifying
+signal handlers in your applications.
 
 To start applications with it you can use the L<hypnotoad> script.
 
@@ -321,7 +323,7 @@ be inactive indefinitely.
 
   keep_alive_requests => 50
 
-Number of keep alive requests per connection, defaults to C<25>.
+Number of keep-alive requests per connection, defaults to C<25>.
 
 =head2 listen
 

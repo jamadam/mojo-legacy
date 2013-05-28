@@ -364,7 +364,12 @@ templates.
   <!DOCTYPE html>
   <html>
     <head><title>Server error</title></head>
-    <body><%= $exception %></body>
+    <body>
+      <h1>Exception</h1>
+      <p><%= $exception->message %></p>
+      <h1>Stash</h1>
+      <pre><%= dumper $snapshot %></pre>
+    </body>
   </html>
 
 =head2 Helpers

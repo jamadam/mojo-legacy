@@ -40,21 +40,18 @@ has static   => sub { Mojolicious::Static->new };
 has types    => sub { Mojolicious::Types->new };
 
 our $CODENAME = 'Rainbow';
-our $VERSION  = '3.89';
+our $VERSION  = '3.97';
 
 sub AUTOLOAD {
   my $self = shift;
 
-  # Method
   my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
-  # Check for helper
+  # Call helper with fresh controller
   croak qq{Can't locate object method "$method" via package "$package"}
     unless my $helper = $self->renderer->helpers->{$method};
-
-  # Call helper with fresh controller
   return $self->controller_class->new(app => $self)->$helper(@_);
 }
 
@@ -628,13 +625,13 @@ L<http://creativecommons.org/licenses/by-sa/3.0>.
 
 =head2 jQuery
 
-  Copyright (C) 2005, 2012 jQuery Foundation, Inc.
+  Copyright (C) 2005, 2013 jQuery Foundation, Inc.
 
 Licensed under the MIT License, L<http://creativecommons.org/licenses/MIT>.
 
 =head2 prettify.js
 
-  Copyright (C) 2006, Google Inc.
+  Copyright (C) 2006, 2013 Google Inc.
 
 Licensed under the Apache License, Version 2.0
 L<http://www.apache.org/licenses/LICENSE-2.0>.

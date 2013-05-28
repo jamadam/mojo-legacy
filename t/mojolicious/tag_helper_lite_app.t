@@ -62,18 +62,20 @@ $t->get_ok('/small_tags')->status_is(200)->content_is(<<EOF);
 EOF
 
 # Links
-$t->get_ok('/links')->status_is(200)->content_is(<<EOF);
+$t->get_ok('/links')->status_is(200)->content_is(<<'EOF');
 <a href="/path">Pa&lt;th</a>
 <a href="http://example.com/" title="Foo">Foo</a>
 <a href="http://example.com/"><foo>Example</foo></a>
+<a href="mailto:sri@example.com">Contact</a>
 <a href="/links">Home</a>
 <a href="/form/23" title="Foo">Foo</a>
 <a href="/form/23" title="Foo">Foo</a>
 EOF
-$t->post_ok('/links')->status_is(200)->content_is(<<EOF);
+$t->post_ok('/links')->status_is(200)->content_is(<<'EOF');
 <a href="/path">Pa&lt;th</a>
 <a href="http://example.com/" title="Foo">Foo</a>
 <a href="http://example.com/"><foo>Example</foo></a>
+<a href="mailto:sri@example.com">Contact</a>
 <a href="/links">Home</a>
 <a href="/form/23" title="Foo">Foo</a>
 <a href="/form/23" title="Foo">Foo</a>
@@ -152,7 +154,7 @@ $t->post_ok(
     search => 'c',
     tel    => '987654321',
     time   => '23:59:58',
-    url    => 'http://kraih.com',
+    url    => 'http://example.com',
     week   => '2012-W17'
   }
 )->status_is(200)->content_is(<<'EOF');
@@ -167,7 +169,7 @@ $t->post_ok(
   <input class="foo" name="search" type="search" value="c" />
   <input class="foo" name="tel" type="tel" value="987654321" />
   <input class="foo" name="time" type="time" value="23:59:58" />
-  <input class="foo" name="url" type="url" value="http://kraih.com" />
+  <input class="foo" name="url" type="url" value="http://example.com" />
   <input class="foo" name="week" type="week" value="2012-W17" />
   <input type="submit" value="Ok" />
 </form>
@@ -439,6 +441,7 @@ __DATA__
 <%= link_to 'Pa<th' => '/path' %>
 <%= link_to 'http://example.com/', title => 'Foo', sub { 'Foo' } %>
 <%= link_to 'http://example.com/' => begin %><foo>Example</foo><% end %>
+<%= link_to Contact => Mojo::URL->new('mailto:sri@example.com') %>
 <%= link_to Home => 'links' %>
 <%= link_to Foo => 'form', {test => 23}, title => 'Foo' %>
 <%= link_to form => {test => 23} => (title => 'Foo') => begin %>Foo<% end %>

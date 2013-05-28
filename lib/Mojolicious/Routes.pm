@@ -4,7 +4,7 @@ use Mojo::Base 'Mojolicious::Routes::Route';
 use List::Util 'first';
 use Mojo::Cache;
 use Mojo::Loader;
-use Mojo::Util qw(camelize deprecated);
+use Mojo::Util 'camelize';
 use Mojolicious::Routes::Match;
 use Scalar::Util 'weaken';
 
@@ -71,22 +71,18 @@ sub dispatch {
 
 sub hide { push @{shift->hidden}, @_ }
 
+sub is_hidden {
+  my ($self, $method) = @_;
+  my $hiding = $self->{hiding} ||= {map { $_ => 1 } @{$self->hidden}};
+  return !!($hiding->{$method} || index($method, '_') == 0);
+}
+
 sub lookup {
   my ($self, $name) = @_;
   my $reverse = $self->{reverse} ||= {};
   return $reverse->{$name} if exists $reverse->{$name};
   return undef unless my $route = $self->find($name);
   return $reverse->{$name} = $route;
-}
-
-# DEPRECATED in Rainbow!
-sub namespace {
-  deprecated 'Mojolicious::Routes::namespace is DEPRECATED in favor of '
-    . 'Mojolicious::Routes::namespaces';
-  my $self = shift;
-  return $self->namespaces->[0] unless @_;
-  $self->namespaces->[0] = shift;
-  return $self;
 }
 
 sub route {
@@ -203,10 +199,9 @@ sub _method {
   my ($self, $c, $field) = @_;
 
   # Hidden
-  $self->{hiding} = {map { $_ => 1 } @{$self->hidden}} unless $self->{hiding};
   return undef unless my $method = $field->{action};
   $c->app->log->debug(qq{Action "$method" is not allowed.}) and return undef
-    if $self->{hiding}{$method} || index($method, '_') == 0;
+    if $self->is_hidden($method);
 
   # Invalid
   $c->app->log->debug(qq{Action "$method" is invalid.}) and return undef
@@ -326,7 +321,7 @@ Contains all available conditions.
   my $hidden = $r->hidden;
   $r         = $r->hidden([qw(attr has new)]);
 
-Controller methods and attributes that are hidden from routes, defaults to
+Controller methods and attributes that are hidden from router, defaults to
 C<attr>, C<has>, C<new> and C<tap>.
 
 =head2 namespaces
@@ -379,7 +374,13 @@ Match routes with L<Mojolicious::Routes::Match> and dispatch.
 
   $r = $r->hide(qw(foo bar));
 
-Hide controller methods and attributes from routes.
+Hide controller methods and attributes from router.
+
+=head2 is_hidden
+
+  my $success = $r->is_hidden('foo');
+
+Check if controller method or attribute is hidden from router.
 
 =head2 lookup
 

@@ -14,6 +14,7 @@ use Test::Mojo;
 
 websocket '/echo' => sub {
   my $self = shift;
+  $self->tx->max_websocket_size(262145);
   $self->on(binary => sub { shift->send({binary => shift}) });
   $self->on(
     text => sub {
@@ -91,7 +92,7 @@ websocket sub {
   $self->on(
     message => sub {
       my ($self, $msg) = @_;
-      $self->send("nested echo: $msg$echo");
+      $self->send("nested echo: $msg$echo")->finish(1000);
     }
   );
 };
@@ -125,7 +126,24 @@ $t->websocket_ok('/echo')->send_ok({binary => 'bytes!'})
 
 # Zero
 $t->websocket_ok('/echo')->send_ok(0)->message_ok->message_is('echo: 0')
-  ->send_ok(0)->message_ok->message_like({text => qr/0/})->finish_ok;
+  ->send_ok(0)->message_ok->message_like({text => qr/0/})->finish_ok(1000)
+  ->finished_ok(1000);
+
+# 64bit binary message (extended limit)
+$t->websocket_ok('/echo');
+is $t->tx->max_websocket_size, 262144, 'right size';
+$t->tx->max_websocket_size(262145);
+$t->send_ok({binary => 'a' x 262145})
+  ->message_ok->message_is({binary => 'a' x 262145})
+  ->finish_ok->finished_ok(1005);
+
+# 64bit binary message (too large)
+$t->websocket_ok('/echo')->send_ok({binary => 'b' x 262145})
+  ->finished_ok(1009);
+
+# Binary message in two 64bit frames without FIN bit (too large)
+$t->websocket_ok('/echo')->send_ok([0, 0, 0, 0, 2, 'c' x 100000])
+  ->send_ok([0, 0, 0, 0, 0, 'c' x 162146])->finished_ok(1009);
 
 # Plain alternative
 $t->get_ok('/echo')->status_is(200)->content_is('plain echo!');
@@ -133,10 +151,10 @@ $t->get_ok('/echo')->status_is(200)->content_is('plain echo!');
 # JSON roundtrips
 $t->websocket_ok('/json')
   ->send_ok({text => j({test => 23, snowman => '☃'})})
-  ->message_ok->json_message_is('/' => {test => 24, snowman => '☃'})
+  ->message_ok->json_message_is('' => {test => 24, snowman => '☃'})
   ->json_message_has('/test')->json_message_hasnt('/test/2')
   ->send_ok({binary => j([1, 2, 3])})
-  ->message_ok->json_message_is('/' => [1, 2, 3, 4], 'right content')
+  ->message_ok->json_message_is('' => [1, 2, 3, 4], 'right content')
   ->send_ok({binary => j([1, 2, 3])})
   ->message_ok->json_message_has('/2', 'has two elements')
   ->json_message_is('/2' => 3)->json_message_hasnt('/5', 'not five elements')
@@ -173,7 +191,7 @@ $t->websocket_ok('/unicode')->send_ok('hello again')
   ->send_ok('and one ☃ more time')
   ->message_ok->message_is('♥: and one ☃ more time')->finish_ok;
 
-# Binary frame and frame event
+# Binary frame and events
 my $bytes = b("I ♥ Mojolicious")->encode('UTF-16LE')->to_string;
 $t->websocket_ok('/bytes');
 my $binary;
@@ -183,11 +201,15 @@ $t->tx->on(
     $binary++ if $frame->[4] == 2;
   }
 );
+my $close;
+$t->tx->on(finish => sub { shift; $close = [@_] });
 $t->send_ok({binary => $bytes})->message_ok->message_is($bytes);
 ok $binary, 'received binary frame';
 $binary = undef;
-$t->send_ok({text => $bytes})->message_ok->message_is($bytes)->finish_ok;
+$t->send_ok({text => $bytes})->message_ok->message_is($bytes);
 ok !$binary, 'received text frame';
+$t->finish_ok(1000 => 'Have a nice day!');
+is_deeply $close, [1000, 'Have a nice day!'], 'right status and message';
 
 # Binary roundtrips
 $t->websocket_ok('/bytes')->send_ok({binary => $bytes})
@@ -202,7 +224,7 @@ $t->websocket_ok('/once')->send_ok('hello')
 
 # Nested WebSocket
 $t->websocket_ok('/nested')->send_ok('hello')
-  ->message_ok->message_is('nested echo: hello')->finish_ok;
+  ->message_ok->message_is('nested echo: hello')->finished_ok(1000);
 
 # Test custom message
 $t->message([binary => 'foobarbaz'])->message_like(qr/bar/)
@@ -210,7 +232,7 @@ $t->message([binary => 'foobarbaz'])->message_like(qr/bar/)
 
 # Nested WebSocket with cookie
 $t->websocket_ok('/nested')->send_ok('hello')
-  ->message_ok->message_is('nested echo: helloagain')->finish_ok;
+  ->message_ok->message_is('nested echo: helloagain')->finished_ok(1000);
 
 # Nested plain request
 $t->get_ok('/nested')->status_is(200)->content_is('plain nested!');

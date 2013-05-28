@@ -12,12 +12,11 @@ has pattern    => sub { Mojolicious::Routes::Pattern->new };
 sub AUTOLOAD {
   my $self = shift;
 
-  # Method
   my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
-  # Call shortcut
+  # Call shortcut with current route
   croak qq{Can't locate object method "$method" via package "$package"}
     unless my $shortcut = $self->root->shortcuts->{$method};
   return $self->$shortcut(@_);
@@ -328,11 +327,12 @@ implements the following new ones.
   my $r = Mojolicious::Routes::Route->new;
   my $r = Mojolicious::Routes::Route->new('/:controller/:action');
 
-Construct a new L<Mojolicious::Routes::Route> object.
+Construct a new L<Mojolicious::Routes::Route> object and <parse> pattern if
+necessary.
 
 =head2 add_child
 
-  $r = $r->add_child(Mojolicious::Route->new);
+  $r = $r->add_child(Mojolicious::Routes::Route->new);
 
 Add a new child to this route, it will be automatically removed from its
 current parent if necessary.
@@ -475,7 +475,7 @@ routing cache, since conditions are too complex for caching.
   $r = $r->parse('/:action', action => qr/\w+/);
   $r = $r->parse(format => 0);
 
-Parse a pattern.
+Parse pattern.
 
 =head2 patch
 
@@ -591,7 +591,7 @@ restrictions.
 
   my $websocket = $r->websocket('/:foo' => sub {...});
 
-Generate route matching only C<WebSocket> handshakes. See also the
+Generate route matching only WebSocket handshakes. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.
 
   $r->websocket('/echo')->to('example#echo');

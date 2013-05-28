@@ -34,7 +34,7 @@ my $ua   = Mojo::UserAgent->new;
 my ($id, $code);
 $ua->get(
   'http://metacpan.org' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     $id   = $tx->connection;
     $code = $tx->res->code;
     $loop->stop;
@@ -95,13 +95,13 @@ is $tx->error, "Couldn't connect", 'right error';
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
 
-# Keep alive
+# Keep-alive
 $ua->get('http://mojolicio.us' => sub { Mojo::IOLoop->singleton->stop });
 Mojo::IOLoop->singleton->start;
 my $kept_alive;
 $ua->get(
   'http://mojolicio.us' => sub {
-    my $tx = pop;
+    my ($ua, $tx) = @_;
     Mojo::IOLoop->singleton->stop;
     $kept_alive = $tx->kept_alive;
   }
@@ -109,7 +109,7 @@ $ua->get(
 Mojo::IOLoop->singleton->start;
 ok $kept_alive, 'connection was kept alive';
 
-# Nested keep alive
+# Nested keep-alive
 my @kept_alive;
 $ua->get(
   'http://mojolicio.us' => sub {
@@ -136,7 +136,7 @@ is_deeply \@kept_alive, [1, 1, 1], 'connections kept alive';
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
 
-# Custom non keep alive request
+# Custom non keep-alive request
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('http://metacpan.org');
@@ -153,7 +153,7 @@ is h('mojolicio.us')->body,          '',  'no content';
 is p('mojolicio.us/lalalala')->code, 404, 'right status';
 is g('http://mojolicio.us')->code,   200, 'right status';
 is p('http://mojolicio.us')->code,   404, 'right status';
-my $res = p('search.cpan.org/search' => form => {query => 'mojolicious'});
+my $res = p('https://metacpan.org/search' => form => {q => 'mojolicious'});
 like $res->body, qr/Mojolicious/, 'right content';
 is $res->code,   200,             'right status';
 
@@ -167,7 +167,7 @@ is $tx->req->method, 'GET',               'right method';
 is $tx->req->url,    'http://google.com', 'right url';
 is $tx->res->code,   301,                 'right status';
 
-# Simple keep alive requests
+# Simple keep-alive requests
 $tx = $ua->get('http://www.wikipedia.org');
 is $tx->req->method, 'GET',                      'right method';
 is $tx->req->url,    'http://www.wikipedia.org', 'right url';
@@ -214,24 +214,22 @@ like $ua->ioloop->stream($tx->connection)
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
 
-# Simple keep alive form POST
-$tx = $ua->post(
-  'http://search.cpan.org/search' => form => {query => 'mojolicious'});
+# Simple keep-alive form POST
+$tx = $ua->post('https://metacpan.org/search' => form => {q => 'mojolicious'});
 is $tx->req->method, 'POST', 'right method';
-is $tx->req->url, 'http://search.cpan.org/search', 'right url';
-is $tx->req->headers->content_length, 17, 'right content length';
-is $tx->req->body,   'query=mojolicious', 'right content';
-like $tx->res->body, qr/Mojolicious/,     'right content';
-is $tx->res->code,   200,                 'right status';
+is $tx->req->url, 'https://metacpan.org/search', 'right url';
+is $tx->req->headers->content_length, 13, 'right content length';
+is $tx->req->body,   'q=mojolicious', 'right content';
+like $tx->res->body, qr/Mojolicious/, 'right content';
+is $tx->res->code,   200,             'right status';
 ok $tx->keep_alive, 'connection will be kept alive';
-$tx = $ua->post(
-  'http://search.cpan.org/search' => form => {query => 'mojolicious'});
+$tx = $ua->post('https://metacpan.org/search' => form => {q => 'mojolicious'});
 is $tx->req->method, 'POST', 'right method';
-is $tx->req->url, 'http://search.cpan.org/search', 'right url';
-is $tx->req->headers->content_length, 17, 'right content length';
-is $tx->req->body,   'query=mojolicious', 'right content';
-like $tx->res->body, qr/Mojolicious/,     'right content';
-is $tx->res->code,   200,                 'right status';
+is $tx->req->url, 'https://metacpan.org/search', 'right url';
+is $tx->req->headers->content_length, 13, 'right content length';
+is $tx->req->body,   'q=mojolicious', 'right content';
+like $tx->res->body, qr/Mojolicious/, 'right content';
+is $tx->res->code,   200,             'right status';
 ok $tx->kept_alive, 'connection was kept alive';
 
 # Simple request with redirect
