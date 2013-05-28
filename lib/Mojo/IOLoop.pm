@@ -38,9 +38,6 @@ sub acceptor {
   # Find acceptor for id
   return $self->{acceptors}{$acceptor} unless ref $acceptor;
 
-  # Make sure connection manager is running
-  $self->_manager;
-
   # Connect acceptor with reactor
   my $id = $self->_id;
   $self->{acceptors}{$id} = $acceptor;
@@ -57,8 +54,8 @@ sub client {
   my ($self, $cb) = (shift, pop);
   $self = $self->singleton unless ref $self;
 
-  # Make sure connection manager is running
-  $self->_manager;
+  # Make sure timers are running
+  $self->_timers;
 
   my $id     = $self->_id;
   my $c      = $self->{connections}{$id} ||= {};
@@ -116,7 +113,8 @@ sub recurring {
 sub remove {
   my ($self, $id) = @_;
   $self = $self->singleton unless ref $self;
-  if (my $c = $self->{connections}{$id}) { return $c->{finish} = 1 }
+  my $c = $self->{connections}{$id};
+  if ($c && (my $stream = $c->{stream})) { return $stream->close_gracefully }
   $self->_remove($id);
 }
 
@@ -181,18 +179,20 @@ sub timer {
 sub _accepting {
   my $self = shift;
 
-  # Check connection limit
-  return if $self->{accepting};
+  # Check if we have acceptors
   my $acceptors = $self->{acceptors} ||= {};
-  return unless keys %$acceptors;
+  return $self->_remove(delete $self->{accept}) unless keys %$acceptors;
+
+  # Check connection limit
   my $i   = keys %{$self->{connections}};
   my $max = $self->max_connections;
   return unless $i < $max;
 
   # Acquire accept mutex
   if (my $cb = $self->lock) { return unless $self->$cb(!$i) }
+  $self->_remove(delete $self->{accept});
 
-  # Check if multi-accept is desirable and start accepting
+  # Check if multi-accept is desirable
   my $multi = $self->multi_accept;
   $_->multi_accept($max < $multi ? 1 : $multi)->start for values %$acceptors;
   $self->{accepting}++;
@@ -206,32 +206,11 @@ sub _id {
   return $id;
 }
 
-sub _manage {
-  my $self = shift;
-
-  # Try to acquire accept mutex
-  $self->_accepting;
-
-  # Close connections gracefully
-  my $connections = $self->{connections} ||= {};
-  while (my ($id, $c) = each %$connections) {
-    $self->_remove($id)
-      if $c->{finish} && (!$c->{stream} || !$c->{stream}->is_writing);
-  }
-
-  # Graceful stop
-  $self->_remove(delete $self->{manager})
-    unless keys %$connections || keys %{$self->{acceptors}};
-  $self->stop if $self->max_connections == 0 && keys %$connections == 0;
-}
-
-sub _manager {
-  my $self = shift;
-  $self->{manager} ||= $self->recurring($self->accept_interval => \&_manage);
-}
-
 sub _not_accepting {
   my $self = shift;
+
+  # Make sure timers are running
+  $self->_timers;
 
   # Release accept mutex
   return unless delete $self->{accepting};
@@ -249,29 +228,40 @@ sub _remove {
   return if $reactor->remove($id);
 
   # Acceptor
-  if (delete $self->{acceptors}{$id}) { delete $self->{accepting} }
+  if (delete $self->{acceptors}{$id}) { $self->_not_accepting }
 
-  # Connection (stream needs to be deleted first)
-  else {
-    delete(($self->{connections}{$id} || {})->{stream});
-    delete $self->{connections}{$id};
-  }
+  # Connection
+  else { delete $self->{connections}{$id} }
+}
+
+sub _stop {
+  my $self = shift;
+  return      if keys %{$self->{connections}};
+  $self->stop if $self->max_connections == 0;
+  return      if keys %{$self->{acceptors}};
+  $self->{$_} && $self->_remove(delete $self->{$_}) for qw(accept stop);
 }
 
 sub _stream {
   my ($self, $stream, $id) = @_;
 
-  # Make sure connection manager is running
-  $self->_manager;
+  # Make sure timers are running
+  $self->_timers;
 
   # Connect stream with reactor
   $self->{connections}{$id}{stream} = $stream;
   weaken $stream->reactor($self->reactor)->{reactor};
   weaken $self;
-  $stream->on(close => sub { $self->{connections}{$id}{finish} = 1 });
+  $stream->on(close => sub { $self && $self->_remove($id) });
   $stream->start;
 
   return $id;
+}
+
+sub _timers {
+  my $self = shift;
+  $self->{accept} ||= $self->recurring($self->accept_interval => \&_accepting);
+  $self->{stop} ||= $self->recurring(1 => \&_stop);
 }
 
 1;
@@ -351,9 +341,9 @@ L<Mojo::IOLoop> implements the following attributes.
   my $interval = $loop->accept_interval;
   $loop        = $loop->accept_interval(0.5);
 
-Interval in seconds for trying to reacquire the accept mutex and connection
-management, defaults to C<0.025>. Note that changing this value can affect
-performance and idle CPU usage.
+Interval in seconds for trying to reacquire the accept mutex, defaults to
+C<0.025>. Note that changing this value can affect performance and idle CPU
+usage.
 
 =head2 lock
 

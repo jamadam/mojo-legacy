@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -29,13 +28,13 @@ get '/login' => sub {
   my $self = shift;
   my $name = $self->param('name') || 'anonymous';
   $self->session(name => $name);
-  $self->render_text("Welcome $name!");
+  $self->render(text => "Welcome $name!");
 };
 
 get '/again' => sub {
   my $self = shift;
   my $name = $self->session('name') || 'anonymous';
-  $self->render_text("Welcome back $name!");
+  $self->render(text => "Welcome back $name!");
 };
 
 get '/logout' => sub {

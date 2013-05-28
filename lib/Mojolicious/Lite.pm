@@ -638,9 +638,9 @@ Restrictive placeholders can also be used.
   # /hello.txt
   get '/hello' => [format => [qw(json txt)]] => sub {
     my $self = shift;
-    return $self->render_json({hello => 'world'})
+    return $self->render(json => {hello => 'world'})
       if $self->stash('format') eq 'json';
-    $self->render_text('hello world');
+    $self->render(text => 'hello world');
   };
 
   app->start;
@@ -857,17 +857,18 @@ L<Mojo::JSON> and L<Mojo::DOM> this can be a very powerful tool.
 =head2 WebSockets
 
 WebSocket applications have never been this simple before. Just receive
-messages by subscribing to the event L<Mojo::Transaction::WebSocket/"message">
-with L<Mojolicious::Controller/"on"> and return them with
-L<Mojolicious::Controller/"send">.
+messages by subscribing to events such as
+L<Mojo::Transaction::WebSocket/"json"> with L<Mojolicious::Controller/"on">
+and return them with L<Mojolicious::Controller/"send">.
 
   use Mojolicious::Lite;
 
   websocket '/echo' => sub {
     my $self = shift;
-    $self->on(message => sub {
-      my ($self, $msg) = @_;
-      $self->send("echo: $msg");
+    $self->on(json => sub {
+      my ($self, $hash) = @_;
+      $hash->{msg} = "echo: $hash->{msg}";
+      $self->send({json => $hash});
     });
   };
 
@@ -884,10 +885,10 @@ L<Mojolicious::Controller/"send">.
       %= javascript begin
         var ws = new WebSocket('<%= url_for('echo')->to_abs %>');
         ws.onmessage = function (event) {
-          document.body.innerHTML += event.data + '<br/>';
+          document.body.innerHTML += JSON.parse(event.data).msg;
         };
         ws.onopen = function (event) {
-          ws.send('I ♥ Mojolicious!');
+          ws.send(JSON.stringify({msg: 'I ♥ Mojolicious!'}));
         };
       % end
     </head>
@@ -898,18 +899,34 @@ L<Mojolicious::Guides::Cookbook/"REAL-TIME WEB">.
 
 =head2 Mode
 
-To disable debug messages later in a production setup, you can change the
-L<Mojolicious> operating mode with command line options or the MOJO_MODE
-environment variable, the default will usually be C<development>.
+You can use the L<Mojo::Log> object from L<Mojo/"log"> to portably collect
+debug messages and automatically disable them later in a production setup by
+changing the L<Mojolicious> operating mode.
+
+  use Mojolicious::Lite;
+
+  get '/' => sub {
+    my $self = shift;
+    $self->app->log->debug('Rendering "Hello World!" message.');
+    $self->render(text => 'Hello World!');
+  };
+
+  app->log->debug('Starting application.');
+  app->start;
+
+The default operating mode will usually be C<development> and can be changed
+with command line options or the MOJO_MODE and PLACK_ENV environment
+variables. A mode other than C<development> will raise the log level from
+C<debug> to C<info>.
 
   $ ./myapp.pl daemon -m production
 
-L<Mojo::Log> messages will be automatically written to C<STDERR> or a
-C<log/$mode.log> file if a C<log> directory exists.
+All messages will be written to C<STDERR> or a C<log/$mode.log> file if a
+C<log> directory exists.
 
   $ mkdir log
 
-Mode changes also affects many other aspects of the framework, such as mode
+Mode changes also affects a few other aspects of the framework, such as mode
 specific C<exception> and C<not_found> templates.
 
 =head2 Testing

@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -30,12 +29,12 @@ get '/' => 'index';
 
 post '/' => sub {
   my $self = shift;
-  $self->render_text("foo: " . $self->param('foo'));
+  $self->render(text => "foo: " . $self->param('foo'));
 };
 
 post '/data' => sub {
   my $self = shift;
-  $self->render_data($self->req->body, format => 'bin');
+  $self->render(data => $self->req->body, format => 'bin');
 };
 
 get '/unicode' => sub {
@@ -43,14 +42,14 @@ get '/unicode' => sub {
   $self->render(test => $yatta, handler => 'test', format => 'txt');
 };
 
-get '/json' => sub { shift->render_json({test => $yatta}) };
+get '/json' => sub { shift->render(json => {test => $yatta}) };
 
-get '/привет/мир' => sub { shift->render_json({foo => $yatta}) };
+get '/привет/мир' => sub { shift->render(json => {foo => $yatta}) };
 
 get '/params' => sub {
   my $self = shift;
-  $self->render_json(
-    {
+  $self->render(
+    json => {
       params => $self->req->url->query->to_hash,
       yatta  => $self->param(['yatta'])
     }
@@ -99,17 +98,17 @@ $t->post_ok('/data', $yatta_sjis)->status_is(200)->content_is($yatta_sjis);
 
 # JSON data
 $t->get_ok('/json')->status_is(200)->content_type_is('application/json')
-  ->json_content_is({test => $yatta});
+  ->json_is({test => $yatta});
 
 # IRI
 $t->get_ok('/привет/мир')->status_is(200)
-  ->content_type_is('application/json')->json_content_is({foo => $yatta});
+  ->content_type_is('application/json')->json_is({foo => $yatta});
 
 # Shift_JIS parameters
 my $url = $t->ua->app_url->path('/params')->query(foo => 3, yatta => $yatta);
 $url->query->charset('shift_jis');
 $t->get_ok($url)->status_is(200)
-  ->json_content_is({params => {foo => 3, yatta => $yatta}, yatta => $yatta});
+  ->json_is({params => {foo => 3, yatta => $yatta}, yatta => $yatta});
 
 done_testing();
 

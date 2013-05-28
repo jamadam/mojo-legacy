@@ -2,7 +2,6 @@ package Mojo::Message::Request;
 use Mojo::Base 'Mojo::Message';
 
 use Mojo::Cookie::Request;
-use Mojo::Parameters;
 use Mojo::Util qw(b64_encode b64_decode get_line);
 use Mojo::URL;
 
@@ -11,7 +10,7 @@ has method => 'GET';
 has url => sub { Mojo::URL->new };
 
 my $START_LINE_RE = qr|
-  ^\s*
+  ^
   ([a-zA-Z]+)                                  # Method
   \s+
   ([0-9a-zA-Z\-._~:/?#[\]\@!\$&'()*+,;=\%]+)   # Path
@@ -142,7 +141,7 @@ sub param { shift->params->param(@_) }
 sub params {
   my $self = shift;
   return $self->{params}
-    ||= Mojo::Parameters->new->merge($self->body_params, $self->query_params);
+    ||= $self->body_params->clone->merge($self->query_params);
 }
 
 sub parse {
@@ -352,7 +351,7 @@ Access request cookies, usually L<Mojo::Cookie::Request> objects.
 
 =head2 extract_start_line
 
-  my $success = $req->extract_start_line(\$string);
+  my $success = $req->extract_start_line(\$str);
 
 Extract request line from string.
 

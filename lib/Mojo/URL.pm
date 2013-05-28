@@ -10,15 +10,16 @@ use Mojo::Path;
 use Mojo::Util qw(punycode_decode punycode_encode url_escape url_unescape);
 
 has base => sub { Mojo::URL->new };
-has [qw(data fragment host port scheme userinfo)];
+has [qw(fragment host port scheme userinfo)];
 
 sub new { shift->SUPER::new->parse(@_) }
 
 sub authority {
-  my ($self, $authority) = @_;
+  my $self = shift;
 
   # New authority
-  if (defined $authority) {
+  if (@_) {
+    return $self unless defined(my $authority = shift);
 
     # Userinfo
     $authority =~ s/^([^\@]+)\@// and $self->userinfo(url_unescape $1);
@@ -32,10 +33,11 @@ sub authority {
   }
 
   # Build authority
-  my $userinfo = $self->userinfo;
-  $authority .= url_escape($userinfo, '^A-Za-z0-9\-._~!$&\'()*+,;=:') . '@'
-    if $userinfo;
-  $authority .= defined $self->ihost ? $self->ihost : '';
+  return undef unless defined(my $authority = $self->ihost);
+  if (my $userinfo = $self->userinfo) {
+    $userinfo = url_escape $userinfo, '^A-Za-z0-9\-._~!$&\'()*+,;=:';
+    $authority = $userinfo . '@' . $authority;
+  }
   if (my $port = $self->port) { $authority .= ":$port" }
 
   return $authority;
@@ -45,7 +47,7 @@ sub clone {
   my $self = shift;
 
   my $clone = $self->new;
-  $clone->$_($self->$_) for qw(scheme data userinfo host port fragment);
+  $clone->$_($self->$_) for qw(scheme userinfo host port fragment);
   $clone->path($self->path->clone);
   $clone->query($self->query->clone);
   $clone->base($self->base->clone) if $self->{base};
@@ -62,7 +64,7 @@ sub ihost {
     if @_;
 
   # Check if host needs to be encoded
-  return undef unless my $host = $self->host;
+  return undef unless defined(my $host = $self->host);
   return lc $host unless $host =~ /[^\x00-\x7f]/;
 
   # Encode
@@ -77,31 +79,20 @@ sub parse {
   my ($self, $url) = @_;
   return $self unless $url;
 
-  # Official regex
-  $url =~ m!(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?!;
-
-  # Supported scheme
-  my $proto = $self->scheme($1)->protocol;
-  if (!$proto || grep { $proto eq $_ } qw(http https ws wss)) {
-    $self->authority($2);
-    $self->path->parse($3);
-    $self->query($4)->fragment($5);
-  }
-
-  # Preserve scheme data
-  else { $self->data(substr($url, length($proto) + 1)) }
-
-  return $self;
+  # Official regex from RFC 3986
+  $url =~ m!^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?!;
+  return $self->scheme($2)->authority($4)->path($5)->query($7)->fragment($9);
 }
 
 sub path {
-  my ($self, $path) = @_;
+  my $self = shift;
 
   # Old path
   $self->{path} ||= Mojo::Path->new;
-  return $self->{path} unless $path;
+  return $self->{path} unless @_;
 
   # New path
+  my $path = shift;
   $self->{path} = ref $path ? $path : $self->{path}->merge($path);
 
   return $self;
@@ -202,36 +193,24 @@ sub to_rel {
 sub to_string {
   my $self = shift;
 
-  # Scheme data
-  my $data = $self->data;
-  return join ':', $self->scheme, $data if defined $data;
-
-  # Protocol
+  # Scheme
   my $url = '';
-  if (my $proto = $self->protocol) { $url .= "$proto://" }
+  if (my $proto = $self->protocol) { $url .= "$proto:" }
 
   # Authority
   my $authority = $self->authority;
-  $url .= $url ? $authority : $authority ? "//$authority" : '';
+  $url .= "//$authority" if defined $authority;
 
-  # Relative path
-  my $path = $self->path;
-  if (!$url) { $url .= "$path" }
-
-  # Absolute path
-  elsif ($path->leading_slash) { $url .= "$path" }
-  else                         { $url .= @{$path->parts} ? "/$path" : '' }
+  # Path
+  my $path = $self->path->to_string;
+  $url .= !$authority || $path eq '' || $path =~ m!^/! ? $path : "/$path";
 
   # Query
-  my $query = join '', $self->query;
-  $url .= "?$query" if length $query;
+  if (length(my $query = $self->query->to_string)) { $url .= "?$query" }
 
   # Fragment
-  my $fragment = $self->fragment;
-  $url .= '#' . url_escape $fragment, '^A-Za-z0-9\-._~!$&\'()*+,;=%:@/?'
-    if $fragment;
-
-  return $url;
+  return $url unless defined(my $fragment = $self->fragment);
+  return $url . '#' . url_escape $fragment, '^A-Za-z0-9\-._~!$&\'()*+,;=%:@/?';
 }
 
 1;
@@ -284,16 +263,6 @@ L<Mojo::URL> implements the following attributes.
   $url     = $url->base(Mojo::URL->new);
 
 Base of this URL.
-
-=head2 data
-
-  my $data = $url->data;
-  $url     = $url->data('foo')
-
-Data preserved for unknown schemes.
-
-  # "sri@example.com"
-  Mojo::URL->new('mailto:sri@example.com')->data;
 
 =head2 fragment
 
@@ -375,8 +344,7 @@ Check if URL is absolute.
 
   $url = $url->parse('http://127.0.0.1:3000/foo/bar?fo=o&baz=23#foo');
 
-Parse relative or absolute URL for the C<http>, C<https>, C<ws> as well as
-C<wss> schemes and preserve scheme data for all unknown ones.
+Parse relative or absolute URL.
 
   # "/test/123"
   $url->parse('/test/123?foo=bar')->path;
@@ -384,8 +352,8 @@ C<wss> schemes and preserve scheme data for all unknown ones.
   # "example.com"
   $url->parse('http://example.com/test/123?foo=bar')->host;
 
-  # "mailto:sri@example.com"
-  $url->parse('mailto:sri@example.com')->to_string;
+  # "sri@example.com"
+  $url->parse('mailto:sri@example.com')->path;
 
 =head2 path
 
@@ -397,14 +365,14 @@ C<wss> schemes and preserve scheme data for all unknown ones.
 Path part of this URL, relative paths will be merged with the existing path,
 defaults to a L<Mojo::Path> object.
 
-  # "http://mojolicio.us/DOM/HTML"
-  Mojo::URL->new('http://mojolicio.us/perldoc/Mojo')->path('/DOM/HTML');
+  # "http://example.com/DOM/HTML"
+  Mojo::URL->new('http://example.com/perldoc/Mojo')->path('/DOM/HTML');
 
-  # "http://mojolicio.us/perldoc/DOM/HTML"
-  Mojo::URL->new('http://mojolicio.us/perldoc/Mojo')->path('DOM/HTML');
+  # "http://example.com/perldoc/DOM/HTML"
+  Mojo::URL->new('http://example.com/perldoc/Mojo')->path('DOM/HTML');
 
-  # "http://mojolicio.us/perldoc/Mojo/DOM/HTML"
-  Mojo::URL->new('http://mojolicio.us/perldoc/Mojo/')->path('DOM/HTML');
+  # "http://example.com/perldoc/Mojo/DOM/HTML"
+  Mojo::URL->new('http://example.com/perldoc/Mojo/')->path('DOM/HTML');
 
 =head2 protocol
 
@@ -413,7 +381,7 @@ defaults to a L<Mojo::Path> object.
 Normalized version of C<scheme>.
 
   # "http"
-  Mojo::URL->new('HtTp://mojolicio.us')->protocol;
+  Mojo::URL->new('HtTp://example.com')->protocol;
 
 =head2 query
 
@@ -427,22 +395,22 @@ Query part of this URL, pairs in an array will be merged and pairs in a hash
 appended, defaults to a L<Mojo::Parameters> object.
 
   # "2"
-  Mojo::URL->new('http://mojolicio.us?a=1&b=2')->query->param('b');
+  Mojo::URL->new('http://example.com?a=1&b=2')->query->param('b');
 
-  # "http://mojolicio.us?a=2&c=3"
-  Mojo::URL->new('http://mojolicio.us?a=1&b=2')->query(a => 2, c => 3);
+  # "http://example.com?a=2&c=3"
+  Mojo::URL->new('http://example.com?a=1&b=2')->query(a => 2, c => 3);
 
-  # "http://mojolicio.us?a=2&a=3"
-  Mojo::URL->new('http://mojolicio.us?a=1&b=2')->query(a => [2, 3]);
+  # "http://example.com?a=2&a=3"
+  Mojo::URL->new('http://example.com?a=1&b=2')->query(a => [2, 3]);
 
-  # "http://mojolicio.us?a=2&b=2&c=3"
-  Mojo::URL->new('http://mojolicio.us?a=1&b=2')->query([a => 2, c => 3]);
+  # "http://example.com?a=2&b=2&c=3"
+  Mojo::URL->new('http://example.com?a=1&b=2')->query([a => 2, c => 3]);
 
-  # "http://mojolicio.us?b=2"
-  Mojo::URL->new('http://mojolicio.us?a=1&b=2')->query([a => undef]);
+  # "http://example.com?b=2"
+  Mojo::URL->new('http://example.com?a=1&b=2')->query([a => undef]);
 
-  # "http://mojolicio.us?a=1&b=2&a=2&c=3"
-  Mojo::URL->new('http://mojolicio.us?a=1&b=2')->query({a => 2, c => 3});
+  # "http://example.com?a=1&b=2&a=2&c=3"
+  Mojo::URL->new('http://example.com?a=1&b=2')->query({a => 2, c => 3});
 
 =head2 to_abs
 
@@ -460,8 +428,8 @@ Clone absolute URL and turn it into a relative one.
 
 =head2 to_string
 
-  my $string = $url->to_string;
-  my $string = "$url";
+  my $str = $url->to_string;
+  my $str = "$url";
 
 Turn URL into a string.
 

@@ -2,7 +2,6 @@ use Mojo::Base -strict;
 
 use Test::More;
 use Mojo::DOM;
-use Mojo::Util 'encode';
 
 # Simple (basics)
 my $dom = Mojo::DOM->new->parse(
@@ -84,8 +83,8 @@ $dom = Mojo::DOM->new->parse(<<EOF);
   more text
 </foo>
 EOF
-is $dom->xml,  undef, 'xml mode not detected';
-is $dom->type, '',    'no type';
+ok !$dom->xml, 'XML mode not detected';
+is $dom->type, '', 'no type';
 is $dom->attrs('foo'), '', 'no attribute';
 is $dom->attrs(foo => 'bar')->attrs('foo'), '', 'no attribute';
 is $dom->tree->[1][0], 'doctype', 'right element';
@@ -212,11 +211,9 @@ is $dom->at('[id="snowm\000021an"]'),  undef, 'no result';
 is $dom->at('[id="snowm\000021 an"]'), undef, 'no result';
 
 # Unicode and escaped selectors
-my $chars
+my $html
   = qq{<html><div id="☃x">Snowman</div><div class="x ♥">Heart</div></html>};
-my $bytes = encode 'UTF-8', $chars;
-$dom = Mojo::DOM->new->charset('UTF-8');
-$dom->parse($bytes);
+$dom = Mojo::DOM->new($html);
 is $dom->at("#\\\n\\002603x")->text,                  'Snowman', 'right text';
 is $dom->at('#\\2603 x')->text,                       'Snowman', 'right text';
 is $dom->at("#\\\n\\2603 x")->text,                   'Snowman', 'right text';
@@ -278,11 +275,12 @@ is $dom->at('[class~=x]')->text,                      'Heart',   'right text';
 is $dom->at('div[class~=x]')->text,                   'Heart',   'right text';
 is $dom->at('html div[class~=x]')->text,              'Heart',   'right text';
 is $dom->at('html > div[class~=x]')->text,            'Heart',   'right text';
-is $dom->to_xml,      $bytes, 'XML is encoded';
-is $dom->content_xml, $bytes, 'XML is encoded';
-$dom->charset(undef);
-is $dom->to_xml,      $chars, 'XML is not encoded';
-is $dom->content_xml, $chars, 'XML is not encoded';
+is $dom->at('html'), $html, 'right result';
+is $dom->at('#☃x')->parent,     $html, 'right result';
+is $dom->at('#☃x')->root,       $html, 'right result';
+is $dom->children('html')->first, $html, 'right result';
+is $dom->to_xml,      $html, 'right result';
+is $dom->content_xml, $html, 'right result';
 
 # Looks remotely like HTML
 $dom = Mojo::DOM->new->parse(
@@ -307,8 +305,8 @@ $dom->replace('<div>foo<p>lalala</p>bar</div>');
 is "$dom", '<div>foo<p>lalala</p>bar</div>', 'right result';
 is $dom->at('p')->replace(''), '<p>lalala</p>', 'right result';
 is "$dom", '<div>foobar</div>', 'right result';
-is $dom->replace(''), '', 'right result';
-is "$dom", '', 'right result';
+is $dom->replace(''), '', 'no result';
+is "$dom", '', 'no result';
 $dom->replace('<div>foo<p>lalala</p>bar</div>');
 is "$dom", '<div>foo<p>lalala</p>bar</div>', 'right result';
 $dom->find('p')->pluck(replace => '');
@@ -328,8 +326,6 @@ is "$dom", '<p>foo</p><b>whatever</b><p>bar</p>', 'right result';
 is $dom->find('p')->pluck('remove')->first->root->at('b')->text, 'whatever',
   'right result';
 is "$dom", '<b>whatever</b>', 'right result';
-$dom->remove;
-is "$dom", '', 'right result';
 
 # Replace element content
 $dom = Mojo::DOM->new->parse('<div>foo<p>lalala</p>bar</div>');
@@ -351,8 +347,8 @@ is "$dom", '♥', 'right result';
 is $dom->replace_content('<div>foo<p>lalala</p>bar</div>'),
   '<div>foo<p>lalala</p>bar</div>', 'right result';
 is "$dom", '<div>foo<p>lalala</p>bar</div>', 'right result';
-is $dom->replace_content(''), '', 'right result';
-is "$dom", '', 'right result';
+is $dom->replace_content(''), '', 'no result';
+is "$dom", '', 'no result';
 $dom->replace_content('<div>foo<p>lalala</p>bar</div>');
 is "$dom", '<div>foo<p>lalala</p>bar</div>', 'right result';
 is $dom->at('p')->replace_content(''), '<p></p>', 'right result';
@@ -404,7 +400,7 @@ $dom = Mojo::DOM->new->parse(<<EOF);
   </channel>
 </rss>
 EOF
-is $dom->xml, 1, 'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 is $dom->find('rss')->[0]->attrs('version'), '2.0', 'right version';
 is $dom->at('extension')->attrs('foo:id'), 'works', 'right id';
 like $dom->at('#works')->text,       qr/\[awesome\]\]/, 'right text';
@@ -415,6 +411,10 @@ like $dom->at('[id*="ork"]')->text,  qr/\[awesome\]\]/,           'right text';
 like $dom->at('[id*="orks"]')->text, qr/\[awesome\]\]/,           'right text';
 like $dom->at('[id*="work"]')->text, qr/\[awesome\]\]/,           'right text';
 like $dom->at('[id*="or"]')->text,   qr/\[awesome\]\]/,           'right text';
+ok $dom->at('rss')->xml,             'XML mode active';
+ok $dom->at('extension')->parent->xml, 'XML mode active';
+ok $dom->at('extension')->root->xml,   'XML mode active';
+ok $dom->children('rss')->first->xml,  'XML mode active';
 
 # Namespace
 $dom = Mojo::DOM->new->parse(<<EOF);
@@ -432,7 +432,7 @@ $dom = Mojo::DOM->new->parse(<<EOF);
   </meta>
 </bk:book>
 EOF
-is $dom->xml,       1,  'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 is $dom->namespace, '', 'no namespace';
 is $dom->at('book comment')->namespace, 'uri:default-ns', 'right namespace';
 is $dom->at('book comment')->text,      'rocks!',         'right text';
@@ -486,7 +486,7 @@ $dom = Mojo::DOM->new->parse(<<'EOF');
   </XRD>
 </XRDS>
 EOF
-is $dom->xml, 1, 'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 is $dom->at('XRDS')->namespace, 'xri://$xrds',         'right namespace';
 is $dom->at('XRD')->namespace,  'xri://$xrd*($v*2.0)', 'right namespace';
 my $s = $dom->find('XRDS XRD Service');
@@ -520,7 +520,7 @@ my $yadis = <<'EOF';
 </xrds:XRDS>
 EOF
 $dom = Mojo::DOM->new->parse($yadis);
-is $dom->xml, 1, 'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 is $dom->at('XRDS')->namespace, 'xri://$xrds',         'right namespace';
 is $dom->at('XRD')->namespace,  'xri://$xrd*($v*2.0)', 'right namespace';
 $s = $dom->find('XRDS XRD Service');
@@ -1479,7 +1479,7 @@ $dom = Mojo::DOM->new->parse(<<EOF);
   <![CDATA[<hello>world</hello>]]>
 </root>
 EOF
-is $dom->xml, 1, 'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 is $dom->at('root')->attrs('att'), 'test', 'right attribute';
 is $dom->tree->[5][1], ' root [
   <!ELEMENT root (#PCDATA)>
@@ -1499,7 +1499,7 @@ SYSTEM "usr.dtd"
 [
   <!ENTITY test "yeah">
 ]', 'right doctype';
-is $dom->xml, undef, 'xml mode not detected';
+ok !$dom->xml, 'XML mode not detected';
 is $dom->at('foo'), '<foo></foo>', 'right element';
 $dom = Mojo::DOM->new->parse(<<EOF);
 <?xml version="1.0" encoding = 'utf-8'?>
@@ -1511,7 +1511,7 @@ $dom = Mojo::DOM->new->parse(<<EOF);
 ]  >
 <foo xml:lang="de">Check!</fOo>
 EOF
-is $dom->xml, 1, 'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 is $dom->tree->[3][1], ' foo [
   <!ELEMENT foo ANY>
   <!ATTLIST foo xml:lang CDATA #IMPLIED>
@@ -1684,23 +1684,23 @@ $dom = Mojo::DOM->new->parse(<<'EOF');
 <?xml version='1.0' encoding='UTF-8'?>
 <XMLTest />
 EOF
-is $dom->xml, 1, 'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 $dom->at('XMLTest')->replace_content('<Element />');
 my $element = $dom->at('Element');
 is $element->type, 'Element', 'right type';
-is $element->xml,  1,         'xml mode detected';
+ok $element->xml, 'XML mode active';
 $element = $dom->at('XMLTest')->children->[0];
 is $element->type, 'Element', 'right child';
 is $element->parent->type, 'XMLTest', 'right parent';
-is $element->root->xml,    1,         'xml mode detected';
+ok $element->root->xml, 'XML mode active';
 $dom->replace('<XMLTest2 />');
-is $dom->xml, undef, 'xml mode not detected';
+ok !$dom->xml, 'XML mode not detected';
 is $dom->children->[0], '<xmltest2></xmltest2>', 'right result';
 $dom->replace(<<EOF);
 <?xml version='1.0' encoding='UTF-8'?>
 <XMLTest3 />
 EOF
-is $dom->xml, 1, 'xml mode detected';
+ok $dom->xml, 'XML mode detected';
 is $dom->children->[0], '<XMLTest3 />', 'right result';
 
 # Ensure XML semantics
@@ -1798,7 +1798,7 @@ $dom = Mojo::DOM->new->xml(1)->parse(<<EOF);
   </B>
 </a>
 EOF
-is $dom->xml, 1, 'xml mode enabled';
+ok $dom->xml, 'XML mode active';
 is $dom->a->B->text, 'foo', 'right text';
 is $dom->a->B->c->[0]->text, 'bar', 'right text';
 is $dom->a->B->c->[1]->text, 'baz', 'right text';
@@ -1815,7 +1815,7 @@ $dom = Mojo::DOM->new(<<EOF);
   </B>
 </a>
 EOF
-is $dom->xml, undef, 'xml mode disabled';
+ok !$dom->xml, 'XML mode not active';
 is $dom->a->b->text, 'foo', 'right text';
 is $dom->a->b->c->[0]->text, 'bar', 'right text';
 is $dom->a->b->c->[1]->text, 'baz', 'right text';
@@ -1832,7 +1832,7 @@ $dom = Mojo::DOM->new->xml(1)->parse(<<EOF);
   </B>
 </a>
 EOF
-is $dom->xml, 1, 'xml mode enabled';
+ok $dom->xml, 'XML mode active';
 is $dom->a->{id}, 'one', 'right attribute';
 is_deeply [sort keys %{$dom->a}], ['id'], 'right attributes';
 is $dom->a->B->text, 'foo', 'right text';
@@ -1868,7 +1868,7 @@ $dom = Mojo::DOM->new(<<EOF);
   </B>
 </a>
 EOF
-is $dom->xml, undef, 'xml mode disabled';
+ok !$dom->xml, 'XML mode not active';
 is $dom->a->{id}, 'one', 'right attribute';
 is_deeply [sort keys %{$dom->a}], ['id'], 'right attributes';
 is $dom->a->b->text, 'foo', 'right text';
@@ -1938,7 +1938,7 @@ $dom = Mojo::DOM->new(<<EOF);
   works
 </div>
 EOF
-is $dom->text, '', 'right text';
+is $dom->text, '', 'no text';
 is $dom->text(0), "\n", 'right text';
 is $dom->all_text, "looks like\n  it\n    really\n  works", 'right text';
 is $dom->all_text(0), "\n  looks\n  like\n  it\n    really\n  \n  works\n\n",
@@ -1974,27 +1974,27 @@ ok
 </div>
 wow
 EOF
-is $dom->text_before, '', 'right text';
-is $dom->text_before(0), '', 'right text';
+is $dom->text_before, '', 'no text';
+is $dom->text_before(0), '', 'no text';
 is $dom->div->text_before, 'ok', 'right text';
 is $dom->div->text_before(0), "ok\n", 'right text';
 is $dom->div->p->[0]->text_before, 'looks', 'right text';
 is $dom->div->p->[0]->text_before(0), "\n  looks", 'right text';
 is $dom->div->p->[1]->text_before, 'thi s', 'right text';
 is $dom->div->p->[1]->text_before(0), "\n  thi s\n  ", 'right text';
-is $dom->div->p->[2]->text_before, '', 'right text';
-is $dom->div->p->[2]->text_before(0), '', 'right text';
-is $dom->div->p->[3]->text_before, '', 'right text';
+is $dom->div->p->[2]->text_before, '', 'no text';
+is $dom->div->p->[2]->text_before(0), '', 'no text';
+is $dom->div->p->[3]->text_before, '', 'no text';
 is $dom->div->p->[3]->text_before(0), "\n  ", 'right text';
-is $dom->text_after, '', 'right text';
-is $dom->text_after(0), '', 'right text';
+is $dom->text_after, '', 'no text';
+is $dom->text_after(0), '', 'no text';
 is $dom->div->text_after, 'wow', 'right text';
 is $dom->div->text_after(0), "\nwow\n", 'right text';
 is $dom->div->p->[0]->text_after, 'thi s', 'right text';
 is $dom->div->p->[0]->text_after(0), "\n  thi s\n  ", 'right text';
-is $dom->div->p->[1]->text_after, '', 'right text';
-is $dom->div->p->[1]->text_after(0), '', 'right text';
-is $dom->div->p->[2]->text_after, '', 'right text';
+is $dom->div->p->[1]->text_after, '', 'no text';
+is $dom->div->p->[1]->text_after(0), '', 'no text';
+is $dom->div->p->[2]->text_after, '', 'no text';
 is $dom->div->p->[2]->text_after(0), "\n  ", 'right text';
 is $dom->div->p->[3]->text_after, 'work', 'right text';
 is $dom->div->p->[3]->text_after(0), "work\n", 'right text';
@@ -2142,25 +2142,11 @@ is $dom->at('span + b')->text, 'b', 'right text';
 is $dom->at('b + span')->text, 'c', 'right text';
 is "$dom", '<span>a</span><b>b</b><span>c</span>', 'right result';
 
-# Bad charset
-$dom = Mojo::DOM->new->charset('doesnotexist');
-$dom->parse('<html><div id="a">A</div></html>');
-is $dom->charset, undef, 'no charset';
-is $dom->at('#a')->text, 'A', 'right text';
-is "$dom", '<html><div id="a">A</div></html>', 'right result';
-$dom = Mojo::DOM->new->charset('UTF-8');
-$dom->parse(qq{<div id="invalid">\x89</div>});
-is $dom->charset, undef, 'no charset';
-is $dom->at('#invalid')->text, "\x89", 'right text';
-is "$dom", qq{<div id="invalid">\x89</div>}, 'right result';
-
-# "0" with charset
-$dom = Mojo::DOM->new->charset('UTF-8');
-$dom->parse('0');
-is $dom->charset, 'UTF-8', 'right charset';
+# "0"
+$dom = Mojo::DOM->new('0');
 is "$dom", '0', 'right result';
 $dom->append_content('☃');
-is "$dom", encode('UTF-8', '0☃'), 'right result';
+is "$dom", '0☃', 'right result';
 
 # Comments
 $dom = Mojo::DOM->new(<<EOF);

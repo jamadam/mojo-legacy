@@ -206,7 +206,7 @@ content will be automatically encoded to bytes.
 Bytes can be rendered with the C<data> stash value, no encoding will be
 performed.
 
-  $self->render(data => $octets);
+  $self->render(data => $bytes);
 
 =head2 Rendering JSON
 
@@ -222,6 +222,11 @@ generating a response, for example to send emails, this can be done using the
 C<partial> stash value.
 
   my $html = $self->render('mail', partial => 1);
+
+No encoding will be performed, making it easy to reuse the result in other
+templates or to generate binary data.
+
+  $self->render(data => $self->render('pdf_invoice', partial => 1));
 
 =head2 Status code
 
@@ -349,7 +354,7 @@ L<Mojolicious::Controller/"render_not_found">.
     return $self->render_exception('Division by zero!') if $divisor == 0;
 
     # 200
-    $self->render_text($dividend / $divisor);
+    $self->render(text => $dividend / $divisor);
   };
 
   app->start;
@@ -586,18 +591,6 @@ template with named blocks that child templates can override.
 
 This chain could go on and on to allow a very high level of template reuse.
 
-=head2 Memorizing template blocks
-
-Compiled templates are always cached in memory, but with the helper
-L<Mojolicious::Plugin::DefaultHelpers/"memorize"> you can go one step further
-and prevent template blocks from getting executed more than once.
-
-  @@ cached.html.ep
-  % use Time::Piece;
-  %= memorize begin
-    This template was compiled at <%= localtime->hms %>.
-  % end
-
 =head2 Adding helpers
 
 Adding and redefining helpers is very easy, you can use them to do pretty much
@@ -606,8 +599,8 @@ everything.
   use Mojolicious::Lite;
 
   helper debug => sub {
-    my ($self, $string) = @_;
-    $self->app->log->debug($string);
+    my ($self, $str) = @_;
+    $self->app->log->debug($str);
   };
 
   get '/' => sub {
@@ -660,8 +653,8 @@ applications, plugins make that very simple.
   sub register {
     my ($self, $app) = @_;
     $app->helper(debug => sub {
-      my ($self, $string) = @_;
-      $self->app->log->debug($string);
+      my ($self, $str) = @_;
+      $self->app->log->debug($str);
     });
   }
 
@@ -676,7 +669,7 @@ The C<register> method will be called when you load the plugin.
   get '/' => sub {
     my $self = shift;
     $self->debug('It works.');
-    $self->render_text('Hello.');
+    $self->render(text => 'Hello.');
   };
 
   app->start;
@@ -687,7 +680,7 @@ generated.
   $ mojo generate plugin DebugHelper
 
 And if you have a C<PAUSE> account (which can be requested at
-L<http://pause.perl.org>), you are only a few commands away from relasing it
+L<http://pause.perl.org>), you are only a few commands away from releasing it
 to CPAN.
 
   $ perl Makefile.PL

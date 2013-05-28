@@ -450,9 +450,10 @@ shouldn't block for too long.
 =head2 WebSocket web service
 
 The WebSocket protocol offers full bi-directional low-latency communication
-channels between clients and servers. Receiving messages is as easy as
-subscribing to the event L<Mojo::Transaction::WebSocket/"message"> with the
-method L<Mojolicious::Controller/"on">.
+channels between clients and servers. Receive messages just by subscribing to
+events such as L<Mojo::Transaction::WebSocket/"message"> with the method
+L<Mojolicious::Controller/"on"> and return them with
+L<Mojolicious::Controller/"send">.
 
   use Mojolicious::Lite;
   use Mojo::IOLoop;
@@ -529,6 +530,13 @@ L<Test::Mojo> API to be used.
     ->send_ok('Hello Mojo!')
     ->message_ok
     ->message_is('echo: Hello Mojo!')
+    ->finish_ok;
+
+  # Test JSON web service
+  $t->websocket_ok('/echo.json')
+    ->send_ok({json => {test => [1, 2, 3]}})
+    ->message_ok
+    ->json_message_is('/test', [1, 2, 3])
     ->finish_ok;
 
   done_testing();
@@ -804,7 +812,7 @@ You can just add username and password to the URL.
   use Mojo::UserAgent;
 
   my $ua = Mojo::UserAgent->new;
-  say $ua->get('https://sri:secret@mojolicio.us/hideout')->res->body;
+  say $ua->get('https://sri:secret@example.com/hideout')->res->body;
 
 =head2 Decorating followup requests
 
@@ -845,8 +853,8 @@ Generate the same type of content repeatedly for multiple requests.
   });
 
   # Send multiple files streaming via PUT and POST
-  $ua->put('http://mojolicio.us/upload'  => stream => '/home/sri/mojo.png');
-  $ua->post('http://mojolicio.us/upload' => stream => '/home/sri/mango.png');
+  $ua->put('http://example.com/upload'  => stream => '/home/sri/mojo.png');
+  $ua->post('http://example.com/upload' => stream => '/home/sri/mango.png');
 
 The C<json> and C<form> content generators are always available.
 
@@ -854,13 +862,13 @@ The C<json> and C<form> content generators are always available.
 
   # Send JSON content via PATCH
   my $ua = Mojo::UserAgent->new;
-  my $tx = $ua->patch('http://api.mojolicio.us' => json => {foo => 'bar'});
+  my $tx = $ua->patch('http://api.example.com' => json => {foo => 'bar'});
 
   # Send "application/x-www-form-urlencoded" content via POST
-  my $tx2 = $ua->post('http://search.mojolicio.us' => form => {q => 'test'});
+  my $tx2 = $ua->post('http://search.example.com' => form => {q => 'test'});
 
   # Send "multipart/form-data" content via PUT
-  my $tx3 = $ua->put('http://upload.mojolicio.us' =>
+  my $tx3 = $ua->put('http://upload.example.com' =>
     form => {test => {content => 'Hello World!'}});
 
 For more information about available content generators see also
@@ -875,7 +883,7 @@ L<Mojo::UserAgent> makes it actually easy.
 
   # Build a normal transaction
   my $ua = Mojo::UserAgent->new;
-  my $tx = $ua->build_tx(GET => 'http://mojolicio.us');
+  my $tx = $ua->build_tx(GET => 'http://example.com');
 
   # Replace "read" events to disable default content parser
   $tx->res->content->unsubscribe('read')->on(read => sub {
@@ -898,7 +906,7 @@ Sending a streaming request is almost just as easy.
 
   # Build a normal transaction
   my $ua = Mojo::UserAgent->new;
-  my $tx = $ua->build_tx(GET => 'http://mojolicio.us');
+  my $tx = $ua->build_tx(GET => 'http://example.com');
 
   # Prepare content
   my $content = 'Hello world!';
@@ -948,7 +956,7 @@ Uploading a large file is even easier.
 
   # Upload file via POST and "multipart/form-data"
   my $ua = Mojo::UserAgent->new;
-  $ua->post('mojolicio.us/upload' =>
+  $ua->post('example.com/upload' =>
     form => {image => {file => '/home/sri/hello.png'}});
 
 And once again you don't have to worry about memory usage, all data will be
@@ -1067,7 +1075,7 @@ Fun hacks you might not use very often but that might come in handy some day.
 
 =head2 Adding commands to Mojolicious
 
-By now you've propably used many of the built-in commands described in
+By now you've probably used many of the built-in commands described in
 L<Mojolicious::Commands>, but did you know that you can just add new ones and
 that they will be picked up automatically by the command line interface?
 
@@ -1093,7 +1101,7 @@ There are many more useful methods and attributes in L<Mojolicious::Command>
 that you can use or overload.
 
   $ mojo spy secret
-  The secret of this application is "Mojolicious::Lite".
+  The secret of this application is "HelloWorld".
 
   $ ./myapp.pl spy secret
   The secret of this application is "secr3t".

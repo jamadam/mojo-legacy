@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_MODE}    = 'development';
   $ENV{MOJO_NO_IPV6} = 1;
@@ -44,10 +43,16 @@ get '/double_dead_action_☃' => sub {
 get '/trapped' => sub {
   my $self = shift;
   eval { die {foo => 'bar'} };
-  $self->render_text($@->{foo} || 'failed');
+  $self->render(text => $@->{foo} || 'failed');
 };
 
 get '/missing_template';
+
+get '/missing_template/too' => sub {
+  my $self = shift;
+  $self->render('does_not_exist')
+    or $self->res->headers->header('X-Not-Found' => 1);
+};
 
 # Dummy exception object
 package MyException;
@@ -61,7 +66,7 @@ package main;
 get '/trapped/too' => sub {
   my $self = shift;
   eval { die MyException->new(error => 'works') };
-  $self->render_text("$@" || 'failed');
+  $self->render(text => "$@" || 'failed');
 };
 
 # Reuse exception and snapshot
@@ -180,6 +185,11 @@ $t->get_ok('/missing_template.xml')->status_is(404)
 # Missing template with unsupported format
 $t->get_ok('/missing_template.json')->status_is(404)
   ->content_type_is('text/html;charset=UTF-8')
+  ->content_like(qr/Page not found/);
+
+# Missing template (failed rendering)
+$t->get_ok('/missing_template/too')->status_is(404)
+  ->header_is('X-Not-Found' => 1)->content_type_is('text/html;charset=UTF-8')
   ->content_like(qr/Page not found/);
 
 # Reuse exception

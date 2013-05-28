@@ -15,7 +15,7 @@ has accept_interval => 0.025;
 has [qw(graceful_timeout heartbeat_timeout)] => 20;
 has heartbeat_interval => 5;
 has lock_file          => sub { catfile tmpdir, 'prefork.lock' };
-has lock_timeout       => 0.5;
+has lock_timeout       => 1;
 has multi_accept       => 50;
 has pid_file           => sub { catfile tmpdir, 'prefork.pid' };
 has workers            => 4;
@@ -154,7 +154,7 @@ sub _pid_file {
 sub _reap {
   my ($self, $pid) = @_;
 
-  # CLean up dead worker
+  # Clean up dead worker
   $self->app->log->debug("Worker $pid stopped.")
     if delete $self->emit(reap => $pid)->{pool}{$pid};
 }
@@ -396,9 +396,9 @@ and implements the following new ones.
   my $interval = $prefork->accept_interval;
   $prefork     = $prefork->accept_interval(0.5);
 
-Interval in seconds for trying to reacquire the accept mutex and connection
-management, defaults to C<0.025>. Note that changing this value can affect
-performance and idle CPU usage.
+Interval in seconds for trying to reacquire the accept mutex, defaults to
+C<0.025>. Note that changing this value can affect performance and idle CPU
+usage.
 
 =head2 accepts
 
@@ -445,10 +445,11 @@ appended, defaults to a random temporary path.
 =head2 lock_timeout
 
   my $timeout = $prefork->lock_timeout;
-  $prefork    = $prefork->lock_timeout(1);
+  $prefork    = $prefork->lock_timeout(0.5);
 
 Maximum amount of time in seconds a worker may block when waiting for the
-accept mutex, defaults to C<0.5>.
+accept mutex, defaults to C<1>. Note that changing this value can affect
+performance and idle CPU usage.
 
 =head2 multi_accept
 

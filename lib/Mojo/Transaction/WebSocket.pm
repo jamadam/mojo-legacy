@@ -2,6 +2,7 @@ package Mojo::Transaction::WebSocket;
 use Mojo::Base 'Mojo::Transaction';
 
 use Config;
+use Mojo::JSON;
 use Mojo::Transaction::HTTP;
 use Mojo::Util qw(b64_encode decode encode sha1_bytes xor_encode);
 
@@ -90,10 +91,8 @@ sub client_handshake {
   my $self = shift;
 
   my $headers = $self->req->headers;
-  $headers->upgrade('websocket')  unless $headers->upgrade;
-  $headers->connection('Upgrade') unless $headers->connection;
-  $headers->sec_websocket_protocol('mojo')
-    unless $headers->sec_websocket_protocol;
+  $headers->upgrade('websocket')      unless $headers->upgrade;
+  $headers->connection('Upgrade')     unless $headers->connection;
   $headers->sec_websocket_version(13) unless $headers->sec_websocket_version;
 
   # Generate WebSocket challenge
@@ -200,12 +199,17 @@ sub resume {
 sub send {
   my ($self, $frame, $cb) = @_;
 
-  # Binary or raw text
-  $frame
-    = exists $frame->{text}
-    ? [1, 0, 0, 0, TEXT, $frame->{text}]
-    : [1, 0, 0, 0, BINARY, $frame->{binary}]
-    if ref $frame eq 'HASH';
+  if (ref $frame eq 'HASH') {
+
+    # JSON
+    $frame->{text} = Mojo::JSON->new->encode($frame->{json}) if $frame->{json};
+
+    # Binary or raw text
+    $frame
+      = exists $frame->{text}
+      ? [1, 0, 0, 0, TEXT, $frame->{text}]
+      : [1, 0, 0, 0, BINARY, $frame->{binary}];
+  }
 
   # Text or object (forcing stringification)
   $frame = [1, 0, 0, 0, TEXT, encode('UTF-8', "$frame")]
@@ -288,12 +292,12 @@ sub _message {
 
   # Whole message
   my $msg = delete $self->{message};
-  if (delete $self->{op} == TEXT) {
-    $self->emit(text => $msg);
-    $msg = decode 'UTF-8', $msg;
-  }
-  else { $self->emit(binary => $msg); }
-  $self->emit(message => $msg);
+  $self->emit(json => Mojo::JSON->new->decode($msg))
+    if $self->has_subscribers('json');
+  $op = delete $self->{op};
+  $self->emit($op == TEXT ? 'text' : 'binary' => $msg);
+  $self->emit(message => $op == TEXT ? decode('UTF-8', $msg) : $msg)
+    if $self->has_subscribers('message');
 }
 
 1;
@@ -321,8 +325,8 @@ Mojo::Transaction::WebSocket - WebSocket transaction
 =head1 DESCRIPTION
 
 L<Mojo::Transaction::WebSocket> is a container for WebSocket transactions as
-described in RFC 6455. Note that 64bit frames require a Perl with 64bit
-integer support, or they are limited to 32bit.
+described in RFC 6455. Note that 64bit frames require a Perl with support for
+quads or they are limited to 32bit.
 
 =head1 EVENTS
 
@@ -386,6 +390,22 @@ Emitted when a WebSocket frame has been received.
     say "Payload: $frame->[5]";
   });
 
+=head2 json
+
+  $ws->on(json => sub {
+    my ($ws, $json) = @_;
+    ...
+  });
+
+Emitted when a complete WebSocket message has been received, all text and
+binary messages will be automatically JSON decoded. Note that this event only
+gets emitted when it has at least one subscriber.
+
+  $ws->on(json => sub {
+    my ($ws, $hash) = @_;
+    say "Message: $hash->{msg}";
+  });
+
 =head2 message
 
   $ws->on(message => sub {
@@ -394,7 +414,8 @@ Emitted when a WebSocket frame has been received.
   });
 
 Emitted when a complete WebSocket message has been received, text messages
-will be automatically decoded.
+will be automatically decoded. Note that this event only gets emitted when it
+has at least one subscriber.
 
   $ws->on(message => sub {
     my ($ws, $msg) = @_;
@@ -592,6 +613,7 @@ Resume C<handshake> transaction.
 
   $ws = $ws->send({binary => $bytes});
   $ws = $ws->send({text   => $bytes});
+  $ws = $ws->send({json   => {test => [1, 2, 3]}});
   $ws = $ws->send([$fin, $rsv1, $rsv2, $rsv3, $op, $bytes]);
   $ws = $ws->send(Mojo::ByteStream->new($chars));
   $ws = $ws->send($chars);

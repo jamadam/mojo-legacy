@@ -29,11 +29,11 @@ sub add {
   my ($self, $name) = (shift, shift);
 
   # Make sure we have a normal case entry for name
-  my $lcname = lc $name;
-  $self->{normalcase}{$lcname} = $self->{normalcase}{$lcname} ? $self->{normalcase}{$lcname} : $name unless $NORMALCASE{$lcname};
+  my $key = lc $name;
+  $self->{normalcase}{$key} = defined $self->{normalcase}{$key} ? $self->{normalcase}{$key} : $name unless $NORMALCASE{$key};
 
   # Add lines
-  push @{$self->{headers}{$lcname}}, map { ref $_ eq 'ARRAY' ? $_ : [$_] } @_;
+  push @{$self->{headers}{$key}}, map { ref $_ eq 'ARRAY' ? $_ : [$_] } @_;
 
   return $self;
 }
@@ -453,7 +453,7 @@ Shortcut for the C<Range> header.
 =head2 referrer
 
   my $referrer = $headers->referrer;
-  $headers     = $headers->referrer('http://mojolicio.us');
+  $headers     = $headers->referrer('http://example.com');
 
 Shortcut for the C<Referer> header, there was a typo in RFC 2068 which
 resulted in C<Referer> becoming an official header.
@@ -539,7 +539,7 @@ multiline values are disabled by default.
 
 =head2 to_string
 
-  my $string = $headers->to_string;
+  my $str = $headers->to_string;
 
 Turn headers into a string, suitable for HTTP messages.
 

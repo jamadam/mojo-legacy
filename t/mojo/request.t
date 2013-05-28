@@ -85,7 +85,7 @@ ok $req->is_finished, 'request is finished';
 is $req->error,       'Maximum line size exceeded', 'right error';
 is $req->method,      'GET', 'right method';
 is $req->version,     '1.1', 'right version';
-is $req->url,         '', 'right URL';
+is $req->url,         '', 'no URL';
 is $req->cookie('a'), undef, 'no value';
 is $req->body, '', 'no content';
 
@@ -98,7 +98,7 @@ ok $req->is_finished, 'request is finished';
 is $req->error,       'Maximum line size exceeded', 'right error';
 is $req->method,      'GET', 'right method';
 is $req->version,     '1.1', 'right version';
-is $req->url,         '', 'right URL';
+is $req->url,         '', 'no URL';
 is $req->cookie('a'), undef, 'no value';
 is $req->body, '', 'no content';
 
@@ -108,23 +108,19 @@ is $req->content->max_leftover_size, 262144, 'right size';
 $req->parse("GET /one HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'a' x 120000);
 ok $req->is_finished, 'request is finished';
-ok !$req->has_leftovers, 'has no leftovers';
+is $req->content->leftovers, '', 'no leftovers';
 $req->parse("GET /two HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'b' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 120045, 'right size';
+is length($req->content->leftovers), 120045, 'right size';
 $req->parse("GET /three HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'c' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 240092, 'right size';
+is length($req->content->leftovers), 240092, 'right size';
 $req->parse("GET /four HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'd' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 360138, 'right size';
+is length($req->content->leftovers), 360138, 'right size';
 $req->parse("GET /five HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'e' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 360138, 'right size';
+is length($req->content->leftovers), 360138, 'right size';
 is $req->error,   undef,  'no error';
 is $req->method,  'GET',  'right method';
 is $req->version, '1.1',  'right version';
@@ -141,23 +137,19 @@ $req->parse("\x0d\x0aea60\x0d\x0a");
 $req->parse('a' x 60000);
 $req->parse("\x0d\x0a0\x0d\x0a\x0d\x0a");
 ok $req->is_finished, 'request is finished';
-ok !$req->has_leftovers, 'has no leftovers';
+is $req->content->leftovers, '', 'no leftovers';
 $req->parse("GET /two HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'b' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 120045, 'right size';
+is length($req->content->leftovers), 120045, 'right size';
 $req->parse("GET /three HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'c' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 240092, 'right size';
+is length($req->content->leftovers), 240092, 'right size';
 $req->parse("GET /four HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'd' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 360138, 'right size';
+is length($req->content->leftovers), 360138, 'right size';
 $req->parse("GET /five HTTP/1.1\x0d\x0a");
 $req->parse("Content-Length: 120000\x0d\x0a\x0d\x0a" . 'e' x 120000);
-ok $req->has_leftovers, 'has leftovers';
-is length($req->leftovers), 360138, 'right size';
+is length($req->content->leftovers), 360138, 'right size';
 is $req->error,   undef,  'no error';
 is $req->method,  'GET',  'right method';
 is $req->version, '1.1',  'right version';
@@ -218,13 +210,12 @@ is $req->url,         '/', 'right URL';
 $req = Mojo::Message::Request->new;
 $req->parse("GET / HTTP/1.1\x0d\x0a\x0d\x0aGET / HTTP/1.1\x0d\x0a\x0d\x0a");
 ok $req->is_finished, 'request is finished';
-is $req->leftovers,   "GET / HTTP/1.1\x0d\x0a\x0d\x0a",
+is $req->content->leftovers, "GET / HTTP/1.1\x0d\x0a\x0d\x0a",
   'second request in leftovers';
 
 # Parse HTTP 1.1 start line, no headers and body with leading CRLFs
-# (SHOULD be ignored, RFC 2616, Section 4.1)
 $req = Mojo::Message::Request->new;
-$req->parse("\x0d\x0aGET / HTTP/1.1\x0d\x0a\x0d\x0a");
+$req->parse("\x0d\x0a GET / HTTP/1.1\x0d\x0a\x0d\x0a");
 ok $req->is_finished, 'request is finished';
 is $req->method,      'GET', 'right method';
 is $req->version,     '1.1', 'right version';
@@ -329,21 +320,28 @@ is $req->headers->content_length, undef,        'no "Content-Length" value';
 
 # Parse HTTP 1.0 start line (with line size limit)
 {
-  $req = Mojo::Message::Request->new;
-  ok !$req->is_limit_exceeded, 'limit is not exceeded';
   local $ENV{MOJO_MAX_LINE_SIZE} = 5;
+  $req = Mojo::Message::Request->new;
+  my $limit;
+  $req->on(finish => sub { $limit = shift->is_limit_exceeded });
+  ok !$req->is_limit_exceeded, 'limit is not exceeded';
   is $req->headers->max_line_size, 5, 'right size';
   $req->parse('GET /foo/bar/baz.html HTTP/1');
   ok $req->is_finished, 'request is finished';
   is(($req->error)[0], 'Maximum line size exceeded', 'right error');
   is(($req->error)[1], 431, 'right status');
   ok $req->is_limit_exceeded, 'limit is exceeded';
+  ok $limit, 'limit is exceeded';
+  $req->error('Nothing important.');
+  is(($req->error)[0], 'Nothing important.', 'right error');
+  is(($req->error)[1], undef, 'no status');
+  ok $req->is_limit_exceeded, 'limit is still exceeded';
 }
 
 # Parse HTTP 1.0 start line and headers (with line size limit)
 {
-  $req = Mojo::Message::Request->new;
   local $ENV{MOJO_MAX_LINE_SIZE} = 20;
+  $req = Mojo::Message::Request->new;
   is $req->max_line_size, 20, 'right size';
   $req->parse("GET / HTTP/1.0\x0d\x0a");
   $req->parse("Content-Type: text/plain\x0d\x0a");
@@ -355,20 +353,23 @@ is $req->headers->content_length, undef,        'no "Content-Length" value';
 
 # Parse HTTP 1.0 start line (with message size limit)
 {
-  $req = Mojo::Message::Request->new;
   local $ENV{MOJO_MAX_MESSAGE_SIZE} = 5;
+  $req = Mojo::Message::Request->new;
+  my $limit;
+  $req->on(finish => sub { $limit = shift->is_limit_exceeded });
   is $req->max_message_size, 5, 'right size';
   $req->parse('GET /foo/bar/baz.html HTTP/1');
   ok $req->is_finished, 'request is finished';
   is(($req->error)[0], 'Maximum message size exceeded', 'right error');
   is(($req->error)[1], 413, 'right status');
   ok $req->is_limit_exceeded, 'limit is exceeded';
+  ok $limit, 'limit is exceeded';
 }
 
 # Parse HTTP 1.0 start line and headers (with message size limit)
 {
-  $req = Mojo::Message::Request->new;
   local $ENV{MOJO_MAX_MESSAGE_SIZE} = 20;
+  $req = Mojo::Message::Request->new;
   $req->parse("GET / HTTP/1.0\x0d\x0a");
   $req->parse("Content-Type: text/plain\x0d\x0a");
   ok $req->is_finished, 'request is finished';
@@ -379,8 +380,8 @@ is $req->headers->content_length, undef,        'no "Content-Length" value';
 
 # Parse HTTP 1.0 start line, headers and body (with message size limit)
 {
-  $req = Mojo::Message::Request->new;
   local $ENV{MOJO_MAX_MESSAGE_SIZE} = 50;
+  $req = Mojo::Message::Request->new;
   $req->parse("GET / HTTP/1.0\x0d\x0a");
   $req->parse("Content-Length: 24\x0d\x0a\x0d\x0a");
   $req->parse('Hello World!');
@@ -391,14 +392,14 @@ is $req->headers->content_length, undef,        'no "Content-Length" value';
   ok $req->is_limit_exceeded, 'limit is exceeded';
 }
 
-# Parse full HTTP 1.0 request
+# Parse full HTTP 1.0 request (solitary LF)
 $req = Mojo::Message::Request->new;
 my $body = '';
 $req->content->on(read => sub { $body .= pop });
 $req->parse('GET /foo/bar/baz.html?fo');
-$req->parse("o=13#23 HTTP/1.0\x0d\x0aContent");
+$req->parse("o=13#23 HTTP/1.0\x0aContent");
 $req->parse('-Type: text/');
-$req->parse("plain\x0d\x0aContent-Length: 27\x0d\x0a\x0d\x0aH");
+$req->parse("plain\x0aContent-Length: 27\x0a\x0aH");
 $req->parse("ello World!\n1234\nlalalala\n");
 ok $req->is_finished, 'request is finished';
 is $req->method,      'GET', 'right method';
@@ -515,7 +516,7 @@ $req->on(
     $progress ||= $self->url->path if $self->content->is_parsing_body;
   }
 );
-$req->body(sub { $buffer .= shift->url->query->param('foo') . shift });
+$req->content->unsubscribe('read')->on(read => sub { $buffer .= pop });
 $req->on(finish => sub { $finish .= shift->url->fragment });
 $req->parse("POST /foo/bar/baz.html?foo=13#23 HTTP/1.1\x0d\x0a");
 is $progress, '', 'no progress';
@@ -537,14 +538,14 @@ is $req->version,     '1.1', 'right version';
 is $req->url,         '/foo/bar/baz.html?foo=13#23', 'right URL';
 is $req->headers->content_length, 13,           'right "Content-Length" value';
 is $req->headers->content_type,   'text/plain', 'right "Content-Type" value';
-is $buffer, '131313abcd1313abcdefghi', 'right content';
+is $buffer, 'abcdabcdefghi', 'right content';
 
 # Parse HTTP 1.1 "x-application-urlencoded"
 $req = Mojo::Message::Request->new;
 $req->parse("POST /foo/bar/baz.html?foo=13#23 HTTP/1.1\x0d\x0a");
-$req->parse("Content-Length: 26\x0d\x0a");
+$req->parse("Content-Length: 25\x0d\x0a");
 $req->parse("Content-Type: x-application-urlencoded\x0d\x0a\x0d\x0a");
-$req->parse('foo=bar& tset=23+;&foo=bar');
+$req->parse('foo=bar& tset=23+&foo=bar');
 ok $req->is_finished, 'request is finished';
 is $req->method,      'POST', 'right method';
 is $req->version,     '1.1', 'right version';
@@ -552,8 +553,8 @@ is $req->url,         '/foo/bar/baz.html?foo=13#23', 'right URL';
 is $req->headers->content_type, 'x-application-urlencoded',
   'right "Content-Type" value';
 ok !$req->content->asset->is_file, 'stored in memory';
-is $req->content->asset->size, 26, 'right size';
-is $req->content->asset->slurp, 'foo=bar& tset=23+;&foo=bar', 'right content';
+is $req->content->asset->size, 25, 'right size';
+is $req->content->asset->slurp, 'foo=bar& tset=23+&foo=bar', 'right content';
 is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
 is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
@@ -563,9 +564,9 @@ is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
 $req = Mojo::Message::Request->new;
 $req->content->asset->max_memory_size(10);
 $req->parse("POST /foo/bar/baz.html?foo=13#23 HTTP/1.1\x0d\x0a");
-$req->parse("Content-Length: 26\x0d\x0a");
+$req->parse("Content-Length: 25\x0d\x0a");
 $req->parse("Content-Type: x-application-urlencoded\x0d\x0a\x0d\x0a");
-$req->parse('foo=bar& tset=23+;&foo=bar');
+$req->parse('foo=bar& tset=23+&foo=bar');
 ok $req->is_finished, 'request is finished';
 is $req->method,      'POST', 'right method';
 is $req->version,     '1.1', 'right version';
@@ -573,8 +574,8 @@ is $req->url,         '/foo/bar/baz.html?foo=13#23', 'right URL';
 is $req->headers->content_type, 'x-application-urlencoded',
   'right "Content-Type" value';
 ok $req->content->asset->is_file, 'stored in file';
-is $req->content->asset->size, 26, 'right size';
-is $req->content->asset->slurp, 'foo=bar& tset=23+;&foo=bar', 'right content';
+is $req->content->asset->size,    25, 'right size';
+is $req->content->asset->slurp,   'foo=bar& tset=23+&foo=bar', 'right content';
 is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
 is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
@@ -583,17 +584,17 @@ is_deeply $req->params->to_hash->{foo}, [qw(bar bar 13)], 'right values';
 # Parse HTTP 1.1 "application/x-www-form-urlencoded"
 $req = Mojo::Message::Request->new;
 $req->parse("POST /foo/bar/baz.html?foo=13#23 HTTP/1.1\x0d\x0a");
-$req->parse("Content-Length: 26\x0d\x0a");
+$req->parse("Content-Length: 25\x0d\x0a");
 $req->parse("Content-Type: application/x-www-form-urlencoded\x0d\x0a");
-$req->parse("\x0d\x0afoo=bar&+tset=23+;&foo=bar");
+$req->parse("\x0d\x0afoo=bar&+tset=23+&foo=bar");
 ok $req->is_finished, 'request is finished';
 is $req->method,      'POST', 'right method';
 is $req->version,     '1.1', 'right version';
 is $req->url,         '/foo/bar/baz.html?foo=13#23', 'right URL';
 is $req->headers->content_type, 'application/x-www-form-urlencoded',
   'right "Content-Type" value';
-is $req->content->asset->size, 26, 'right size';
-is $req->content->asset->slurp, 'foo=bar&+tset=23+;&foo=bar', 'right content';
+is $req->content->asset->size, 25, 'right size';
+is $req->content->asset->slurp, 'foo=bar&+tset=23+&foo=bar', 'right content';
 is_deeply $req->body_params->to_hash->{foo}, [qw(bar bar)], 'right values';
 is $req->body_params->to_hash->{' tset'}, '23 ', 'right value';
 is $req->body_params, 'foo=bar&+tset=23+&foo=bar', 'right parameters';
@@ -728,12 +729,12 @@ $req->parse("use warnings;\n\n");
 $req->parse("print \"Hello World :)\\n\"\n");
 $req->parse("\x0d\x0a------------0xKhTmLbOuNdArY--");
 is $req->content->progress, 416, 'right progress';
-ok $req->is_finished,  'request is finished';
-ok $req->is_multipart, 'multipart content';
-is $req->method,       'GET', 'right method';
-is $req->version,      '1.1', 'right version';
+ok $req->is_finished, 'request is finished';
+ok $req->content->is_multipart, 'multipart content';
+is $req->method,       'GET',                        'right method';
+is $req->version,      '1.1',                        'right version';
 is $req->url,          '/foo/bar/baz.html?foo13#23', 'right URL';
-is $req->query_params, 'foo13', 'right parameters';
+is $req->query_params, 'foo13',                      'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
@@ -790,12 +791,12 @@ $req->parse("use strict;\n");
 $req->parse("use warnings;\n\n");
 $req->parse("print \"Hello World :)\\n\"\n");
 $req->parse("\x0d\x0a------------0xKhTmLbOuNdArY--");
-ok $req->is_finished,  'request is finished';
-ok $req->is_multipart, 'multipart content';
-is $req->method,       'GET', 'right method';
-is $req->version,      '1.1', 'right version';
+ok $req->is_finished, 'request is finished';
+ok $req->content->is_multipart, 'multipart content';
+is $req->method,       'GET',                        'right method';
+is $req->version,      '1.1',                        'right version';
 is $req->url,          '/foo/bar/baz.html?foo13#23', 'right URL';
-is $req->query_params, 'foo13', 'right parameters';
+is $req->query_params, 'foo13',                      'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
@@ -866,12 +867,12 @@ is $stream, '#!/usr/bin/', 'right content';
 $req->parse("print \"Hello World :)\\n\"\n");
 is $stream, "#!/usr/bin/perl\n\nuse strict;\nuse war", 'right content';
 $req->parse("\x0d\x0a------------0xKhTmLbOuNdArY--");
-ok $req->is_finished,  'request is finished';
-ok $req->is_multipart, 'multipart content';
-is $req->method,       'GET', 'right method';
-is $req->version,      '1.1', 'right version';
+ok $req->is_finished, 'request is finished';
+ok $req->content->is_multipart, 'multipart content';
+is $req->method,       'GET',                        'right method';
+is $req->version,      '1.1',                        'right version';
 is $req->url,          '/foo/bar/baz.html?foo13#23', 'right URL';
-is $req->query_params, 'foo13', 'right parameters';
+is $req->query_params, 'foo13',                      'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
@@ -911,7 +912,7 @@ $req->parse("use warnings;\n\n");
 $req->parse("print \"Hello World :)\\n\"\n");
 $req->parse("\x0d\x0a------------0xKhTmLbOuNdArY--");
 ok $req->is_finished, 'request is finished';
-ok !$req->is_multipart, 'no multipart content';
+ok !$req->content->is_multipart, 'no multipart content';
 is $req->method,       'GET',                        'right method';
 is $req->version,      '1.1',                        'right version';
 is $req->url,          '/foo/bar/baz.html?foo13#23', 'right URL';
@@ -944,12 +945,12 @@ $req->parse("use strict;\n");
 $req->parse("use warnings;\n\n");
 $req->parse("print \"Hello World :)\\n\"\n");
 $req->parse("\x0d\x0a------------0xKhTmLbOuNdArY--");
-ok $req->is_finished,  'request is finished';
-ok $req->is_multipart, 'no multipart content';
-is $req->method,       'GET', 'right method';
-is $req->version,      '1.1', 'right version';
+ok $req->is_finished, 'request is finished';
+ok $req->content->is_multipart, 'no multipart content';
+is $req->method,       'GET',                        'right method';
+is $req->version,      '1.1',                        'right version';
 is $req->url,          '/foo/bar/baz.html?foo13#23', 'right URL';
-is $req->query_params, 'foo13', 'right parameters';
+is $req->query_params, 'foo13',                      'right parameters';
 is $req->headers->content_type,
   'multipart/form-data; boundary=----------0xKhTmLbOuNdArY',
   'right "Content-Type" value';
@@ -1182,12 +1183,10 @@ is $req->headers->host,   '127.0.0.1',                'right "Host" value';
 is $req->headers->content_length, '13', 'right "Content-Length" value';
 is $req->body, "Hello World!\n", 'right content';
 my $req2 = Mojo::Message::Request->new->parse($req->to_string);
-ok !$req->has_leftovers, 'has no leftovers';
-is $req->leftovers, '',    'no leftovers';
-is $req->error,     undef, 'no error';
-ok !$req2->has_leftovers, 'has no leftovers';
-is $req2->leftovers, '',    'no leftovers';
-is $req2->error,     undef, 'no error';
+is $req->content->leftovers, '', 'no leftovers';
+is $req->error, undef, 'no error';
+is $req2->content->leftovers, '', 'no leftovers';
+is $req2->error, undef, 'no error';
 ok $req2->is_finished, 'request is finished';
 is $req2->method,      'GET', 'right method';
 is $req2->version,     '1.1', 'right version';
@@ -1509,7 +1508,7 @@ $req->url->parse('http://127.0.0.1:8080/foo/bar');
 $req->headers->transfer_encoding('chunked');
 my $counter;
 $req->on(progress => sub { $counter++ });
-$req->write_chunk(
+$req->content->write_chunk(
   'hello world!' => sub {
     shift->write_chunk(
       "hello world2!\n\n" => sub {
@@ -1535,9 +1534,9 @@ ok $counter, 'right counter';
 $req = Mojo::Message::Request->new;
 $req->method('GET');
 $req->url->parse('http://127.0.0.1/foo/bar');
-$req->write_chunk('hello world!');
-$req->write_chunk("hello world2!\n\n");
-$req->write_chunk('');
+$req->content->write_chunk('hello world!');
+$req->content->write_chunk("hello world2!\n\n");
+$req->content->write_chunk('');
 is $req->clone, undef, 'dynamic requests cannot be cloned';
 $req = Mojo::Message::Request->new->parse($req->to_string);
 ok $req->is_finished, 'request is finished';

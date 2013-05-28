@@ -11,14 +11,17 @@ sub client_read {
   $res->content->skip_body(1) if uc $self->req->method eq 'HEAD';
   return unless $res->parse($chunk)->is_finished;
 
-  # Unexpected 1xx reponse
+  # Unexpected 1xx response
   return $self->{state} = 'finished'
     if !$res->is_status_class(100) || $res->headers->upgrade;
   $self->res($res->new)->emit(unexpected => $res);
-  $self->client_read($res->leftovers) if $res->has_leftovers;
+  return unless length(my $leftovers = $res->content->leftovers);
+  $self->client_read($leftovers);
 }
 
 sub client_write { shift->_write(0) }
+
+sub is_empty { !!(uc $_[0]->req->method eq 'HEAD' || $_[0]->res->is_empty) }
 
 sub keep_alive {
   my $self = shift;
@@ -60,7 +63,7 @@ sub _body {
   # Prepare body chunk
   my $buffer = $msg->get_body_chunk($self->{offset});
   my $written = defined $buffer ? length $buffer : 0;
-  $self->{write} = $msg->is_dynamic ? 1 : ($self->{write} - $written);
+  $self->{write} = $msg->content->is_dynamic ? 1 : ($self->{write} - $written);
   $self->{offset} = $self->{offset} + $written;
   if (defined $buffer) { delete $self->{delay} }
 
@@ -71,7 +74,7 @@ sub _body {
   }
 
   # Finished
-  $self->{state} = $finish ? 'finished' : 'read_response'
+  $self->{state} = $finish ? 'finished' : 'read'
     if $self->{write} <= 0 || (defined $buffer && !length $buffer);
 
   return defined $buffer ? $buffer : '';
@@ -91,13 +94,12 @@ sub _headers {
     $self->{offset} = 0;
 
     # Response without body
-    $head = $head && (uc $self->req->method eq 'HEAD' || $msg->is_empty);
-    if ($head) { $self->{state} = 'finished' }
+    if ($head && $self->is_empty) { $self->{state} = 'finished' }
 
     # Body
     else {
-      $self->{state} = 'write_body';
-      $self->{write} = $msg->is_dynamic ? 1 : $msg->body_size;
+      $self->{http_state} = 'body';
+      $self->{write} = $msg->content->is_dynamic ? 1 : $msg->body_size;
     }
   }
 
@@ -115,9 +117,9 @@ sub _start_line {
 
   # Switch to headers
   if ($self->{write} <= 0) {
-    $self->{state}  = 'write_headers';
-    $self->{write}  = $msg->header_size;
-    $self->{offset} = 0;
+    $self->{http_state} = 'headers';
+    $self->{write}      = $msg->header_size;
+    $self->{offset}     = 0;
   }
 
   return $buffer;
@@ -126,10 +128,14 @@ sub _start_line {
 sub _write {
   my ($self, $server) = @_;
 
+  # Client starts writing right away
+  $self->{state} ||= 'write' unless $server;
+  return '' unless $self->{state} eq 'write';
+
   # Nothing written yet
   $self->{$_} ||= 0 for qw(offset write);
   my $msg = $server ? $self->res : $self->req;
-  if ($server ? ($self->{state} eq 'write') : !$self->{state}) {
+  unless ($self->{http_state}) {
 
     # Connection header
     my $headers = $msg->headers;
@@ -137,20 +143,19 @@ sub _write {
       unless $headers->connection;
 
     # Switch to start line
-    $self->{state} = 'write_start_line';
-    $self->{write} = $msg->start_line_size;
+    $self->{http_state} = 'start_line';
+    $self->{write}      = $msg->start_line_size;
   }
 
   # Start line
   my $chunk = '';
-  $chunk .= $self->_start_line($msg) if $self->{state} eq 'write_start_line';
+  $chunk .= $self->_start_line($msg) if $self->{http_state} eq 'start_line';
 
   # Headers
-  $chunk .= $self->_headers($msg, $server)
-    if $self->{state} eq 'write_headers';
+  $chunk .= $self->_headers($msg, $server) if $self->{http_state} eq 'headers';
 
   # Body
-  $chunk .= $self->_body($msg, $server) if $self->{state} eq 'write_body';
+  $chunk .= $self->_body($msg, $server) if $self->{http_state} eq 'body';
 
   return $chunk;
 }
@@ -168,7 +173,7 @@ Mojo::Transaction::HTTP - HTTP transaction
   # Client
   my $tx = Mojo::Transaction::HTTP->new;
   $tx->req->method('GET');
-  $tx->req->url->parse('http://mojolicio.us');
+  $tx->req->url->parse('http://example.com');
   $tx->req->headers->accept('application/json');
   say $tx->res->code;
   say $tx->res->headers->content_type;
@@ -258,6 +263,12 @@ Read data client-side, used to implement user agents.
   my $bytes = $tx->client_write;
 
 Write data client-side, used to implement user agents.
+
+=head2 is_empty
+
+  my $success = $tx->is_empty;
+
+Check transaction for C<HEAD> request and C<1xx>, C<204> or C<304> response.
 
 =head2 keep_alive
 

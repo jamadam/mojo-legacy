@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6, TLS and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = $ENV{MOJO_NO_TLS} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -39,12 +38,12 @@ get '/echo' => sub {
   my $self = shift;
   gzip \(my $uncompressed = $self->req->body), \my $compressed;
   $self->res->headers->content_encoding($self->req->headers->accept_encoding);
-  $self->render_data($compressed);
+  $self->render(data => $compressed);
 };
 
 post '/echo' => sub {
   my $self = shift;
-  $self->render_data($self->req->body);
+  $self->render(data => $self->req->body);
 };
 
 # Proxy detection
@@ -238,13 +237,15 @@ ok $tx->success, 'successful';
 ok !$tx->kept_alive, 'kept connection not alive';
 ok $tx->keep_alive, 'keep connection alive';
 is $tx->res->code, 204, 'right status';
-is $tx->res->body, '',  'no content';
+ok $tx->is_empty, 'transaction is empty';
+is $tx->res->body, '', 'no content';
 
 # Connection was kept alive
 $tx = $ua->get('/');
 ok $tx->success,    'successful';
 ok $tx->kept_alive, 'kept connection alive';
-is $tx->res->code, 200,      'right status';
+is $tx->res->code, 200, 'right status';
+ok !$tx->is_empty, 'transaction is not empty';
 is $tx->res->body, 'works!', 'right content';
 
 # Non-blocking form
@@ -315,13 +316,14 @@ $ua->once(
 $tx = $ua->get('/echo' => 'Hello World!');
 ok !$tx->success, 'not successful';
 is(($tx->error)[0], 'Maximum message size exceeded', 'right error');
-is(($tx->error)[1], undef, 'no code');
+is(($tx->error)[1], undef, 'no status');
+ok $tx->res->is_limit_exceeded, 'limit is exceeded';
 
 # 404 response
 $tx = $ua->get('/does_not_exist');
 ok !$tx->success, 'not successful';
 is(($tx->error)[0], 'Not Found', 'right error');
-is(($tx->error)[1], 404,         'right code');
+is(($tx->error)[1], 404,         'right status');
 
 # Introspect
 my $req = my $res = '';
@@ -372,21 +374,21 @@ $tx = $ua->build_tx(GET => '/echo');
 my $i = 0;
 my ($stream, $drain);
 $drain = sub {
-  my $req = shift;
+  my $content = shift;
   return $ua->ioloop->timer(
     0.25 => sub {
-      $req->write_chunk('');
+      $content->write_chunk('');
       $tx->resume;
       $stream
         += @{Mojo::IOLoop->stream($tx->connection)->subscribers('drain')};
     }
   ) if $i >= 10;
-  $req->write_chunk($i++, $drain);
+  $content->write_chunk($i++, $drain);
   $tx->resume;
   return unless my $id = $tx->connection;
   $stream += @{Mojo::IOLoop->stream($id)->subscribers('drain')};
 };
-$tx->req->$drain;
+$tx->req->content->$drain;
 $ua->start($tx);
 ok $tx->success, 'successful';
 ok !$tx->error, 'no error';

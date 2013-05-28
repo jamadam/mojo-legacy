@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -238,7 +237,7 @@ is $client, 'works!', 'full message has been written';
 $err = '';
 $loop = Mojo::IOLoop->new(max_connections => 0);
 $loop->remove($loop->client({port => $loop->generate_port} => sub { }));
-$loop->timer(1 => sub { shift->stop; $err = 'failed' });
+$loop->timer(3 => sub { shift->stop; $err = 'failed' });
 $loop->start;
 ok !$err, 'no error';
 is $loop->max_connections, 0, 'right value';
@@ -250,7 +249,7 @@ $port = $loop->generate_port;
 $loop->server(
   {address => '127.0.0.1', port => $port} => sub { shift; shift->close });
 $loop->client({port => $port} => sub { });
-$loop->timer(1 => sub { shift->stop; $err = 'failed' });
+$loop->timer(3 => sub { shift->stop; $err = 'failed' });
 $loop->start;
 ok !$err, 'no error';
 is $loop->max_accepts, 1, 'right value';

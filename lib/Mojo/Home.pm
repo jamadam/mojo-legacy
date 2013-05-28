@@ -135,9 +135,9 @@ Path to C<lib> directory of application.
   my $files = $home->list_files('foo/bar');
 
 Portably list all files recursively in directory relative to the home
-diectory.
+directory.
 
-  $home->rel_file($home->list_files('templates/layouts')->[1]);
+  say $home->rel_file($home->list_files('templates/layouts')->[1]);
 
 =head2 mojo_lib_dir
 
@@ -166,8 +166,8 @@ Portably generate an absolute path for a file relative to the home directory.
 
 =head2 to_string
 
-  my $string = $home->to_string;
-  my $string = "$home";
+  my $str = $home->to_string;
+  my $str = "$home";
 
 Home directory.
 

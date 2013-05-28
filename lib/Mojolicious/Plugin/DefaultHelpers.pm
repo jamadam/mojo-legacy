@@ -12,7 +12,7 @@ sub register {
     $app->helper($name => sub { shift->$name(@_) });
   }
 
-  # Stash key shortcuts
+  # Stash key shortcuts (should not generate log messages)
   for my $name (qw(extends layout title)) {
     $app->helper(
       $name => sub {
@@ -26,38 +26,13 @@ sub register {
   }
 
   $app->helper(config => sub { shift->app->config(@_) });
+
   $app->helper(content       => \&_content);
   $app->helper(content_for   => \&_content_for);
   $app->helper(current_route => \&_current_route);
   $app->helper(dumper        => \&_dumper);
   $app->helper(include       => \&_include);
-
-  my %mem;
-  $app->helper(
-    memorize => sub {
-      my $self = shift;
-      return '' unless ref(my $cb = pop) eq 'CODE';
-      my ($name, $args)
-        = ref $_[0] eq 'HASH' ? (undef, shift) : (shift, shift || {});
-
-      # Default name
-      $name ||= join '', map { $_ || '' } (caller(1))[0 .. 3];
-
-      # Expire old results
-      my $expires = $args->{expires} || 0;
-      delete $mem{$name}
-        if exists $mem{$name} && $expires > 0 && $mem{$name}{expires} < time;
-
-      # Memorized result
-      return $mem{$name}{content} if exists $mem{$name};
-
-      # Memorize new result
-      $mem{$name}{expires} = $expires;
-      return $mem{$name}{content} = $cb->();
-    }
-  );
-
-  $app->helper(url_with => \&_url_with);
+  $app->helper(url_with      => \&_url_with);
 }
 
 sub _content {
@@ -105,7 +80,7 @@ sub _include {
   my @keys = keys %$args;
   local @{$self->stash}{@keys} = @{$args}{@keys};
 
-  return $self->render_partial(layout => $layout, extend => $extends);
+  return $self->render(partial => 1, layout => $layout, extend => $extends);
 }
 
 sub _url_with {
@@ -223,23 +198,6 @@ only available in the partial template.
 
 Render this template with a layout. All additional values get merged into the
 C<stash>.
-
-=head2 memorize
-
-  %= memorize begin
-    %= time
-  % end
-  %= memorize {expires => time + 1} => begin
-    %= time
-  % end
-  %= memorize foo => begin
-    %= time
-  % end
-  %= memorize foo => {expires => time + 1} => begin
-    %= time
-  % end
-
-Memorize block result in memory and prevent future execution.
 
 =head2 param
 

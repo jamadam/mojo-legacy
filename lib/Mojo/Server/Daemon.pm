@@ -108,9 +108,7 @@ sub _build_tx {
   );
 
   # Kept alive if we have more than one request on the connection
-  $tx->kept_alive(1) if ++$c->{requests} > 1;
-
-  return $tx;
+  return ++$c->{requests} > 1 ? $tx->kept_alive(1) : $tx;
 }
 
 sub _close {
@@ -153,9 +151,9 @@ sub _finish {
   return $self->_remove($id) if $req->error || !$tx->keep_alive;
 
   # Build new transaction for leftovers
-  return unless $req->has_leftovers;
+  return unless length(my $leftovers = $req->content->leftovers);
   $tx = $c->{tx} = $self->_build_tx($id, $c);
-  $tx->server_read($req->leftovers);
+  $tx->server_read($leftovers);
 }
 
 sub _listen {
@@ -257,7 +255,7 @@ sub _write {
       return unless $c->{tx};
     }
   }
-  $stream->write('', $cb);
+  $stream->write('' => $cb);
 }
 
 1;

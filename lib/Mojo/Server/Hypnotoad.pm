@@ -256,9 +256,9 @@ L<Mojolicious::Guides::Cookbook/"Hypnotoad"> for examples.
 
   accept_interval => 0.5
 
-Interval in seconds for trying to reacquire the accept mutex and connection
-management, defaults to C<0.025>. Note that changing this value can affect
-performance and idle CPU usage.
+Interval in seconds for trying to reacquire the accept mutex, defaults to
+C<0.025>. Note that changing this value can affect performance and idle CPU
+usage.
 
 =head2 accepts
 
@@ -341,10 +341,11 @@ appended, defaults to a random temporary path.
 
 =head2 lock_timeout
 
-  lock_timeout => 1
+  lock_timeout => 0.5
 
 Maximum amount of time in seconds a worker may block when waiting for the
-accept mutex, defaults to C<0.5>.
+accept mutex, defaults to C<1>. Note that changing this value can affect
+performance and idle CPU usage.
 
 =head2 multi_accept
 

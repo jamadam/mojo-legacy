@@ -8,7 +8,7 @@ use List::Util 'first';
 use Mojo::IOLoop;
 use Mojo::Server::Daemon;
 use Mojo::URL;
-use Mojo::Util qw(deprecated monkey_patch);
+use Mojo::Util 'monkey_patch';
 use Mojo::UserAgent::CookieJar;
 use Mojo::UserAgent::Transactor;
 use Scalar::Util 'weaken';
@@ -59,20 +59,6 @@ sub app_url {
   return Mojo::URL->new("$self->{proto}://localhost:$self->{port}/");
 }
 
-# DEPRECATED in Rainbow!
-sub build_form_tx {
-  deprecated 'Mojo::UserAgent::build_form_tx is DEPRECATED in favor of '
-    . 'Mojo::UserAgent::build_tx';
-  shift->transactor->form(@_);
-}
-
-# DEPRECATED in Rainbow!
-sub build_json_tx {
-  deprecated 'Mojo::UserAgent::build_json_tx is DEPRECATED in favor of '
-    . 'Mojo::UserAgent::build_tx';
-  shift->transactor->json(@_);
-}
-
 sub build_tx           { shift->transactor->tx(@_) }
 sub build_websocket_tx { shift->transactor->websocket(@_) }
 
@@ -86,24 +72,6 @@ sub detect_proxy {
 sub need_proxy {
   my ($self, $host) = @_;
   return !first { $host =~ /\Q$_\E$/ } @{$self->no_proxy || []};
-}
-
-# DEPRECATED in Rainbow!
-sub post_form {
-  deprecated 'Mojo::UserAgent::post_form is DEPRECATED in favor of '
-    . 'Mojo::UserAgent::post';
-  my $self = shift;
-  my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
-  return $self->start($self->build_form_tx(@_), $cb);
-}
-
-# DEPRECATED in Rainbow!
-sub post_json {
-  deprecated 'Mojo::UserAgent::post_json is DEPRECATED in favor of '
-    . 'Mojo::UserAgent::post';
-  my $self = shift;
-  my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
-  return $self->start($self->build_json_tx(@_), $cb);
 }
 
 sub start {
@@ -332,8 +300,9 @@ sub _handle {
   my ($self, $id, $close) = @_;
 
   # Remove request timeout
+  return unless my $loop = $self->_loop;
   my $c = $self->{connections}{$id};
-  $self->_loop->remove($c->{timeout}) if $c->{timeout};
+  $loop->remove($c->{timeout}) if $c->{timeout};
 
   # Finish WebSocket
   my $old = $c->{tx};
@@ -348,7 +317,7 @@ sub _handle {
     if (my $jar = $self->cookie_jar) { $jar->extract($old) }
     $old->client_close;
     $self->_finish($new, $c->{cb});
-    $new->client_read($old->res->leftovers);
+    $new->client_read($old->res->content->leftovers);
   }
 
   # Finish normal connection
@@ -572,18 +541,16 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   }
   $delay->wait unless Mojo::IOLoop->is_running;
 
-  # Non-blocking WebSocket connection sending and receiving JSON text messages
-  use Mojo::JSON 'j';
-  $ua->websocket('ws://localhost:3000/echo.json' => sub {
+  # Non-blocking WebSocket connection sending and receiving JSON messages
+  $ua->websocket('ws://example.com/echo.json' => sub {
     my ($ua, $tx) = @_;
     say 'WebSocket handshake failed!' and return unless $tx->is_websocket;
-    $tx->on(text => sub {
-      my ($tx, $bytes) = @_;
-      my $hash = j($bytes);
+    $tx->on(json => sub {
+      my ($tx, $hash) = @_;
       say "WebSocket message via JSON: $hash->{msg}";
       $tx->finish;
     });
-    $tx->send({text => j({msg => 'Hello World!'})});
+    $tx->send({json => {msg => 'Hello World!'}});
   });
   Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
@@ -831,8 +798,9 @@ L<Mojo::UserAgent::Transactor/"tx">.
 
 =head2 build_websocket_tx
 
-  my $tx = $ua->build_websocket_tx('ws://localhost:3000');
-  my $tx = $ua->build_websocket_tx('ws://localhost:3000' => {DNT => 1});
+  my $tx = $ua->build_websocket_tx('ws://example.com');
+  my $tx =
+    $ua->build_websocket_tx('ws://example.com' => {DNT => 1} => ['v1.proto']);
 
 Generate L<Mojo::Transaction::HTTP> object with
 L<Mojo::UserAgent::Transactor/"websocket">.
@@ -905,7 +873,7 @@ append a callback to perform requests non-blocking.
 
 =head2 need_proxy
 
-  my $success = $ua->need_proxy('intranet.mojolicio.us');
+  my $success = $ua->need_proxy('intranet.example.com');
 
 Check if request for domain would use a proxy server.
 
@@ -1003,15 +971,16 @@ non-blocking.
 
 =head2 websocket
 
-  $ua->websocket('ws://localhost:3000' => sub {...});
-  $ua->websocket('ws://localhost:3000' => {DNT => 1} => sub {...});
+  $ua->websocket('ws://example.com' => sub {...});
+  $ua->websocket(
+    'ws://example.com' => {DNT => 1} => ['v1.proto'] => sub {...});
 
 Open a non-blocking WebSocket connection with transparent handshake, takes the
 same arguments as L<Mojo::UserAgent::Transactor/"websocket">. The callback
 will receive either a L<Mojo::Transaction::WebSocket> or
 L<Mojo::Transaction::HTTP> object.
 
-  $ua->websocket('ws://localhost:3000/echo' => sub {
+  $ua->websocket('ws://example.com/echo' => sub {
     my ($ua, $tx) = @_;
     say 'WebSocket handshake failed!' and return unless $tx->is_websocket;
     $tx->on(finish => sub {

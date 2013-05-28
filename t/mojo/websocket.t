@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -181,7 +180,7 @@ $ua->websocket(
 );
 Mojo::IOLoop->start;
 ok !$ws, 'not a WebSocket';
-is $code, 426, 'right code';
+is $code, 426, 'right status';
 ok $body =~ /^(\d+)failed!$/, 'right content';
 is $1, 15, 'right timeout';
 
@@ -415,37 +414,36 @@ Mojo::IOLoop->start;
 is $result, 'foo bar', 'right result';
 
 # Dies
-($finished, $code, $msg) = ();
-my $websocket;
+($finished, $ws, $code, $msg) = ();
 $ua->websocket(
   '/dead' => sub {
     my ($ua, $tx) = @_;
-    $finished  = $tx->is_finished;
-    $websocket = $tx->is_websocket;
-    $code      = $tx->res->code;
-    $msg       = $tx->res->message;
+    $finished = $tx->is_finished;
+    $ws       = $tx->is_websocket;
+    $code     = $tx->res->code;
+    $msg      = $tx->res->message;
     Mojo::IOLoop->stop;
   }
 );
 Mojo::IOLoop->start;
 ok $finished, 'transaction is finished';
-ok !$websocket, 'no websocket';
+ok !$ws, 'no websocket';
 is $code, 500, 'right status';
 is $msg, 'Internal Server Error', 'right message';
 
 # Forbidden
-($websocket, $code, $msg) = ();
+($ws, $code, $msg) = ();
 $ua->websocket(
   '/foo' => sub {
     my ($ua, $tx) = @_;
-    $websocket = $tx->is_websocket;
-    $code      = $tx->res->code;
-    $msg       = $tx->res->message;
+    $ws   = $tx->is_websocket;
+    $code = $tx->res->code;
+    $msg  = $tx->res->message;
     Mojo::IOLoop->stop;
   }
 );
 Mojo::IOLoop->start;
-ok !$websocket, 'no websocket';
+ok !$ws, 'no websocket';
 is $code, 403,            'right status';
 is $msg,  "i'm a teapot", 'right message';
 

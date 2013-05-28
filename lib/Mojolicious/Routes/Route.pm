@@ -151,51 +151,25 @@ sub route {
 sub to {
   my $self = shift;
 
-  # No argument
   my $pattern = $self->pattern;
   return $pattern->defaults unless @_;
+  my ($shortcut, %defaults) = _defaults(@_);
 
-  # Single argument
-  my ($shortcut, $defaults);
-  if (@_ == 1) {
-    $defaults = shift if ref $_[0] eq 'HASH';
-    $shortcut = shift if $_[0];
-  }
-
-  # Multiple arguments
-  else {
-
-    # Odd
-    if (@_ % 2) { ($shortcut, $defaults) = (shift, {@_}) }
-
-    # Even
-    else {
-
-      # Shortcut and defaults
-      if (ref $_[1] eq 'HASH') { ($shortcut, $defaults) = (shift, shift) }
-
-      # Just defaults
-      else { $defaults = {@_} }
-    }
-  }
-
-  # Shortcut
   if ($shortcut) {
 
-    # App
+    # Application
     if (ref $shortcut || $shortcut =~ /^[\w:]+$/) {
-      $defaults->{app} = $shortcut;
+      $defaults{app} = $shortcut;
     }
 
     # Controller and action
     elsif ($shortcut =~ /^([\w\-:]+)?\#(\w+)?$/) {
-      $defaults->{controller} = $1 if defined $1;
-      $defaults->{action}     = $2 if defined $2;
+      $defaults{controller} = $1 if defined $1;
+      $defaults{action}     = $2 if defined $2;
     }
   }
 
-  # Merge defaults
-  $pattern->defaults({%{$pattern->defaults}, %$defaults}) if $defaults;
+  $pattern->defaults({%{$pattern->defaults}, %defaults});
 
   return $self;
 }
@@ -221,6 +195,18 @@ sub websocket {
   my $route = shift->get(@_);
   $route->{websocket} = 1;
   return $route;
+}
+
+sub _defaults {
+
+  # Hash or shortcut (one)
+  return ref $_[0] eq 'HASH' ? (undef, %{shift()}) : @_ if @_ == 1;
+
+  # Shortcut and values (odd)
+  return shift, @_ if @_ % 2;
+
+  # Shortcut and hash or just values (even)
+  return ref $_[1] eq 'HASH' ? (shift, %{shift()}) : (undef, @_);
 }
 
 sub _generate_route {
@@ -375,19 +361,12 @@ L<Mojolicious::Lite> tutorial for more argument variations.
 =head2 detour
 
   $r = $r->detour(action => 'foo');
-  $r = $r->detour({action => 'foo'});
   $r = $r->detour('controller#action');
-  $r = $r->detour('controller#action', foo => 'bar');
-  $r = $r->detour('controller#action', {foo => 'bar'});
-  $r = $r->detour(Mojolicious->new);
   $r = $r->detour(Mojolicious->new, foo => 'bar');
-  $r = $r->detour(Mojolicious->new, {foo => 'bar'});
-  $r = $r->detour('MyApp');
-  $r = $r->detour('MyApp', foo => 'bar');
   $r = $r->detour('MyApp', {foo => 'bar'});
 
 Set default parameters for this route and allow partial matching to simplify
-application embedding.
+application embedding, takes the same arguments as C<to>.
 
 =head2 find
 
@@ -559,7 +538,7 @@ Set default parameters for this route.
 
 =head2 to_string
 
-  my $string = $r->to_string;
+  my $str = $r->to_string;
 
 Stringify the whole route.
 
@@ -589,7 +568,7 @@ restrictions.
 
 =head2 websocket
 
-  my $websocket = $r->websocket('/:foo' => sub {...});
+  my $ws = $r->websocket('/:foo' => sub {...});
 
 Generate route matching only WebSocket handshakes. See also the
 L<Mojolicious::Lite> tutorial for more argument variations.

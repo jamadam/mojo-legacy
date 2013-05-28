@@ -5,24 +5,26 @@ use Mojo::URL;
 
 # Simple
 my $url = Mojo::URL->new('HtTp://Example.Com');
-is $url->scheme,   'HtTp',        'right scheme';
-is $url->protocol, 'http',        'right protocol';
-is $url->host,     'Example.Com', 'right host';
-is $url->ihost,    'example.com', 'right internationalized host';
+is $url->scheme,    'HtTp',        'right scheme';
+is $url->protocol,  'http',        'right protocol';
+is $url->host,      'Example.Com', 'right host';
+is $url->ihost,     'example.com', 'right internationalized host';
+is $url->authority, 'example.com', 'right authority';
 is "$url", 'http://example.com', 'right format';
 
 # Advanced
 $url = Mojo::URL->new(
   'https://sri:foobar@example.com:8080/x/index.html?monkey=biz&foo=1#/!%?@3');
-ok $url->is_abs,   'is absolute';
-is $url->scheme,   'https', 'right scheme';
-is $url->protocol, 'https', 'right protocol';
-is $url->userinfo, 'sri:foobar', 'right userinfo';
-is $url->host,     'example.com', 'right host';
-is $url->port,     '8080', 'right port';
-is $url->path,     '/x/index.html', 'right path';
-is $url->query,    'monkey=biz&foo=1', 'right query';
-is $url->fragment, '/!%?@3', 'right fragment';
+ok $url->is_abs,    'is absolute';
+is $url->scheme,    'https', 'right scheme';
+is $url->protocol,  'https', 'right protocol';
+is $url->userinfo,  'sri:foobar', 'right userinfo';
+is $url->host,      'example.com', 'right host';
+is $url->port,      '8080', 'right port';
+is $url->authority, 'sri:foobar@example.com:8080', 'right authority';
+is $url->path,      '/x/index.html', 'right path';
+is $url->query,     'monkey=biz&foo=1', 'right query';
+is $url->fragment,  '/!%?@3', 'right fragment';
 is "$url",
   'https://sri:foobar@example.com:8080/x/index.html?monkey=biz&foo=1#/!%?@3',
   'right format';
@@ -95,42 +97,76 @@ is $url->query, '_monkeybiz%3B=&_monkey=&23=', 'right query';
 is $url->fragment, '23', 'right fragment';
 is "$url", 'wss://sri:foobar@example.com:8080?_monkeybiz%3B=&_monkey=&23=#23',
   'right format';
+$url = Mojo::URL->new('https://example.com/0?0#0');
+ok $url->is_abs,   'is absolute';
+is $url->scheme,   'https', 'right scheme';
+is $url->userinfo, undef, 'no userinfo';
+is $url->host,     'example.com', 'right host';
+is $url->port,     undef, 'no port';
+is $url->path,     '/0', 'no path';
+is $url->query,    '0', 'right query';
+is $url->fragment, '0', 'right fragment';
+is "$url", 'https://example.com/0?0#0', 'right format';
 
-# Unknown scheme
-$url = Mojo::URL->new('DATA:helloworld123');
-is $url->scheme,   'DATA', 'right scheme';
-is $url->protocol, 'data', 'right protocol';
-is $url->userinfo, undef,  'no userinfo';
-is $url->host,     undef,  'no host';
-is $url->port,     undef,  'no port';
-is $url->path,     '',     'no path';
-is $url->query,    '',     'no query';
-is $url->fragment, undef,  'no fragment';
-is "$url", 'DATA:helloworld123', 'right format';
+# No authority
+$url = Mojo::URL->new('DATA:image/png;base64,helloworld123');
+is $url->scheme,    'DATA',                           'right scheme';
+is $url->protocol,  'data',                           'right protocol';
+is $url->userinfo,  undef,                            'no userinfo';
+is $url->host,      undef,                            'no host';
+is $url->port,      undef,                            'no port';
+is $url->authority, undef,                            'no authority';
+is $url->path,      'image/png;base64,helloworld123', 'right path';
+is $url->query,     '',                               'no query';
+is $url->fragment,  undef,                            'no fragment';
+is "$url", 'data:image/png;base64,helloworld123', 'right format';
 $url = $url->clone;
-is $url->scheme,   'DATA', 'right scheme';
-is $url->protocol, 'data', 'right protocol';
-is $url->userinfo, undef,  'no userinfo';
-is $url->host,     undef,  'no host';
-is $url->port,     undef,  'no port';
-is $url->path,     '',     'no path';
-is $url->query,    '',     'no query';
-is $url->fragment, undef,  'no fragment';
-is "$url", 'DATA:helloworld123', 'right format';
+is $url->scheme,    'DATA',                           'right scheme';
+is $url->protocol,  'data',                           'right protocol';
+is $url->userinfo,  undef,                            'no userinfo';
+is $url->host,      undef,                            'no host';
+is $url->port,      undef,                            'no port';
+is $url->authority, undef,                            'no authority';
+is $url->path,      'image/png;base64,helloworld123', 'right path';
+is $url->query,     '',                               'no query';
+is $url->fragment,  undef,                            'no fragment';
+is "$url", 'data:image/png;base64,helloworld123', 'right format';
 $url = Mojo::URL->new->parse('mailto:sri@example.com');
 is $url->scheme,   'mailto',          'right scheme';
 is $url->protocol, 'mailto',          'right protocol';
-is $url->data,     'sri@example.com', 'right data';
+is $url->path,     'sri@example.com', 'right path';
 is "$url", 'mailto:sri@example.com', 'right format';
-$url = Mojo::URL->new->parse('foo://test/123');
-is $url->scheme,   'foo',        'right scheme';
-is $url->protocol, 'foo',        'right protocol';
-is $url->data,     '//test/123', 'right data';
-is "$url", 'foo://test/123', 'right format';
-is $url->scheme('Bar')->to_string, 'Bar://test/123', 'right format';
-is $url->scheme,   'Bar',        'right scheme';
-is $url->protocol, 'bar',        'right protocol';
-is $url->data,     '//test/123', 'right data';
+$url = Mojo::URL->new->parse('foo:/test/123?foo=bar#baz');
+is $url->scheme,   'foo',       'right scheme';
+is $url->protocol, 'foo',       'right protocol';
+is $url->path,     '/test/123', 'right path';
+is $url->query,    'foo=bar',   'right query';
+is $url->fragment, 'baz',       'right fragment';
+is "$url", 'foo:/test/123?foo=bar#baz', 'right format';
+is $url->scheme('Bar')->to_string, 'bar:/test/123?foo=bar#baz', 'right format';
+is $url->scheme,    'Bar',       'right scheme';
+is $url->protocol,  'bar',       'right protocol';
+is $url->host,      undef,       'no host';
+is $url->authority, undef,       'no authority';
+is $url->path,      '/test/123', 'right path';
+is $url->query,     'foo=bar',   'right query';
+is $url->fragment,  'baz',       'right fragment';
+is "$url", 'bar:/test/123?foo=bar#baz', 'right format';
+$url = Mojo::URL->new->parse('file:///foo/bar');
+is $url->scheme,   'file',     'right scheme';
+is $url->protocol, 'file',     'right protocol';
+is $url->path,     '/foo/bar', 'right path';
+is "$url", 'file:///foo/bar', 'right format';
+$url = $url->clone;
+is $url->scheme,   'file',     'right scheme';
+is $url->protocol, 'file',     'right protocol';
+is $url->path,     '/foo/bar', 'right path';
+is "$url", 'file:///foo/bar', 'right format';
+$url = Mojo::URL->new->parse('foo:0');
+is $url->scheme,   'foo', 'right scheme';
+is $url->protocol, 'foo', 'right protocol';
+is $url->path,     '0',   'right path';
+is "$url", 'foo:0', 'right format';
 
 # Relative
 $url = Mojo::URL->new('foo?foo=bar#23');
@@ -164,12 +200,12 @@ $url = Mojo::URL->new('///bar/23/');
 ok !$url->is_abs, 'is not absolute';
 is $url->host, '',         'no host';
 is $url->path, '/bar/23/', 'right path';
-is "$url", '/bar/23/', 'right relative version';
+is "$url", '///bar/23/', 'right relative version';
 $url = Mojo::URL->new('////bar//23/');
 ok !$url->is_abs, 'is not absolute';
 is $url->host, '',           'no host';
 is $url->path, '//bar//23/', 'right path';
-is "$url", '//bar//23/', 'right relative version';
+is "$url", '////bar//23/', 'right relative version';
 
 # Relative (base without trailing slash)
 $url = Mojo::URL->new('http://sri:foobar@example.com:8080/baz/foo?foo=bar#23');
@@ -301,22 +337,6 @@ is $url->to_abs, 'http://example.com/bar/foo?foo=bar#23',
   'right absolute version';
 is $url->to_abs->base, 'http://example.com/bar/baz/', 'right base';
 
-# Real world tests
-$url = Mojo::URL->new('http://acme.s3.amazonaws.com'
-    . '/mojo%2Fg%2B%2B-4%2E2_4%2E2%2E3-2ubuntu7_i386%2Edeb');
-ok $url->is_abs,   'is absolute';
-is $url->scheme,   'http', 'right scheme';
-is $url->userinfo, undef, 'no userinfo';
-is $url->host,     'acme.s3.amazonaws.com', 'right host';
-is $url->port,     undef, 'no port';
-is $url->path,     '/mojo%2Fg%2B%2B-4%2E2_4%2E2%2E3-2ubuntu7_i386%2Edeb',
-  'right path';
-ok !$url->query->to_string, 'no query';
-is_deeply $url->query->to_hash, {}, 'right structure';
-is $url->fragment, undef, 'no fragment';
-is "$url", 'http://acme.s3.amazonaws.com/mojo/g++-4.2_4.2.3-2ubuntu7_i386.deb',
-  'right format';
-
 # Clone (advanced)
 $url = Mojo::URL->new(
   'ws://sri:foobar@example.com:8080/test/index.html?monkey=biz&foo=1#23');
@@ -432,8 +452,7 @@ is $url->scheme, 'http', 'right scheme';
 is $url->host,   '☃.Net', 'right host';
 is $url->ihost,  'xn--n3h.net', 'right internationalized host';
 is $url->path,   '/%E2%99%A5/%E2%99%A5/', 'right path';
-is $url->path->parts->[0], '♥', 'right path part';
-is $url->path->parts->[1], '♥', 'right path part';
+is_deeply $url->path->parts, ['♥', '♥'], 'right structure';
 is $url->query->param('♥'), '☃', 'right query value';
 is "$url", 'http://xn--n3h.net/%E2%99%A5/%E2%99%A5/?%E2%99%A5=%E2%98%83',
   'right format';
@@ -444,8 +463,7 @@ is $url->scheme, 'http', 'right scheme';
 is $url->host,   'xn--n3h.net', 'right host';
 is $url->ihost,  'xn--n3h.net', 'right internationalized host';
 is $url->path,   '/%E2%99%A5/%E2%99%A5/', 'right path';
-is $url->path->parts->[0], '♥', 'right path part';
-is $url->path->parts->[1], '♥', 'right path part';
+is_deeply $url->path->parts, ['♥', '♥'], 'right structure';
 is $url->query->param('♥'), '☃', 'right query value';
 is "$url", 'http://xn--n3h.net/%E2%99%A5/%E2%99%A5/?%E2%99%A5=%E2%98%83',
   'right format';
@@ -583,7 +601,7 @@ is $url->userinfo, undef,                                      'no userinfo';
 is $url->host,     'foo.bar',                                  'right host';
 is $url->port,     undef,                                      'no port';
 is $url->path,     '/zzz',                                     'right path';
-is $url->query,    '',                                         'right query';
+is $url->query,    '',                                         'no query';
 is $url->fragment, 'test2', 'right fragment';
 is "$url", 'http://foo.bar/zzz#test2', 'right absolute URL';
 
@@ -605,7 +623,7 @@ is $url->userinfo, undef,                                      'no userinfo';
 is $url->host,     'foo.bar',                                  'right host';
 is $url->port,     undef,                                      'no port';
 is $url->path,     '/baz/zzz',                                 'right path';
-is $url->query,    '',                                         'right query';
+is $url->query,    '',                                         'no query';
 is $url->fragment, 'test2', 'right fragment';
 is "$url", 'http://foo.bar/baz/zzz#test2', 'right absolute URL';
 
@@ -627,7 +645,7 @@ is $url->userinfo, undef,                                      'no userinfo';
 is $url->host,     'foo.bar',                                  'right host';
 is $url->port,     undef,                                      'no port';
 is $url->path,     '/zzz',                                     'right path';
-is $url->query,    '',                                         'right query';
+is $url->query,    '',                                         'no query';
 is $url->fragment, undef,                                      'no fragment';
 is "$url", 'http://foo.bar/zzz', 'right absolute URL';
 
@@ -649,7 +667,7 @@ is $url->userinfo, undef,                                      'no userinfo';
 is $url->host,     'foo.bar',                                  'right host';
 is $url->port,     undef,                                      'no port';
 is $url->path,     '/baz/zzz',                                 'right path';
-is $url->query,    '',                                         'right query';
+is $url->query,    '',                                         'no query';
 is $url->fragment, undef,                                      'no fragment';
 is "$url", 'http://foo.bar/baz/zzz', 'right absolute URL';
 
@@ -679,6 +697,25 @@ is $url->host, 'foo.1.1.1.1.de', 'right host';
 $url = Mojo::URL->new('http://1.1.1.1.1.1/');
 is $url->host, '1.1.1.1.1.1', 'right host';
 
+# Heavily escaped path
+$url = Mojo::URL->new(
+  'http://example.com/mojo%2Fg%2B%2B-4%2E2_4%2E2%2E3-2ubuntu7_i386%2Edeb');
+ok $url->is_abs,   'is absolute';
+is $url->scheme,   'http', 'right scheme';
+is $url->userinfo, undef, 'no userinfo';
+is $url->host,     'example.com', 'right host';
+is $url->port,     undef, 'no port';
+is $url->path,     '/mojo%2Fg%2B%2B-4%2E2_4%2E2%2E3-2ubuntu7_i386%2Edeb',
+  'right path';
+is $url->query,    '',    'no query';
+is $url->fragment, undef, 'no fragment';
+is "$url",
+  'http://example.com/mojo%2Fg%2B%2B-4%2E2_4%2E2%2E3-2ubuntu7_i386%2Edeb',
+  'right format';
+$url->path->canonicalize;
+is "$url", 'http://example.com/mojo/g++-4.2_4.2.3-2ubuntu7_i386.deb',
+  'right format';
+
 # "%" in path
 $url = Mojo::URL->new('http://mojolicio.us/100%_fun');
 is $url->path->parts->[0], '100%_fun', 'right part';
@@ -703,8 +740,7 @@ is $url->protocol, 'http',    'right protocol';
 is $url->host,     'FOO.BAR', 'right host';
 is $url->ihost,    'foo.bar', 'right internationalized host';
 is $url->path,     '/%E4/',   'right path';
-is $url->path->parts->[0], "\xe4", 'right part';
-is $url->path->parts->[1], undef,  'no part';
+is_deeply $url->path->parts, ["\xe4"], 'right structure';
 ok $url->path->leading_slash,  'has leading slash';
 ok $url->path->trailing_slash, 'has trailing slash';
 is $url->query, '%E5=%E4', 'right query';

@@ -6,6 +6,11 @@ use List::Util 'min';
 use Mojo::Util qw(md5_sum steady_time);
 use Time::HiRes 'usleep';
 
+sub again {
+  my $timer = shift->{timers}{shift()};
+  $timer->{time} = steady_time + $timer->{after};
+}
+
 sub io {
   my ($self, $handle, $cb) = @_;
   $self->{io}{fileno $handle} = {cb => $cb};
@@ -46,12 +51,14 @@ sub one_tick {
     # Wait for timeout if poll can't be used
     elsif ($timeout) { usleep $timeout * 1000000 }
 
-    # Timers
-    while (my ($id, $t) = each %{$self->{timers} || {}}) {
-      next unless $t->{time} <= (my $time = steady_time);
+    # Timers (time should not change in between timers)
+    my $now = steady_time;
+    for my $id (keys %{$self->{timers}}) {
+      next unless my $t = $self->{timers}{$id};
+      next unless $t->{time} <= $now;
 
       # Recurring timer
-      if (exists $t->{recurring}) { $t->{time} = $time + $t->{recurring} }
+      if (exists $t->{recurring}) { $t->{time} = $now + $t->{recurring} }
 
       # Normal timer
       else { $self->remove($id) }
@@ -108,7 +115,8 @@ sub _timer {
   my $timers = $self->{timers} = defined $self->{timers} ? $self->{timers} : {};
   my $id;
   do { $id = md5_sum('t' . steady_time . rand 999) } while $timers->{$id};
-  my $timer = $timers->{$id} = {cb => $cb, time => steady_time + $after};
+  my $timer = $timers->{$id}
+    = {cb => $cb, after => $after, time => steady_time + $after};
   $timer->{recurring} = $after if $recurring;
 
   return $id;
@@ -156,6 +164,12 @@ L<Mojo::Reactor::Poll> inherits all events from L<Mojo::Reactor>.
 
 L<Mojo::Reactor::Poll> inherits all methods from L<Mojo::Reactor> and
 implements the following new ones.
+
+=head2 again
+
+  $reactor->again($id);
+
+Restart active timer.
 
 =head2 io
 

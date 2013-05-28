@@ -11,15 +11,13 @@ use Mojo::Parameters;
 use Mojo::Transaction::HTTP;
 use Mojo::Transaction::WebSocket;
 use Mojo::URL;
-use Mojo::Util qw(deprecated encode);
+use Mojo::Util 'encode';
 
 has generators => sub { {} };
 
 sub new {
   my $self = shift->SUPER::new(@_);
-  $self->add_generator(form => \&_form);
-  $self->add_generator(json => \&_json);
-  return $self;
+  return $self->add_generator(form => \&_form)->add_generator(json => \&_json);
 }
 
 sub add_generator {
@@ -43,24 +41,6 @@ sub endpoint {
     if $proto eq 'http' && lc(defined $req->headers->upgrade ? $req->headers->upgrade : '') ne 'websocket';
 
   return $proto, $host, $port;
-}
-
-# DEPRECATED in Rainbow!
-sub form {
-  deprecated 'Mojo::UserAgent::Transactor::form is DEPRECATED in favor of '
-    . 'Mojo::UserAgent::Transactor::tx';
-  my ($self, $url, $charset) = (shift, shift, shift);
-  my $form = ref $charset ? $charset : shift;
-  $charset = undef if ref $charset;
-  return $self->tx(POST => $url, @_, form => $form, charset => $charset);
-}
-
-# DEPRECATED in Rainbow!
-sub json {
-  deprecated 'Mojo::UserAgent::Transactor::json is DEPRECATED in favor of '
-    . 'Mojo::UserAgent::Transactor::tx';
-  my ($self, $url, $data) = (shift, shift, shift);
-  return $self->tx(POST => $url, @_, json => $data);
 }
 
 sub peer {
@@ -107,7 +87,7 @@ sub redirect {
   my $new    = Mojo::Transaction::HTTP->new;
   my $req    = $old->req;
   my $method = uc $req->method;
-  if (grep { $_ eq $code } 301, 307, 308) {
+  if ($code eq 301 || $code eq 307 || $code eq 308) {
     return undef unless my $req = $req->clone;
     $new->req($req);
     $req->headers->remove('Host')->remove('Cookie')->remove('Referer');
@@ -154,8 +134,11 @@ sub websocket {
   my $self = shift;
 
   # New WebSocket transaction
-  my $tx    = $self->tx(GET => @_);
-  my $url   = $tx->req->url;
+  my $sub = ref $_[-1] eq 'ARRAY' ? pop : [];
+  my $tx = $self->tx(GET => @_);
+  my $req = $tx->req;
+  $req->headers->sec_websocket_protocol(join ', ', @$sub) if @$sub;
+  my $url   = $req->url;
   my $proto = $url->protocol;
   $url->scheme($proto eq 'wss' ? 'https' : 'http') if $proto;
 
@@ -280,10 +263,10 @@ Mojo::UserAgent::Transactor - User agent transactor
 
   # Simple GET request
   my $t = Mojo::UserAgent::Transactor->new;
-  say $t->tx(GET => 'http://mojolicio.us')->req->to_string;
+  say $t->tx(GET => 'http://example.com')->req->to_string;
 
   # PATCH request with "Do Not Track" header and content
-  say $t->tx(PATCH => 'mojolicio.us' => {DNT => 1} => 'Hi!')->req->to_string;
+  say $t->tx(PATCH => 'example.com' => {DNT => 1} => 'Hi!')->req->to_string;
 
   # POST request with form data
   say $t->tx(POST => 'example.com' => form => {a => 'b'})->req->to_string;
@@ -369,14 +352,14 @@ Versatile general purpose L<Mojo::Transaction::HTTP> transaction builder for
 requests, with support for content generators.
 
   # Inspect generated request
-  say $t->tx(GET => 'mojolicio.us' => {DNT => 1} => 'Bye!')->req->to_string;
+  say $t->tx(GET => 'example.com' => {DNT => 1} => 'Bye!')->req->to_string;
 
   # Streaming response
-  my $tx = $t->tx(GET => 'http://mojolicio.us');
-  $tx->res->body(sub { say $_[1] });
+  my $tx = $t->tx(GET => 'http://example.com');
+  $tx->res->content->unsubscribe('read')->on(read => sub { say $_[1] });
 
   # Custom socket
-  my $tx = $t->tx(GET => 'http://mojolicio.us');
+  my $tx = $t->tx(GET => 'http://example.com');
   $tx->connection($sock);
 
   # Generate query parameters
@@ -397,16 +380,16 @@ requests, with support for content generators.
   my $tx = $t->tx(
     POST => 'http://example.com' => form => {mytext => {content => 'lala'}});
 
-  # Upload multiple files
+  # Upload multiple files with same name
   my $tx = $t->tx(POST => 'http://example.com' =>
     form => {mytext => [{content => 'first'}, {content => 'second'}]});
 
   # Customized upload with filename and header
   my $tx = $t->tx(POST => 'http://example.com' => form => {
     myzip => {
-      file     => Mojo::Asset::Memory->new->add_chunk('lalala'),
-      filename => 'foo.zip',
-      DNT      => 1
+      file           => Mojo::Asset::Memory->new->add_chunk('lalala'),
+      filename       => 'foo.zip',
+      'Content-Type' => 'text/plain'
     }
   });
 
@@ -415,6 +398,10 @@ C<GET>/C<HEAD> requests and the "application/x-www-form-urlencoded" content
 type for everything else. Both get upgraded automatically to using the
 "multipart/form-data" content type when necessary or when the header has been
 set manually.
+
+  # Force "multipart/form-data"
+  my $headers = {'Content-Type' => 'multipart/form-data'};
+  my $tx = $t->tx(POST => 'example.com' => $headers => form => {a => 'b'});
 
 =head2 upgrade
 
@@ -425,8 +412,8 @@ handshake if possible.
 
 =head2 websocket
 
-  my $tx = $t->websocket('ws://localhost:3000');
-  my $tx = $t->websocket('ws://localhost:3000' => {DNT => 1});
+  my $tx = $t->websocket('ws://example.com');
+  my $tx = $t->websocket('ws://example.com' => {DNT => 1} => ['v1.proto']);
 
 Versatile L<Mojo::Transaction::HTTP> transaction builder for WebSocket
 handshake requests.

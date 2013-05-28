@@ -13,7 +13,7 @@ use Mojo::JSON;
 use Mojo::JSON::Pointer;
 use Mojo::Server;
 use Mojo::UserAgent;
-use Mojo::Util qw(decode deprecated encode);
+use Mojo::Util qw(decode encode);
 use Test::More ();
 
 has [qw(message tx)];
@@ -146,12 +146,6 @@ sub header_unlike {
     $regex, $desc || "$name is not similar");
 }
 
-sub json_content_is {
-  my ($self, $data, $desc) = @_;
-  $desc ||= 'exact match for JSON structure';
-  return $self->_test('is_deeply', $self->tx->res->json, $data, $desc);
-}
-
 sub json_has {
   my ($self, $p, $desc) = @_;
   $desc ||= qq{has value for JSON Pointer "$p"};
@@ -167,8 +161,9 @@ sub json_hasnt {
 }
 
 sub json_is {
-  my ($self, $p, $data, $desc) = @_;
-  $desc ||= qq{exact match for JSON Pointer "$p"};
+  my $self = shift;
+  my ($p, $data) = ref $_[0] ? ('', shift) : (shift, shift);
+  my $desc = shift || qq{exact match for JSON Pointer "$p"};
   return $self->_test('is_deeply', $self->tx->res->json($p), $data, $desc);
 }
 
@@ -185,8 +180,9 @@ sub json_message_hasnt {
 }
 
 sub json_message_is {
-  my ($self, $p, $data, $desc) = @_;
-  $desc ||= qq{exact match for JSON Pointer "$p"};
+  my $self = shift;
+  my ($p, $data) = ref $_[0] ? ('', shift) : (shift, shift);
+  my $desc = shift || qq{exact match for JSON Pointer "$p"};
   return $self->_test('is_deeply', $self->_json(get => $p), $data, $desc);
 }
 
@@ -225,26 +221,7 @@ sub or {
 
 sub patch_ok { shift->_request_ok(patch => @_) }
 sub post_ok  { shift->_request_ok(post  => @_) }
-
-# DEPRECATED in Rainbow!
-sub post_form_ok {
-  deprecated
-    'Test::Mojo::post_form_ok is DEPRECATED in favor of Test::Mojo::post_ok';
-  my ($self, $url) = (shift, shift);
-  my $tx = $self->tx($self->ua->post_form($url, @_))->tx;
-  return $self->_test('ok', $tx->is_finished, encode('UTF-8', "POST $url"));
-}
-
-# DEPRECATED in Rainbow!
-sub post_json_ok {
-  deprecated
-    'Test::Mojo::post_json_ok is DEPRECATED in favor of Test::Mojo::post_ok';
-  my ($self, $url) = (shift, shift);
-  my $tx = $self->tx($self->ua->post_json($url, @_))->tx;
-  return $self->_test('ok', $tx->is_finished, encode('UTF-8', "POST $url"));
-}
-
-sub put_ok { shift->_request_ok(put => @_) }
+sub put_ok   { shift->_request_ok(put   => @_) }
 
 sub request_ok {
   my $self = shift;
@@ -405,7 +382,7 @@ Test::Mojo - Testing Mojo!
   # JSON
   $t->post_ok('/search.json' => form => {q => 'Perl'})
     ->status_is(200)
-    ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+    ->header_is('Server' => 'Mojolicious (Perl)')
     ->header_isnt('X-Bender' => 'Bite my shiny metal ass!')
     ->json_is('/results/4/title' => 'Perl rocks!');
 
@@ -449,7 +426,7 @@ Current transaction, usually a L<Mojo::Transaction::HTTP> object.
 
   # More specific tests
   is $t->tx->res->json->{foo}, 'bar', 'right value';
-  ok $t->tx->res->is_multipart, 'multipart content';
+  ok $t->tx->res->content->is_multipart, 'multipart content';
 
   # Test custom transactions
   $t->tx($t->tx->previous)->status_is(302)->header_like(Location => qr/foo/);
@@ -657,14 +634,6 @@ Check response header for similar match.
 
 Opposite of C<header_like>.
 
-=head2 json_content_is
-
-  $t = $t->json_content_is([1, 2, 3]);
-  $t = $t->json_content_is([1, 2, 3], 'right content');
-  $t = $t->json_content_is({foo => 'bar', baz => 23}, 'right content');
-
-Check response content for JSON data.
-
 =head2 json_has
 
   $t = $t->json_has('/foo');
@@ -682,12 +651,13 @@ Opposite of C<json_has>.
 
 =head2 json_is
 
-  $t = $t->json_is('' => {foo => [1, 2, 3]});
+  $t = $t->json_is({foo => [1, 2, 3]});
+  $t = $t->json_is({foo => [1, 2, 3]}, 'right content');
   $t = $t->json_is('/foo' => [1, 2, 3]);
   $t = $t->json_is('/foo/1' => 2, 'right value');
 
 Check the value extracted from JSON response using the given JSON Pointer with
-L<Mojo::JSON::Pointer>.
+L<Mojo::JSON::Pointer>, which defaults to the root value if it is omitted.
 
 =head2 json_message_has
 
@@ -706,12 +676,14 @@ Opposite of C<json_message_has>.
 
 =head2 json_message_is
 
-  $t = $t->json_message_is('' => {foo => [1, 2, 3]});
+  $t = $t->json_message_is({foo => [1, 2, 3]});
+  $t = $t->json_message_is({foo => [1, 2, 3]}, 'right content');
   $t = $t->json_message_is('/foo' => [1, 2, 3]);
   $t = $t->json_message_is('/foo/1' => 2, 'right value');
 
 Check the value extracted from JSON WebSocket message using the given JSON
-Pointer with L<Mojo::JSON::Pointer>.
+Pointer with L<Mojo::JSON::Pointer>, which defaults to the root value if it is
+omitted.
 
 =head2 message_is
 
@@ -810,7 +782,7 @@ arguments as L<Mojo::UserAgent/"post">, except for the callback.
   # Test JSON API
   $t->post_json_ok('/hello.json' => json => {hello => 'world'})
     ->status_is(200)
-    ->json_content_is({bye => 'world'});
+    ->json_is({bye => 'world'});
 
 =head2 put_ok
 
@@ -831,7 +803,7 @@ Perform request and check for transport errors.
 
   # Request with custom method
   my $tx = $t->ua->build_tx(FOO => '/test.json' => json => {foo => 1});
-  $t->request_ok($tx)->status_is(200)->json_content_is({success => 1});
+  $t->request_ok($tx)->status_is(200)->json_is({success => 1});
 
 =head2 reset_session
 
@@ -843,6 +815,7 @@ Reset user agent session.
 
   $t = $t->send_ok({binary => $bytes});
   $t = $t->send_ok({text   => $bytes});
+  $t = $t->send_ok({json   => {test => [1, 2, 3]}});
   $t = $t->send_ok([$fin, $rsv1, $rsv2, $rsv3, $op, $payload]);
   $t = $t->send_ok($chars);
   $t = $t->send_ok($chars, 'sent successfully');
@@ -850,9 +823,8 @@ Reset user agent session.
 Send message or frame via WebSocket.
 
   # Send JSON object as "Text" message
-  use Mojo::JSON 'j';
   $t->websocket_ok('/echo.json')
-    ->send_ok({text => j({test => 'I ♥ Mojolicious!'})})
+    ->send_ok({json => {test => 'I ♥ Mojolicious!'}})
     ->message_ok
     ->json_message_is('/test' => 'I ♥ Mojolicious!')
     ->finish_ok;
@@ -904,7 +876,7 @@ Opposite of C<text_like>.
 =head2 websocket_ok
 
   $t = $t->websocket_ok('/echo');
-  $t = $t->websocket_ok('/echo' => {DNT => 1});
+  $t = $t->websocket_ok('/echo' => {DNT => 1} => ['v1.proto']);
 
 Open a WebSocket connection with transparent handshake, takes the same
 arguments as L<Mojo::UserAgent/"websocket">, except for the callback.

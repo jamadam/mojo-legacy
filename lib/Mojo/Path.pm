@@ -20,15 +20,11 @@ sub canonicalize {
 
     # ".."
     if ($part eq '..') {
-      unless (@parts && $parts[-1] ne '..') { push @parts, '..' }
-      else                                  { pop @parts }
-      next;
+      (@parts && $parts[-1] ne '..') ? pop @parts : push @parts, '..';
     }
 
-    # "."
-    next if grep { $_ eq $part } '.', '';
-
-    push @parts, $part;
+    # Something else than "."
+    elsif ($part ne '.' && $part ne '') { push @parts, $part }
   }
   $self->trailing_slash(undef) unless @parts;
 
@@ -249,7 +245,7 @@ Parse path.
 
 =head2 to_abs_string
 
-  my $string = $path->to_abs_string;
+  my $str = $path->to_abs_string;
 
 Turn path into an absolute string.
 
@@ -292,8 +288,8 @@ Turn path into a route.
 
 =head2 to_string
 
-  my $string = $path->to_string;
-  my $string = "$path";
+  my $str = $path->to_string;
+  my $str = "$path";
 
 Turn path into a string.
 
