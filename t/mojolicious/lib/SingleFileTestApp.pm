@@ -65,12 +65,14 @@ sub data_template2 { shift->stash(template => 'too') }
 
 sub data_static { shift->render_static('singlefiletestapp/foo.txt') }
 
-sub index { shift->stash(template => 'withlayout', msg => 'works great!') }
+sub index {
+  shift->stash(template => 'WithGreenLayout', msg => 'works great!');
+}
 
 sub routes {
   my $self = shift;
   $self->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
-  $self->render_text($self->url_for);
+  $self->render(text => $self->url_for);
 }
 
 1;

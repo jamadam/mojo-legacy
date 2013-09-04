@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -17,15 +16,18 @@ use FindBin;
 use IO::Socket::INET;
 use Mojo::IOLoop;
 use Mojo::UserAgent;
-use Mojo::Util 'spurt';
+use Mojo::Util qw(slurp spurt);
 
 # Prepare script
 my $dir = tempdir CLEANUP => 1;
 my $script = catdir $dir, 'myapp.pl';
+my $log    = catdir $dir, 'mojo.log';
 my $port1  = Mojo::IOLoop->generate_port;
 my $port2  = Mojo::IOLoop->generate_port;
 spurt <<EOF, $script;
 use Mojolicious::Lite;
+
+app->log->path('$log');
 
 plugin Config => {
   default => {
@@ -37,7 +39,7 @@ plugin Config => {
   }
 };
 
-app->log->level('fatal');
+app->log->level('debug');
 
 get '/hello' => {text => 'Hello Hypnotoad!'};
 
@@ -94,6 +96,8 @@ is $tx->res->body, 'Hello Hypnotoad!', 'right content';
 spurt <<EOF, $script;
 use Mojolicious::Lite;
 
+app->log->path('$log');
+
 plugin Config => {
   default => {
     hypnotoad => {
@@ -104,7 +108,7 @@ plugin Config => {
   }
 };
 
-app->log->level('fatal');
+app->log->level('debug');
 
 get '/hello' => {text => 'Hello World!'};
 
@@ -128,7 +132,7 @@ ok $tx->kept_alive,  'connection was kept alive';
 is $tx->res->code, 200, 'right status';
 is $tx->res->body, 'Hello Hypnotoad!', 'right content';
 
-# Remove keep alive connections
+# Remove keep-alive connections
 $ua = Mojo::UserAgent->new;
 
 # Wait for hot deployment to finish
@@ -178,6 +182,12 @@ sleep 1
   PeerAddr => '127.0.0.1',
   PeerPort => $port2
   );
+
+# Check log
+$log = slurp $log;
+like $log, qr/Worker \d+ started\./,                      'right message';
+like $log, qr/Starting zero downtime software upgrade\./, 'right message';
+like $log, qr/Upgrade successful, stopping $old\./,       'right message';
 
 sub _pid {
   return undef unless open my $file, '<', catdir($dir, 'hypnotoad.pid');

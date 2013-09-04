@@ -43,7 +43,7 @@ sub extract {
   for my $cookie (@{$tx->res->cookies}) {
 
     # Validate domain
-    my $host = lc $url->ihost;
+    my $host = $url->ihost;
     my $domain = lc(defined $cookie->domain ? $cookie->domain : $host);
     $domain =~ s/^\.//;
     next
@@ -61,7 +61,7 @@ sub extract {
 sub find {
   my ($self, $url) = @_;
 
-  return unless my $domain = lc(defined $url->ihost ? $url->ihost : '');
+  return unless my $domain = $url->ihost;
   my $path = $url->path->to_abs_string;
   my @found;
   while ($domain =~ /[^.]+\.[^.]+|localhost$/) {
@@ -101,6 +101,8 @@ sub inject {
 sub _path { $_[0] eq '/' || $_[0] eq $_[1] || $_[1] =~ m!^\Q$_[0]/! }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 

@@ -1,15 +1,12 @@
 package Mojo::Exception;
 use Mojo::Base -base;
-use overload
-  'bool'   => sub {1},
-  '""'     => sub { shift->to_string },
-  fallback => 1;
+use overload bool => sub {1}, '""' => sub { shift->to_string }, fallback => 1;
 
 use Scalar::Util 'blessed';
 
 has [qw(frames line lines_before lines_after)] => sub { [] };
 has message => 'Exception!';
-has verbose => sub { $ENV{MOJO_EXCEPTION_VERBOSE} || 0 };
+has 'verbose';
 
 sub new {
   my $self = shift->SUPER::new;
@@ -22,19 +19,19 @@ sub to_string {
   my $self = shift;
 
   return $self->message unless $self->verbose;
-  my $string = $self->message ? $self->message : '';
+  my $str = $self->message ? $self->message : '';
 
   # Before
-  $string .= $_->[0] . ': ' . $_->[1] . "\n" for @{$self->lines_before};
+  $str .= $_->[0] . ': ' . $_->[1] . "\n" for @{$self->lines_before};
 
   # Line
-  $string .= ($self->line->[0] . ': ' . $self->line->[1] . "\n")
+  $str .= ($self->line->[0] . ': ' . $self->line->[1] . "\n")
     if $self->line->[0];
 
   # After
-  $string .= $_->[0] . ': ' . $_->[1] . "\n" for @{$self->lines_after};
+  $str .= $_->[0] . ': ' . $_->[1] . "\n" for @{$self->lines_after};
 
-  return $string;
+  return $str;
 }
 
 sub trace {
@@ -46,40 +43,36 @@ sub trace {
 }
 
 sub _context {
-  my ($self, $line, $lines) = @_;
-
-  # Wrong file
-  return unless defined $lines->[0][$line - 1];
+  my ($self, $num, $lines) = @_;
 
   # Line
-  $self->line([$line]);
-  for my $l (@$lines) {
-    chomp(my $code = $l->[$line - 1]);
+  return unless defined $lines->[0][$num - 1];
+  $self->line([$num]);
+  for my $line (@$lines) {
+    chomp(my $code = $line->[$num - 1]);
     push @{$self->line}, $code;
   }
 
   # Before
   for my $i (2 .. 6) {
-    last if ((my $previous = $line - $i) < 0);
-    if (defined $lines->[0][$previous]) {
-      unshift @{$self->lines_before}, [$previous + 1];
-      for my $l (@$lines) {
-        chomp(my $code = $l->[$previous]);
-        push @{$self->lines_before->[0]}, $code;
-      }
+    last if ((my $previous = $num - $i) < 0);
+    next unless defined $lines->[0][$previous];
+    unshift @{$self->lines_before}, [$previous + 1];
+    for my $line (@$lines) {
+      chomp(my $code = $line->[$previous]);
+      push @{$self->lines_before->[0]}, $code;
     }
   }
 
   # After
   for my $i (0 .. 4) {
-    next if ((my $next = $line + $i) < 0);
-    if (defined $lines->[0][$next]) {
-      push @{$self->lines_after}, [$next + 1];
-      for my $l (@$lines) {
-        next unless defined(my $code = $l->[$next]);
-        chomp $code;
-        push @{$self->lines_after->[-1]}, $code;
-      }
+    next if ((my $next = $num + $i) < 0);
+    next unless defined $lines->[0][$next];
+    push @{$self->lines_after}, [$next + 1];
+    for my $line (@$lines) {
+      last unless defined(my $code = $line->[$next]);
+      chomp $code;
+      push @{$self->lines_after->[-1]}, $code;
     }
   }
 }
@@ -112,6 +105,8 @@ sub _detect {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -147,21 +142,21 @@ Stacktrace.
   my $line = $e->line;
   $e       = $e->line([3 => 'foo']);
 
-The line where the exception occured.
+The line where the exception occurred.
 
 =head2 lines_after
 
   my $lines = $e->lines_after;
   $e        = $e->lines_after([[1 => 'bar'], [2 => 'baz']]);
 
-Lines after the line where the exception occured.
+Lines after the line where the exception occurred.
 
 =head2 lines_before
 
   my $lines = $e->lines_before;
   $e        = $e->lines_before([[4 => 'bar'], [5 => 'baz']]);
 
-Lines before the line where the exception occured.
+Lines before the line where the exception occurred.
 
 =head2 message
 
@@ -175,8 +170,7 @@ Exception message.
   my $verbose = $e->verbose;
   $e          = $e->verbose(1);
 
-Activate verbose rendering, defaults to the value of the
-MOJO_EXCEPTION_VERBOSE environment variable or C<0>.
+Render exception with context.
 
 =head1 METHODS
 
@@ -199,8 +193,8 @@ Throw exception with stacktrace.
 
 =head2 to_string
 
-  my $string = $e->to_string;
-  my $string = "$e";
+  my $str = $e->to_string;
+  my $str = "$e";
 
 Render exception.
 

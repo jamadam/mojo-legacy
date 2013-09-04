@@ -3,14 +3,14 @@ use Mojo::Base -base;
 
 has 'tree';
 
-my $ESCAPE_RE = qr/\\[^[:xdigit:]]|\\[[:xdigit:]]{1,6}/;
+my $ESCAPE_RE = qr/\\[^0-9a-fA-F]|\\[0-9a-fA-F]{1,6}/;
 my $ATTR_RE   = qr/
   \[
   ((?:$ESCAPE_RE|[\w\-])+)        # Key
   (?:
     (\W)?                         # Operator
     =
-    (?:"((?:\\"|[^"])+)"|(\S+))   # Value
+    (?:"((?:\\"|[^"])*)"|(\S+))   # Value
   )?
   \]
 /x;
@@ -52,7 +52,7 @@ sub select {
 
       # Try all selectors with element
       for my $part (@$pattern) {
-        push(@results, $current) and last
+        push @results, $current and last
           if $self->_combinator([reverse @$part], $current, $tree);
       }
     }
@@ -125,7 +125,6 @@ sub _compile {
     my ($separator, $element, $pc, $attrs, $combinator)
       = ($1, defined $2 ? $2 : '', $3, $6, $11);
 
-    # Trash
     next unless $separator || $element || $pc || $attrs || $combinator;
 
     # New selector
@@ -251,10 +250,9 @@ sub _pc {
 
     # Siblings
     my $parent = $current->[3];
-    my $start = $parent->[0] eq 'root' ? 1 : 4;
     my @siblings;
     my $type = $class =~ /of-type$/ ? $current->[1] : undef;
-    for my $i ($start .. $#$parent) {
+    for my $i (($parent->[0] eq 'root' ? 1 : 4) .. $#$parent) {
       my $sibling = $parent->[$i];
       next unless $sibling->[0] eq 'tag';
       next if defined $type && $type ne $sibling->[1];
@@ -279,8 +277,7 @@ sub _pc {
 
     # Siblings
     my $parent = $current->[3];
-    my $start = $parent->[0] eq 'root' ? 1 : 4;
-    for my $i ($start .. $#$parent) {
+    for my $i (($parent->[0] eq 'root' ? 1 : 4) .. $#$parent) {
       my $sibling = $parent->[$i];
       next if $sibling->[0] ne 'tag' || $sibling eq $current;
       return undef unless defined $type && $sibling->[1] ne $type;
@@ -345,8 +342,7 @@ sub _sibling {
 
   my $parent = $current->[3];
   my $found;
-  my $start = $parent->[0] eq 'root' ? 1 : 4;
-  for my $e (@$parent[$start .. $#$parent]) {
+  for my $e (@$parent[($parent->[0] eq 'root' ? 1 : 4) .. $#$parent]) {
     return $found if $e eq $current;
     next unless $e->[0] eq 'tag';
 
@@ -367,7 +363,7 @@ sub _unescape {
   $value =~ s/\\\n//g;
 
   # Unescape Unicode characters
-  $value =~ s/\\([[:xdigit:]]{1,6})\s?/pack('U', hex $1)/ge;
+  $value =~ s/\\([0-9a-fA-F]{1,6})\s?/pack('U', hex $1)/ge;
 
   # Remove backslash
   $value =~ s/\\//g;
@@ -376,6 +372,8 @@ sub _unescape {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -600,9 +598,10 @@ L<Mojo::DOM::CSS> implements the following attributes.
 =head2 tree
 
   my $tree = $css->tree;
-  $css     = $css->tree(['root', [qw(text lalala)]]);
+  $css     = $css->tree(['root', ['text', 'foo']]);
 
-Document Object Model.
+Document Object Model. Note that this structure should only be used very
+carefully since it is very dynamic.
 
 =head1 METHODS
 

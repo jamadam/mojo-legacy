@@ -25,8 +25,8 @@ my $capture = 'no warnings "redefine"; sub capture { shift->(@_) }';
 
 # Consistent scalar context
 my $mt = Mojo::Template->new;
-$mt->prepend('my @foo = (3, 4);');
-my $output = $mt->render('<%= @foo %>:<%== @foo %>');
+$mt->prepend('my @foo = (3, 4);')->parse('<%= @foo %>:<%== @foo %>');
+my $output = $mt->build->compile || $mt->interpret;
 is $output, "2:2\n", 'same context';
 
 # Trim tag
@@ -132,10 +132,10 @@ is $output, "  %# 1 + 1\n", 'comment line has been replaced';
 # Replace mixed
 $mt     = Mojo::Template->new;
 $output = $mt->render(<<'EOF');
-%% my $number = <%= 20 + 3%>;
-The number is <%%= <%= '$' %>number %>.
+%% my $num = <%= 20 + 3%>;
+The number is <%%= <%= '$' %>num %>.
 EOF
-is $output, "% my \$number = 23;\nThe number is <%= \$number %>.\n",
+is $output, "% my \$num = 23;\nThe number is <%= \$num %>.\n",
   'mixed lines have been replaced';
 
 # Helper starting with "end"
@@ -557,10 +557,8 @@ EOF
 is $output, " \n    2\n\n    3\n\n    4\n", 'block loop';
 
 # Strict
-$mt     = Mojo::Template->new;
-$output = $mt->render(<<'EOF');
-% $foo = 1;
-EOF
+$mt = Mojo::Template->new;
+$output = $mt->parse('% $foo = 1;')->build->compile || $mt->interpret;
 isa_ok $output, 'Mojo::Exception', 'right exception';
 like $output->message, qr/^Global symbol "\$foo" requires/, 'right message';
 
@@ -753,7 +751,7 @@ foo
 EOF
 is $output, "foo\nbar\n", 'control structure';
 
-# All tags
+# Mixed tags
 $mt = Mojo::Template->new;
 $mt->parse(<<'EOF');
 <html foo="bar">
@@ -1052,16 +1050,17 @@ like "$output", qr/exception\.mt line 2/, 'right result';
 
 # Exception in file (different name)
 $mt     = Mojo::Template->new;
-$output = $mt->name('foo.mt')->render_file($file);
+$output = $mt->name('"foo.mt" from DATA section')->render_file($file);
 isa_ok $output, 'Mojo::Exception', 'right exception';
-like $output->message, qr/foo\.mt line 2/, 'message contains filename';
+like $output->message, qr/foo\.mt from DATA section line 2/,
+  'message contains filename';
 is $output->lines_before->[0][0], 1,      'right number';
 is $output->lines_before->[0][1], 'test', 'right line';
 is $output->line->[0], 2,        'right number';
 is $output->line->[1], '% die;', 'right line';
 is $output->lines_after->[0][0], 3,     'right number';
 is $output->lines_after->[0][1], '123', 'right line';
-like "$output", qr/foo\.mt line 2/, 'right result';
+like "$output", qr/foo\.mt from DATA section line 2/, 'right result';
 
 # Exception with UTF-8 context
 $mt     = Mojo::Template->new;

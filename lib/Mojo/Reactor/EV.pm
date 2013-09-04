@@ -13,6 +13,8 @@ sub DESTROY { undef $EV }
 # We have to fall back to Mojo::Reactor::Poll, since EV is unique
 sub new { $EV++ ? Mojo::Reactor::Poll->new : shift->SUPER::new }
 
+sub again { shift->{timers}{shift()}{watcher}->again }
+
 sub is_running { !!EV::depth }
 
 sub one_tick { EV::run(EV::RUN_ONCE) }
@@ -59,7 +61,7 @@ sub _timer {
   my $id = $self->SUPER::_timer(0, 0, $cb);
   weaken $self;
   $self->{timers}{$id}{watcher} = EV::timer(
-    $after => ($recurring ? $after : 0) => sub {
+    $after => $after => sub {
       $self->_sandbox("Timer $id", $self->{timers}{$id}{cb});
       delete $self->{timers}{$id} unless $recurring;
     }
@@ -69,6 +71,8 @@ sub _timer {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -116,6 +120,12 @@ implements the following new ones.
   my $reactor = Mojo::Reactor::EV->new;
 
 Construct a new L<Mojo::Reactor::EV> object.
+
+=head2 again
+
+  $reactor->again($id);
+
+Restart active timer.
 
 =head2 is_running
 

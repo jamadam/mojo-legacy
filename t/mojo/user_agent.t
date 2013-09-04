@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6, TLS and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = $ENV{MOJO_NO_TLS} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -39,12 +38,12 @@ get '/echo' => sub {
   my $self = shift;
   gzip \(my $uncompressed = $self->req->body), \my $compressed;
   $self->res->headers->content_encoding($self->req->headers->accept_encoding);
-  $self->render_data($compressed);
+  $self->render(data => $compressed);
 };
 
 post '/echo' => sub {
   my $self = shift;
-  $self->render_data($self->req->body);
+  $self->render(data => $self->req->body);
 };
 
 # Proxy detection
@@ -64,20 +63,20 @@ post '/echo' => sub {
   ok $ua->need_proxy('icio.us'),   'proxy needed';
   ok $ua->need_proxy('localhost'), 'proxy needed';
   ($ENV{HTTP_PROXY}, $ENV{HTTPS_PROXY}, $ENV{NO_PROXY}) = ();
-  local $ENV{http_proxy}  = 'proxy.kraih.com';
-  local $ENV{https_proxy} = 'tunnel.kraih.com';
-  local $ENV{no_proxy}    = 'localhost,localdomain,foo.com,kraih.com';
+  local $ENV{http_proxy}  = 'proxy.example.com';
+  local $ENV{https_proxy} = 'tunnel.example.com';
+  local $ENV{no_proxy}    = 'localhost,localdomain,foo.com,example.com';
   $ua->detect_proxy;
-  is $ua->http_proxy,  'proxy.kraih.com',  'right proxy';
-  is $ua->https_proxy, 'tunnel.kraih.com', 'right proxy';
+  is $ua->http_proxy,  'proxy.example.com',  'right proxy';
+  is $ua->https_proxy, 'tunnel.example.com', 'right proxy';
   ok $ua->need_proxy('dummy.mojolicio.us'), 'proxy needed';
   ok $ua->need_proxy('icio.us'),            'proxy needed';
   ok !$ua->need_proxy('localhost'),             'proxy needed';
   ok !$ua->need_proxy('localhost.localdomain'), 'no proxy needed';
   ok !$ua->need_proxy('foo.com'),               'no proxy needed';
-  ok !$ua->need_proxy('kraih.com'),             'no proxy needed';
-  ok !$ua->need_proxy('www.kraih.com'),         'no proxy needed';
-  ok $ua->need_proxy('www.kraih.com.com'), 'proxy needed';
+  ok !$ua->need_proxy('example.com'),           'no proxy needed';
+  ok !$ua->need_proxy('www.example.com'),       'no proxy needed';
+  ok $ua->need_proxy('www.example.com.com'), 'proxy needed';
 }
 
 # Max redirects
@@ -146,6 +145,8 @@ $ua->get(
     Mojo::IOLoop->stop;
   }
 );
+eval { $ua->get('/') };
+like $@, qr/^Non-blocking requests in progress/, 'right error';
 Mojo::IOLoop->start;
 ok $success, 'successful';
 is $code,    200, 'right status';
@@ -238,13 +239,15 @@ ok $tx->success, 'successful';
 ok !$tx->kept_alive, 'kept connection not alive';
 ok $tx->keep_alive, 'keep connection alive';
 is $tx->res->code, 204, 'right status';
-is $tx->res->body, '',  'no content';
+ok $tx->is_empty, 'transaction is empty';
+is $tx->res->body, '', 'no content';
 
 # Connection was kept alive
 $tx = $ua->get('/');
 ok $tx->success,    'successful';
 ok $tx->kept_alive, 'kept connection alive';
-is $tx->res->code, 200,      'right status';
+is $tx->res->code, 200, 'right status';
+ok !$tx->is_empty, 'transaction is not empty';
 is $tx->res->body, 'works!', 'right content';
 
 # Non-blocking form
@@ -315,13 +318,37 @@ $ua->once(
 $tx = $ua->get('/echo' => 'Hello World!');
 ok !$tx->success, 'not successful';
 is(($tx->error)[0], 'Maximum message size exceeded', 'right error');
-is(($tx->error)[1], undef, 'no code');
+is(($tx->error)[1], undef, 'no status');
+ok $tx->res->is_limit_exceeded, 'limit is exceeded';
 
 # 404 response
 $tx = $ua->get('/does_not_exist');
 ok !$tx->success, 'not successful';
 is(($tx->error)[0], 'Not Found', 'right error');
-is(($tx->error)[1], 404,         'right code');
+is(($tx->error)[1], 404,         'right status');
+
+# Fork safety
+$tx = $ua->get('/');
+is $tx->res->body, 'works!', 'right content';
+my $last = $tx->connection;
+my $port = $ua->app_url->port;
+$tx = $ua->get('/');
+is $tx->res->body, 'works!', 'right content';
+is $tx->connection, $last, 'same connection';
+is $ua->app_url->port, $port, 'same port';
+{
+  local $$ = -23;
+  $tx = $ua->get('/');
+  is $tx->res->body, 'works!', 'right content';
+  isnt $tx->connection, $last, 'new connection';
+  isnt $ua->app_url->port, $port, 'new port';
+  $port = $ua->app_url->port;
+  $last = $tx->connection;
+  $tx   = $ua->get('/');
+  is $tx->res->body, 'works!', 'right content';
+  is $tx->connection, $last, 'same connection';
+  is $ua->app_url->port, $port, 'same port';
+}
 
 # Introspect
 my $req = my $res = '';
@@ -372,21 +399,21 @@ $tx = $ua->build_tx(GET => '/echo');
 my $i = 0;
 my ($stream, $drain);
 $drain = sub {
-  my $req = shift;
+  my $content = shift;
   return $ua->ioloop->timer(
     0.25 => sub {
-      $req->write_chunk('');
+      $content->write_chunk('');
       $tx->resume;
       $stream
         += @{Mojo::IOLoop->stream($tx->connection)->subscribers('drain')};
     }
   ) if $i >= 10;
-  $req->write_chunk($i++, $drain);
+  $content->write_chunk($i++, $drain);
   $tx->resume;
   return unless my $id = $tx->connection;
   $stream += @{Mojo::IOLoop->stream($id)->subscribers('drain')};
 };
-$tx->req->$drain;
+$tx->req->content->$drain;
 $ua->start($tx);
 ok $tx->success, 'successful';
 ok !$tx->error, 'no error';
@@ -448,8 +475,8 @@ is $tx->res->code, 200,      'right status';
 is $tx->res->body, 'works!', 'right content';
 
 # Unexpected 1xx responses
-my $port = Mojo::IOLoop->generate_port;
-$req = Mojo::Message::Request->new;
+$port = Mojo::IOLoop->generate_port;
+$req  = Mojo::Message::Request->new;
 Mojo::IOLoop->server(
   {address => '127.0.0.1', port => $port} => sub {
     my ($loop, $stream) = @_;

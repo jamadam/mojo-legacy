@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -21,8 +20,8 @@ app->renderer->paths->[0] = app->home->rel_dir('does_not_exist');
 
 # Reverse filter
 hook after_render => sub {
-  my ($self, $output, $format) = @_;
-  return unless $self->stash->{reverse};
+  my ($c, $output, $format) = @_;
+  return unless $c->stash->{reverse};
   $$output = reverse $$output . $format;
 };
 
@@ -30,6 +29,8 @@ hook after_render => sub {
 app->defaults(layout => 'default');
 
 get '/works';
+
+get '/mixed';
 
 get '/doesnotexist';
 
@@ -108,15 +109,22 @@ my $t = Test::Mojo->new;
 
 # Template with layout
 $t->get_ok('/works')->status_is(200)
+  ->content_type_is('text/html;charset=UTF-8')
   ->content_is("DefaultJust worksThis <template> just works!\n\n");
 
 # Different layout
 $t->get_ok('/works?green=1')->status_is(200)
+  ->content_type_is('text/html;charset=UTF-8')
   ->content_is("GreenJust worksThis <template> just works!\n\n");
 
 # Extended
 $t->get_ok('/works?blue=1')->status_is(200)
+  ->content_type_is('text/html;charset=UTF-8')
   ->content_is("BlueJust worksThis <template> just works!\n\n");
+
+# Mixed formats
+$t->get_ok('/mixed')->status_is(200)->content_type_is('text/plain')
+  ->content_is("Mixed formats\n\n");
 
 # Missing template
 $t->get_ok('/doesnotexist')->status_is(404)
@@ -144,29 +152,25 @@ $t->get_ok('/dies?blue=1')->status_is(500)
 
 # Template inheritance
 $t->get_ok('/template_inheritance')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is(
   "<title>Works!</title>\n<br>\nSidebar!\nHello World!\n\nDefault footer!\n");
 
 # Just the layout
 $t->get_ok('/layout_without_inheritance')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is(
   "<title></title>\nDefault header!\nDefault sidebar!\n\nDefault footer!\n");
 
 # Double inheritance
 $t->get_ok('/double_inheritance')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("<title>Works!</title>\n<br>\nSidebar too!\n"
     . "Hello World!\n\nDefault footer!\n");
 
 # Triple inheritance
 $t->get_ok('/triple_inheritance')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("<title>Works!</title>\n<br>\nSidebar too!\n"
     . "New <content>.\n\nDefault footer!\n");
 
@@ -176,66 +180,56 @@ $t->get_ok('/plugin_with_template')->status_is(200)
 
 # Nested partial templates
 $t->get_ok('/nested-includes')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("layouted Nested Hello\n[\n  1,\n  2\n]\nthere<br>!\n\n\n\n");
 
 # Partial template with localized stash values
 $t->get_ok('/localized/include')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_type_is('text/html;charset=UTF-8')
   ->content_is("lmth\n\noof\n\n\n123 2dezilacol\noof 1dezilacol");
 
 # Filter
 $t->get_ok('/plain/reverse')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
-  ->content_type_is('text/plain')->content_is('oof!olleH');
+  ->header_is(Server => 'Mojolicious (Perl)')->content_type_is('text/plain')
+  ->content_is('oof!olleH');
 
 # Layout in render call
 $t->get_ok('/outerlayout')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("layouted Hello\n[\n  1,\n  2\n]\nthere<br>!\n\n\n");
 
 # Layout in route
 $t->get_ok('/outerlayouttwo')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("layouted Hello\n[\n  1,\n  2\n]\nthere<br>!\n\n\n");
 
 # Partial template with layout
 $t->get_ok('/outerinnerlayout')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("layouted Hello\nlayouted [\n  1,\n  2\n]\nthere<br>!\n\n\n\n");
 
 # Layout with block
 $t->get_ok('/withblocklayout')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("\nwith_block \n\nOne: one\nTwo: two\n\n");
 
 # Content blocks
 $t->get_ok('/content_for')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')
+  ->header_is(Server => 'Mojolicious (Perl)')
   ->content_is("DefaultThis\n\nseems\nto\nHello    world!\n\nwork!\n\n");
 
 # Inline template
 $t->get_ok('/inline')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')->content_is("inline!\n");
+  ->header_is(Server => 'Mojolicious (Perl)')->content_is("inline!\n");
 
 # "0" inline template
 $t->get_ok('/inline/again')->status_is(200)
-  ->header_is(Server         => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')->content_is("0\n");
+  ->header_is(Server => 'Mojolicious (Perl)')->content_is("0\n");
 
 # "0" data
 $t->get_ok('/data')->status_is(200)->header_is(Server => 'Mojolicious (Perl)')
-  ->header_is('X-Powered-By' => 'Mojolicious (Perl)')->content_is(0);
+  ->content_is(0);
 
 done_testing();
 
@@ -246,6 +240,9 @@ Default<%= title %><%= content %>
 @@ layouts/green.html.ep
 Green<%= title %><%= content %>
 
+@@ layouts/mixed.txt.ep
+Mixed <%= content %>
+
 @@ blue.html.ep
 Blue<%= title %><%= content %>
 
@@ -254,6 +251,10 @@ Blue<%= title %><%= content %>
 % layout 'green' if param 'green';
 % extends 'blue' if param 'blue';
 This <template> just works!
+
+@@ mixed.html.ep
+% layout 'mixed', format => 'txt';
+formats
 
 @@ exception.html.ep
 % title 'Exception happened';

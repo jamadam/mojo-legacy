@@ -51,7 +51,7 @@ sub _perldoc {
   my $perldoc = $self->url_for('/perldoc/');
   $dom->find('a[href]')->each(
     sub {
-      my $attrs = shift->attrs;
+      my $attrs = shift->attr;
       $attrs->{href} =~ s!%3A%3A!/!gi
         if $attrs->{href} =~ s!^http://search\.cpan\.org/perldoc\?!$perldoc!;
     }
@@ -62,7 +62,7 @@ sub _perldoc {
     sub {
       my $e = shift;
       return if $e->all_text =~ /^\s*\$\s+/m;
-      my $attrs = $e->attrs;
+      my $attrs = $e->attr;
       my $class = $attrs->{class};
       $attrs->{class} = defined $class ? "$class prettyprint" : 'prettyprint';
     }
@@ -78,7 +78,7 @@ sub _perldoc {
       # Anchor and text
       my $name = my $text = $e->all_text;
       $name =~ s/\s+/_/g;
-      $name =~ s/\W//g;
+      $name =~ s/[^\w\-]//g;
       my $anchor = $name;
       my $i      = 1;
       $anchor = $name . $i++ while $anchors{$anchor}++;
@@ -129,6 +129,8 @@ sub _pod_to_html {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -203,7 +205,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
   my $route = $plugin->register(Mojolicious->new);
   my $route = $plugin->register(Mojolicious->new, {name => 'foo'});
 
-Register renderer in L<Mojolicious> application.
+Register renderer and helper in L<Mojolicious> application.
 
 =head1 SEE ALSO
 

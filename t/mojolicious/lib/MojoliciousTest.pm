@@ -33,6 +33,9 @@ sub startup {
   $self->plugin('test-some_plugin2');
   $self->plugin('UPPERCASETestPlugin');
 
+  # Plugin for rendering return values
+  $self->plugin('AroundPlugin');
+
   # Templateless renderer
   $self->renderer->add_handler(
     test => sub {
@@ -74,17 +77,6 @@ sub startup {
 
   # /happy/fun/time
   $r->route('/happy')->fun('/time')->to('foo#fun');
-
-  # /auth (authentication bridge)
-  my $auth = $r->bridge('/auth')->to(
-    cb => sub {
-      return 1 if shift->req->headers->header('X-Bender');
-      return undef;
-    }
-  );
-
-  # /auth/authenticated
-  $auth->route('/authenticated')->to('foo#authenticated');
 
   # /stash_config
   $r->route('/stash_config')
@@ -135,11 +127,18 @@ sub startup {
   $r->route('/test10')->to('baz#index');
 
   # /withblock (template with blocks)
-  $r->route('/withblock')->to('foo#withblock');
+  $r->route('/withblock')->to('foo#withBlock');
 
   # /staged (authentication with bridges)
-  my $b = $r->bridge('/staged')->to(controller => 'foo', action => 'stage1');
+  my $b = $r->bridge('/staged')->to('foo#stage1', return => 1);
   $b->route->to(action => 'stage2');
+
+  # /suspended (suspended bridge)
+  $r->bridge('/suspended')->to('foo#suspended')->bridge->to('foo#suspended')
+    ->route->to('foo#fun');
+
+  # /longpoll (long polling)
+  $r->route('/longpoll')->to('foo#longpoll');
 
   # /shortcut/act
   # /shortcut/ctrl

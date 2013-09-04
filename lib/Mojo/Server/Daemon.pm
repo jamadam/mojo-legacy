@@ -9,6 +9,7 @@ use Scalar::Util 'weaken';
 
 use constant DEBUG => $ENV{MOJO_DAEMON_DEBUG} || 0;
 
+has acceptors => sub { [] };
 has [qw(backlog group silent user)];
 has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 15 };
 has ioloop => sub { Mojo::IOLoop->singleton };
@@ -20,7 +21,7 @@ sub DESTROY {
   my $self = shift;
   return unless my $loop = $self->ioloop;
   $self->_remove($_) for keys %{$self->{connections} || {}};
-  $loop->remove($_) for @{$self->{acceptors} || []};
+  $loop->remove($_) for @{$self->acceptors};
 }
 
 sub run {
@@ -54,9 +55,9 @@ sub start {
 
   # Resume accepting connections
   my $loop = $self->ioloop;
-  if (my $acceptors = $self->{acceptors}) {
-    push @$acceptors, $loop->acceptor(delete $self->{servers}{$_})
-      for keys %{$self->{servers}};
+  if (my $servers = $self->{servers}) {
+    push @{$self->acceptors}, $loop->acceptor(delete $servers->{$_})
+      for keys %$servers;
   }
 
   # Start listening
@@ -71,7 +72,7 @@ sub stop {
 
   # Suspend accepting connections but keep listen sockets open
   my $loop = $self->ioloop;
-  while (my $id = shift @{$self->{acceptors}}) {
+  while (my $id = shift @{$self->acceptors}) {
     my $server = $self->{servers}{$id} = $loop->acceptor($id);
     $loop->remove($id);
     $server->stop;
@@ -108,9 +109,7 @@ sub _build_tx {
   );
 
   # Kept alive if we have more than one request on the connection
-  $tx->kept_alive(1) if ++$c->{requests} > 1;
-
-  return $tx;
+  return ++$c->{requests} > 1 ? $tx->kept_alive(1) : $tx;
 }
 
 sub _close {
@@ -153,9 +152,9 @@ sub _finish {
   return $self->_remove($id) if $req->error || !$tx->keep_alive;
 
   # Build new transaction for leftovers
-  return unless $req->has_leftovers;
+  return unless length(my $leftovers = $req->content->leftovers);
   $tx = $c->{tx} = $self->_build_tx($id, $c);
-  $tx->server_read($req->leftovers);
+  $tx->server_read($leftovers);
 }
 
 sub _listen {
@@ -167,6 +166,7 @@ sub _listen {
     address  => $url->host,
     backlog  => $self->backlog,
     port     => $url->port,
+    reuse    => scalar $query->param('reuse'),
     tls_ca   => scalar $query->param('ca'),
     tls_cert => scalar $query->param('cert'),
     tls_key  => scalar $query->param('key')
@@ -177,7 +177,7 @@ sub _listen {
   my $tls = $options->{tls} = $url->protocol eq 'https' ? 1 : undef;
 
   weaken $self;
-  my $id = $self->ioloop->server(
+  push @{$self->acceptors}, $self->ioloop->server(
     $options => sub {
       my ($loop, $stream, $id) = @_;
 
@@ -198,24 +198,24 @@ sub _listen {
           sub { $self->app->log->debug('Inactivity timeout.') if $c->{tx} });
     }
   );
-  push @{$self->{acceptors} ||= []}, $id;
 
   return if $self->silent;
-  $self->app->log->info(qq{Listening at "$listen".});
-  $listen =~ s!//\*!//127.0.0.1!i;
-  say "Server available at $listen.";
+  $self->app->log->info(qq{Listening at "$url".});
+  $query->params([]);
+  $url->host('127.0.0.1') if $url->host eq '*';
+  say "Server available at $url.";
 }
 
 sub _read {
   my ($self, $id, $chunk) = @_;
 
   # Make sure we have a transaction and parse chunk
-  my $c = $self->{connections}{$id};
+  return unless my $c = $self->{connections}{$id};
   my $tx = $c->{tx} ||= $self->_build_tx($id, $c);
   warn "-- Server <<< Client (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
   $tx->server_read($chunk);
 
-  # Last keep alive request or corrupted connection
+  # Last keep-alive request or corrupted connection
   $tx->res->headers->connection('close')
     if (($c->{requests} || 0) >= $self->max_requests) || $tx->req->error;
 
@@ -234,7 +234,7 @@ sub _write {
   my ($self, $id) = @_;
 
   # Not writing
-  my $c = $self->{connections}{$id};
+  return unless my $c  = $self->{connections}{$id};
   return unless my $tx = $c->{tx};
   return unless $tx->is_writing;
 
@@ -257,10 +257,12 @@ sub _write {
       return unless $c->{tx};
     }
   }
-  $stream->write('', $cb);
+  $stream->write('' => $cb);
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -292,13 +294,15 @@ Mojo::Server::Daemon - Non-blocking I/O HTTP and WebSocket server
 =head1 DESCRIPTION
 
 L<Mojo::Server::Daemon> is a full featured, highly portable non-blocking I/O
-HTTP and WebSocket server, with C<IPv6>, C<TLS>, C<Comet> (long polling) and
-multiple event loop support.
+HTTP and WebSocket server, with IPv6, TLS, Comet (long polling), keep-alive,
+connection pooling, timeout, cookie, multipart and multiple event loop
+support.
 
-Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
-L<IO::Socket::SSL> (1.75+) are supported transparently through
-L<Mojo::IOLoop>, and used if installed. Individual features can also be
-disabled with the MOJO_NO_IPV6 and MOJO_NO_TLS environment variables.
+For better scalability (epoll, kqueue) and to provide IPv6 as well as TLS
+support, the optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
+L<IO::Socket::SSL> (1.75+) will be used automatically by L<Mojo::IOLoop> if
+they are installed. Individual features can also be disabled with the
+MOJO_NO_IPV6 and MOJO_NO_TLS environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for more.
 
@@ -310,6 +314,13 @@ L<Mojo::Server::Daemon> inherits all events from L<Mojo::Server>.
 
 L<Mojo::Server::Daemon> inherits all attributes from L<Mojo::Server> and
 implements the following new ones.
+
+=head2 acceptors
+
+  my $acceptors = $daemon->acceptors;
+  $daemon       = $daemon->acceptors([]);
+
+Active acceptors.
 
 =head2 backlog
 
@@ -351,6 +362,9 @@ L<Mojo::IOLoop> singleton.
 List of one or more locations to listen on, defaults to the value of the
 MOJO_LISTEN environment variable or C<http://*:3000>.
 
+  # Allow multiple servers to use the same port (SO_REUSEPORT)
+  $daemon->listen(['http://*:8080?reuse=1']);
+
   # Listen on IPv6 interface
   $daemon->listen(['http://[::1]:4000']);
 
@@ -370,17 +384,32 @@ These parameters are currently available:
 
 =item ca
 
+  ca=/etc/tls/ca.crt
+
 Path to TLS certificate authority file.
 
 =item cert
+
+  cert=/etc/tls/server.crt
 
 Path to the TLS cert file, defaults to a built-in test certificate.
 
 =item key
 
+  key=/etc/tls/server.key
+
 Path to the TLS key file, defaults to a built-in test key.
 
+=item reuse
+
+  reuse=1
+
+Allow multiple servers to use the same port with the C<SO_REUSEPORT> socket
+option.
+
 =item verify
+
+  verify=0x00
 
 TLS verification mode, defaults to C<0x03>.
 
@@ -398,7 +427,7 @@ Maximum number of parallel client connections, defaults to C<1000>.
   my $max = $daemon->max_requests;
   $daemon = $daemon->max_requests(100);
 
-Maximum number of keep alive requests per connection, defaults to C<25>.
+Maximum number of keep-alive requests per connection, defaults to C<25>.
 
 =head2 silent
 

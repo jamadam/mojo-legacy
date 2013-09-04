@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_MODE}    = 'testing';
   $ENV{MOJO_NO_IPV6} = 1;
@@ -21,6 +20,7 @@ $t->get_ok('/')->status_is(200)->content_is(<<'EOF');
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/">Test</a>
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>

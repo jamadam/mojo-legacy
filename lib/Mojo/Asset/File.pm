@@ -26,7 +26,7 @@ has handle => sub {
   my $name = defined $path ? $path : $base;
   until ($handle->open($name, O_CREAT | O_EXCL | O_RDWR)) {
     croak qq{Can't open file "$name": $!} if defined $path || $! != $!{EEXIST};
-    $name = "$base." . md5_sum(time . $$ . rand 9999999);
+    $name = "$base." . md5_sum(time . $$ . rand 9 x 7);
   }
   $self->path($name);
 
@@ -57,14 +57,14 @@ sub add_chunk {
 }
 
 sub contains {
-  my ($self, $string) = @_;
+  my ($self, $str) = @_;
 
   my $handle = $self->handle;
   $handle->sysseek($self->start_range, SEEK_SET);
 
   # Calculate window size
   my $end  = defined $self->end_range ? $self->end_range : $self->size;
-  my $len  = length $string;
+  my $len  = length $str;
   my $size = $len > 131072 ? $len : 131072;
   $size = $end - $self->start_range if $size > $end - $self->start_range;
 
@@ -79,7 +79,7 @@ sub contains {
     $window .= $buffer;
 
     # Search window
-    my $pos = index $window, $string;
+    my $pos = index $window, $str;
     return $offset + $pos if $pos >= 0;
     $offset += $read;
     return -1 if $read == 0 || $offset == $end;
@@ -140,6 +140,8 @@ sub slurp {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Asset::File - File storage for HTTP content
@@ -184,7 +186,7 @@ Delete file automatically once it's not used anymore.
   my $handle = $file->handle;
   $file      = $file->handle(IO::File->new);
 
-File handle, created on demand.
+Filehandle, created on demand.
 
 =head2 path
 

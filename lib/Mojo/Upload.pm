@@ -1,7 +1,6 @@
 package Mojo::Upload;
 use Mojo::Base -base;
 
-use Carp 'croak';
 use Mojo::Asset::File;
 use Mojo::Headers;
 
@@ -19,6 +18,8 @@ sub size  { shift->asset->size }
 sub slurp { shift->asset->slurp }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -45,7 +46,8 @@ L<Mojo::Upload> implements the following attributes.
   my $asset = $upload->asset;
   $upload   = $upload->asset(Mojo::Asset::File->new);
 
-Asset containing the uploaded data, defaults to a L<Mojo::Asset::File> object.
+Asset containing the uploaded data, usually a L<Mojo::Asset::File> or
+L<Mojo::Asset::Memory> object.
 
 =head2 filename
 

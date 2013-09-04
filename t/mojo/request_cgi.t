@@ -55,7 +55,7 @@ is $req->method, 'POST', 'right method';
 is $req->url->path, 'foo/bar', 'right path';
 is $req->url->base->path, '/test/index.cgi/', 'right base path';
 is $req->url->base->host, 'mojolicio.us',     'right base host';
-is $req->url->base->port, '',                 'right base port';
+is $req->url->base->port, '',                 'no base port';
 is $req->url->query, 'lalala=23&bar=baz', 'right query';
 is $req->version, '1.0', 'right version';
 is $req->headers->dnt, 1, 'right "DNT" value';
@@ -121,7 +121,7 @@ is $req->url->to_abs->to_string,
   ok $req->content->asset->is_file, 'stored in file';
   is $req->content->progress, 12, 'right progress';
   ok $req->is_finished, 'request is finished';
-  ok !$req->is_multipart, 'no multipart content';
+  ok !$req->content->is_multipart, 'no multipart content';
   is $req->method, 'POST', 'right method';
   is $req->url->path, 'foo/bar', 'right path';
   is $req->url->base->path, '/test/index.cgi/', 'right base path';
@@ -207,10 +207,10 @@ ok $progress, 'made progress';
 is $req->content->progress, 87, 'right progress';
 ok $req->is_finished, 'request is finished';
 is $req->method, 'POST', 'right method';
-is $req->url->path, '', 'right path';
+is $req->url->path, '', 'no path';
 is $req->url->base->path, '/index.pl/', 'right base path';
 is $req->url->base->host, 'test1',      'right base host';
-is $req->url->base->port, '',           'right base port';
+is $req->url->base->port, '',           'no base port';
 ok !$req->url->query->to_string, 'no query';
 is $req->version, '1.1', 'right version';
 is $req->body, 'request=&ajax=true&login=test&password=111&'
@@ -238,10 +238,10 @@ $req->parse('request=&ajax=true&login=test&password=111&');
 $req->parse('edition=db6d8b30-16df-4ecd-be2f-c8194f94e1f4');
 ok $req->is_finished, 'request is finished';
 is $req->method, 'POST', 'right method';
-is $req->url->path, '', 'right path';
+is $req->url->path, '', 'no path';
 is $req->url->base->path, '/index.pl/', 'right base path';
 is $req->url->base->host, 'test1',      'right base host';
-is $req->url->base->port, '',           'right base port';
+is $req->url->base->port, '',           'no base port';
 ok !$req->url->query->to_string, 'no query';
 is $req->version, '1.1', 'right version';
 is $req->body, 'request=&ajax=true&login=test&password=111&'
@@ -285,7 +285,7 @@ ok $req->is_finished, 'request is finished';
 is $req->method, 'POST', 'right method';
 is $req->url->base->host, '127.0.0.1', 'right base host';
 is $req->url->base->port, 13028,       'right base port';
-is $req->url->path, '', 'right path';
+is $req->url->path, '', 'no path';
 is $req->url->base->path, '/upload/', 'right base path';
 is $req->version, '1.1', 'right version';
 ok !$req->is_secure, 'not secure';
@@ -360,7 +360,7 @@ ok $req->is_finished, 'request is finished';
 is $req->method, 'GET', 'right method';
 is $req->url->base->host, 'localhost', 'right base host';
 is $req->url->path, '/foo/bar', 'right path';
-is $req->url->base->path, '', 'right base path';
+is $req->url->base->path, '', 'no base path';
 is $req->version, '1.0',         'right version';
 is $req->body,    'hello=world', 'right content';
 is_deeply $req->param('hello'), 'world', 'right parameters';
@@ -382,7 +382,7 @@ $req->parse('hello=world');
 ok $req->is_finished, 'request is finished';
 is $req->method, 'GET', 'right method';
 is $req->url->base->host, 'localhost', 'right base host';
-is $req->url->path, '', 'right path';
+is $req->url->path, '', 'no path';
 is $req->url->base->path, '/test/index.cgi/', 'right base path';
 is $req->version, '1.0',         'right version';
 is $req->body,    'hello=world', 'right content';
@@ -404,7 +404,7 @@ $req->parse(
 ok $req->is_finished, 'request is finished';
 is $req->method, 'GET', 'right method';
 is $req->url->base->host, 'getmyapp.org', 'right base host';
-is $req->url->path, '', 'right path';
+is $req->url->path, '', 'no path';
 is $req->url->base->path, '/cgi-bin/myapp/myapp.pl/', 'right base path';
 is $req->version, '1.1', 'right version';
 is $req->url->to_abs->to_string, 'http://getmyapp.org/cgi-bin/myapp/myapp.pl',
@@ -420,7 +420,7 @@ $req->parse(
   PATH_INFO        => '/upload',
   HTTP_CONNECTION  => 'Keep-Alive',
   REQUEST_METHOD   => 'POST',
-  CONTENT_LENGTH   => '135',
+  CONTENT_LENGTH   => '139',
   SCRIPT_FILENAME  => '/tmp/SnLu1cQ3t2/test.fcgi',
   SERVER_SOFTWARE  => 'Apache/2.2.14 (Unix) mod_fastcgi/2.4.2',
   QUERY_STRING     => '',
@@ -443,16 +443,16 @@ is $req->content->progress, 0, 'right progress';
 $req->parse("--8jXGX\x0d\x0a");
 is $req->content->progress, 9, 'right progress';
 $req->parse(
-  "Content-Disposition: form-data; name=\"file\"; filename=\"file\"\x0d\x0a"
+  "Content-Disposition: form-data; name = file; filename = file.txt\x0d\x0a"
     . "Content-Type: application/octet-stream\x0d\x0a\x0d\x0a");
-is $req->content->progress, 113, 'right progress';
+is $req->content->progress, 117, 'right progress';
 $req->parse('11023456789');
-is $req->content->progress, 124, 'right progress';
+is $req->content->progress, 128, 'right progress';
 $req->parse("\x0d\x0a--8jXGX--");
-is $req->content->progress, 135, 'right progress';
-ok $req->is_finished,  'request is finished';
-ok $req->is_multipart, 'multipart content';
-is $req->method,       'POST', 'right method';
+is $req->content->progress, 139, 'right progress';
+ok $req->is_finished, 'request is finished';
+ok $req->content->is_multipart, 'multipart content';
+is $req->method, 'POST', 'right method';
 is $req->url->base->host, '127.0.0.1', 'right base host';
 is $req->url->path, '/upload', 'right path';
 is $req->url->base->path, '', 'no base path';
@@ -460,6 +460,7 @@ is $req->version, '1.1', 'right version';
 is $req->url->to_abs->to_string, 'http://127.0.0.1:13028/upload',
   'right absolute URL';
 my $file = $req->upload('file');
-is $file->slurp, '11023456789', 'right uploaded content';
+is $file->filename, 'file.txt',    'right filename';
+is $file->slurp,    '11023456789', 'right uploaded content';
 
 done_testing();

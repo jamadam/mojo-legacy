@@ -1,16 +1,13 @@
 package Mojo::Home;
 use Mojo::Base -base;
-use overload
-  'bool'   => sub {1},
-  '""'     => sub { shift->to_string },
-  fallback => 1;
+use overload bool => sub {1}, '""' => sub { shift->to_string }, fallback => 1;
 
 use Cwd 'abs_path';
 use File::Basename 'dirname';
 use File::Find 'find';
 use File::Spec::Functions qw(abs2rel catdir catfile splitdir);
 use FindBin;
-use Mojo::Util qw(class_to_path deprecated slurp);
+use Mojo::Util qw(class_to_path slurp);
 
 sub new { shift->SUPER::new->parse(@_) }
 
@@ -80,16 +77,11 @@ sub parse {
 sub rel_dir { catdir(@{shift->{parts} || []}, split '/', shift) }
 sub rel_file { catfile(@{shift->{parts} || []}, split '/', shift) }
 
-# DEPRECATED in Rainbow!
-sub slurp_rel_file {
-  deprecated
-    'Mojo::Home::slurp_rel_file is DEPRECATED in favor of Mojo::Util::slurp';
-  slurp shift->rel_file(@_);
-}
-
 sub to_string { catdir(@{shift->{parts} || []}) }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -120,7 +112,7 @@ following new ones.
   my $home = Mojo::Home->new;
   my $home = Mojo::Home->new('/home/sri/myapp');
 
-Construct a new L<Mojo::Home> object.
+Construct a new L<Mojo::Home> object and C<parse> home directory if necessary.
 
 =head2 detect
 
@@ -142,9 +134,9 @@ Path to C<lib> directory of application.
   my $files = $home->list_files('foo/bar');
 
 Portably list all files recursively in directory relative to the home
-diectory.
+directory.
 
-  $home->rel_file($home->list_files('templates/layouts')->[1]);
+  say $home->rel_file($home->list_files('templates/layouts')->[1]);
 
 =head2 mojo_lib_dir
 
@@ -173,8 +165,8 @@ Portably generate an absolute path for a file relative to the home directory.
 
 =head2 to_string
 
-  my $string = $home->to_string;
-  my $string = "$home";
+  my $str = $home->to_string;
+  my $str = "$home";
 
 Home directory.
 

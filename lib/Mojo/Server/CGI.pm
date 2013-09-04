@@ -34,7 +34,7 @@ sub run {
   return undef unless _write($res, 'get_header_chunk');
 
   # Response body
-  return undef unless _write($res, 'get_body_chunk');
+  $tx->is_empty or _write($res, 'get_body_chunk') or return undef;
 
   # Finish transaction
   $tx->server_close;
@@ -64,6 +64,8 @@ sub _write {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -112,7 +114,7 @@ implements the following new ones.
   my $nph = $cgi->nph;
   $cgi    = $cgi->nph(1);
 
-Activate non parsed header mode.
+Activate non-parsed header mode.
 
 =head1 METHODS
 

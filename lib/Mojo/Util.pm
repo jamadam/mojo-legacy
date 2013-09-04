@@ -33,39 +33,28 @@ for my $line (split "\x0a", slurp(catfile dirname(__FILE__), 'entities.txt')) {
   $ENTITIES{$1} = defined $3 ? (chr(hex $2) . chr(hex $3)) : chr(hex $2);
 }
 
-# DEPRECATED in Rainbow!
-my %REVERSE = ("\x{0027}" => '#39;');
-$REVERSE{$ENTITIES{$_}} = defined $REVERSE{$ENTITIES{$_}} ? $REVERSE{$ENTITIES{$_}} : $_
-  for sort  { @{[$a =~ /[A-Z]/g]} <=> @{[$b =~ /[A-Z]/g]} }
-  sort grep {/;/} keys %ENTITIES;
-
 # Encoding cache
 my %CACHE;
 
 our @EXPORT_OK = (
   qw(b64_decode b64_encode camelize class_to_file class_to_path decamelize),
-  qw(decode deprecated encode get_line hmac_md5_sum hmac_sha1_sum),
-  qw(html_unescape md5_bytes md5_sum monkey_patch punycode_decode),
-  qw(punycode_encode quote secure_compare sha1_bytes sha1_sum slurp spurt),
-  qw(squish steady_time trim unquote url_escape url_unescape xml_escape),
-  qw(xor_encode)
+  qw(decode deprecated encode get_line hmac_sha1_sum html_unescape md5_bytes),
+  qw(md5_sum monkey_patch punycode_decode punycode_encode quote),
+  qw(secure_compare sha1_bytes sha1_sum slurp split_header spurt squish),
+  qw(steady_time trim unquote url_escape url_unescape xml_escape xor_encode)
 );
 
-# DEPRECATED in Rainbow!
-push @EXPORT_OK, 'html_escape';
-
 sub b64_decode { decode_base64($_[0]) }
-
 sub b64_encode { encode_base64($_[0], $_[1]) }
 
 sub camelize {
-  my $string = shift;
-  return $string if $string =~ /^[A-Z]/;
+  my $str = shift;
+  return $str if $str =~ /^[A-Z]/;
 
-  # Camel case words
+  # CamelCase words
   return join '::', map {
     join '', map { ucfirst lc } split /_/, $_
-  } split /-/, $string;
+  } split /-/, $str;
 }
 
 sub class_to_file {
@@ -78,14 +67,14 @@ sub class_to_file {
 sub class_to_path { join '.', join('/', split /::|'/, shift), 'pm' }
 
 sub decamelize {
-  my $string = shift;
-  return $string if $string !~ /^[A-Z]/;
+  my $str = shift;
+  return $str if $str !~ /^[A-Z]/;
 
   # Module parts
   my @parts;
-  for my $part (split /::/, $string) {
+  for my $part (split /::/, $str) {
 
-    # Snake case words
+    # snake_case words
     my @words;
     push @words, lc $1 while $part =~ s/([A-Z]{1}[^A-Z]*)//;
     push @parts, join '_', @words;
@@ -120,25 +109,13 @@ sub get_line {
   return $line;
 }
 
-sub hmac_md5_sum  { _hmac(\&md5,  @_) }
-sub hmac_sha1_sum { _hmac(\&sha1, @_) }
-
-# DEPRECATED in Rainbow!
-sub html_escape {
-  deprecated 'Mojo::Util::html_escape is DEPRECATED in favor of '
-    . 'Mojo::Util::xml_escape';
-  my ($string, $pattern) = @_;
-  $pattern ||= '^\n\r\t !#$%(-;=?-~';
-  return $string unless $string =~ /[^$pattern]/;
-  $string =~ s/([$pattern])/_encode($1)/ge;
-  return $string;
-}
+sub hmac_sha1_sum { unpack 'H*', hmac_sha1(@_) }
 
 sub html_unescape {
-  my $string = shift;
-  $string
-    =~ s/&(?:\#((?:\d{1,7}|x[[:xdigit:]]{1,6}));|(\w+;?))/_decode($1, $2)/ge;
-  return $string;
+  my $str = shift;
+  return $str if index($str, '&') == -1;
+  $str =~ s/&(?:\#((?:\d{1,7}|x[0-9a-fA-F]{1,6}));|(\w+;?))/_decode($1, $2)/ge;
+  return $str;
 }
 
 sub md5_bytes { md5(@_) }
@@ -156,36 +133,32 @@ sub punycode_decode {
   my $input = shift;
   use integer;
 
-  # Delimiter
-  my @output;
-  push @output, split //, $1 if $input =~ s/(.*)\x2d//s;
-
   my $n    = PC_INITIAL_N;
   my $i    = 0;
   my $bias = PC_INITIAL_BIAS;
+  my @output;
+
+  # Consume all code points before the last delimiter
+  push @output, split //, $1 if $input =~ s/(.*)\x2d//s;
+
   while (length $input) {
     my $oldi = $i;
     my $w    = 1;
 
     # Base to infinity in steps of base
     for (my $k = PC_BASE; 1; $k += PC_BASE) {
-
-      # Digit
       my $digit = ord substr $input, 0, 1, '';
       $digit = $digit < 0x40 ? $digit + (26 - 0x30) : ($digit & 0x1f) - 1;
       $i += $digit * $w;
       my $t = $k - $bias;
       $t = $t < PC_TMIN ? PC_TMIN : $t > PC_TMAX ? PC_TMAX : $t;
       last if $digit < $t;
-
-      $w *= (PC_BASE - $t);
+      $w *= PC_BASE - $t;
     }
 
-    # Bias
     $bias = _adapt($i - $oldi, @output + 1, $oldi == 0);
     $n += $i / (@output + 1);
     $i = $i % (@output + 1);
-
     splice @output, $i++, 0, chr $n;
   }
 
@@ -197,35 +170,28 @@ sub punycode_encode {
   my $output = shift;
   use integer;
 
-  # Split input
+  my $n     = PC_INITIAL_N;
+  my $delta = 0;
+  my $bias  = PC_INITIAL_BIAS;
+
+  # Extract basic code points
   my $len   = length $output;
   my @input = map {ord} split //, $output;
   my @chars = sort grep { $_ >= PC_INITIAL_N } @input;
-
-  # Handle non basic characters
   $output =~ s/[^\x00-\x7f]+//gs;
   my $h = my $b = length $output;
   $output .= "\x2d" if $b > 0;
 
-  my $n     = PC_INITIAL_N;
-  my $delta = 0;
-  my $bias  = PC_INITIAL_BIAS;
   for my $m (@chars) {
-
-    # Basic character
     next if $m < $n;
-
-    # Walk all code points in order
     $delta += ($m - $n) * ($h + 1);
     $n = $m;
+
     for (my $i = 0; $i < $len; $i++) {
       my $c = $input[$i];
 
-      # Basic character
-      $delta++ if $c < $n;
-
-      # Non basic character
-      if ($c == $n) {
+      if ($c < $n) { $delta++ }
+      elsif ($c == $n) {
         my $q = $delta;
 
         # Base to infinity in steps of base
@@ -233,18 +199,12 @@ sub punycode_encode {
           my $t = $k - $bias;
           $t = $t < PC_TMIN ? PC_TMIN : $t > PC_TMAX ? PC_TMAX : $t;
           last if $q < $t;
-
-          # Code point for digit "t"
           my $o = $t + (($q - $t) % (PC_BASE - $t));
           $output .= chr $o + ($o < 26 ? 0x61 : 0x30 - 26);
-
           $q = ($q - $t) / (PC_BASE - $t);
         }
 
-        # Code point for digit "q"
         $output .= chr $q + ($q < 26 ? 0x61 : 0x30 - 26);
-
-        # Bias
         $bias = _adapt($delta, $h + 1, $h == $b);
         $delta = 0;
         $h++;
@@ -259,9 +219,9 @@ sub punycode_encode {
 }
 
 sub quote {
-  my $string = shift;
-  $string =~ s/(["\\])/\\$1/g;
-  return qq{"$string"};
+  my $str = shift;
+  $str =~ s/(["\\])/\\$1/g;
+  return qq{"$str"};
 }
 
 sub secure_compare {
@@ -283,6 +243,26 @@ sub slurp {
   return $content;
 }
 
+sub split_header {
+  my $str = shift;
+
+  my (@tree, @token);
+  while ($str =~ s/^[,;\s]*([^=;, ]+)\s*//) {
+    push @token, $1, undef;
+    $token[-1] = unquote($1)
+      if $str =~ s/^=\s*("(?:\\\\|\\"|[^"])*"|[^;, ]*)\s*//;
+
+    # Separator
+    $str =~ s/^;\s*//;
+    next unless $str =~ s/^,\s*//;
+    push @tree, [@token];
+    @token = ();
+  }
+
+  # Take care of final token
+  return [@token ? (@tree, \@token) : @tree];
+}
+
 sub spurt {
   my ($content, $path) = @_;
   croak qq{Can't open file "$path": $!} unless open my $file, '>', $path;
@@ -292,9 +272,9 @@ sub spurt {
 }
 
 sub squish {
-  my $string = trim(@_);
-  $string =~ s/\s+/ /g;
-  return $string;
+  my $str = trim(@_);
+  $str =~ s/\s+/ /g;
+  return $str;
 }
 
 sub steady_time () {
@@ -304,45 +284,44 @@ sub steady_time () {
 }
 
 sub trim {
-  my $string = shift;
-  $string =~ s/^\s+|\s+$//g;
-  return $string;
+  my $str = shift;
+  $str =~ s/^\s+|\s+$//g;
+  return $str;
 }
 
 sub unquote {
-  my $string = shift;
-  return $string unless $string =~ s/^"(.*)"$/$1/g;
-  $string =~ s/\\\\/\\/g;
-  $string =~ s/\\"/"/g;
-  return $string;
+  my $str = shift;
+  return $str unless $str =~ s/^"(.*)"$/$1/g;
+  $str =~ s/\\\\/\\/g;
+  $str =~ s/\\"/"/g;
+  return $str;
 }
 
 sub url_escape {
-  my ($string, $pattern) = @_;
+  my ($str, $pattern) = @_;
   $pattern ||= '^A-Za-z0-9\-._~';
-  $string =~ s/([$pattern])/sprintf('%%%02X',ord($1))/ge;
-  return $string;
+  $str =~ s/([$pattern])/sprintf('%%%02X',ord($1))/ge;
+  return $str;
 }
 
 sub url_unescape {
-  my $string = shift;
-  return $string if index($string, '%') == -1;
-  $string =~ s/%([[:xdigit:]]{2})/chr(hex($1))/ge;
-  return $string;
+  my $str = shift;
+  return $str if index($str, '%') == -1;
+  $str =~ s/%([0-9a-fA-F]{2})/chr(hex($1))/ge;
+  return $str;
 }
 
 sub xml_escape {
-  my $string = shift;
+  my $str = shift;
 
-  $string =~ s/&/&amp;/g;
-  $string =~ s/</&lt;/g;
-  $string =~ s/>/&gt;/g;
-  $string =~ s/"/&quot;/g;
-  $string =~ s/'/&#39;/g;
+  $str =~ s/&/&amp;/g;
+  $str =~ s/</&lt;/g;
+  $str =~ s/>/&gt;/g;
+  $str =~ s/"/&quot;/g;
+  $str =~ s/'/&#39;/g;
 
-  return $string;
+  return $str;
 }
-
 
 sub xor_encode {
   my ($input, $key) = @_;
@@ -357,8 +336,8 @@ sub xor_encode {
 
 sub _adapt {
   my ($delta, $numpoints, $firsttime) = @_;
-
   use integer;
+
   $delta = $firsttime ? $delta / PC_DAMP : $delta / 2;
   $delta += $delta / $numpoints;
   my $k = 0;
@@ -371,43 +350,27 @@ sub _adapt {
 }
 
 sub _decode {
+  my ($point, $name) = @_;
 
-  # Numeric
-  return substr($_[0], 0, 1) eq 'x' ? chr(hex $_[0]) : chr($_[0]) unless $_[1];
+  # Code point
+  return chr($point !~ /^x/ ? $point : hex $point) unless defined $name;
 
   # Find entity name
-  my $rest   = '';
-  my $entity = $_[1];
-  while (length $entity) {
-    return "$ENTITIES{$entity}$rest" if exists $ENTITIES{$entity};
-    $rest = chop($entity) . $rest;
+  my $rest = '';
+  while (length $name) {
+    return "$ENTITIES{$name}$rest" if exists $ENTITIES{$name};
+    $rest = chop($name) . $rest;
   }
-  return "&$_[1]";
-}
-
-# DEPRECATED in Rainbow!
-sub _encode {
-  return exists $REVERSE{$_[0]} ? "&$REVERSE{$_[0]}" : "&#@{[ord($_[0])]};";
+  return "&$rest";
 }
 
 sub _encoding {
   $CACHE{$_[0]} = defined $CACHE{$_[0]} ? $CACHE{$_[0]} : defined find_encoding($_[0]) ? find_encoding($_[0]) : croak "Unknown encoding '$_[0]'";
 }
 
-sub _hmac {
-  my ($hash, $string, $secret) = @_;
-
-  # Secret
-  $secret = $secret ? "$secret" : 'Very insecure!';
-  $secret = $hash->($secret) if length $secret > 64;
-
-  # HMAC
-  my $ipad = $secret ^ (chr(0x36) x 64);
-  my $opad = $secret ^ (chr(0x5c) x 64);
-  return unpack 'H*', $hash->($opad . $hash->($ipad . $string));
-}
-
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -417,8 +380,8 @@ Mojo::Util - Portable utility functions
 
   use Mojo::Util qw(b64_encode url_escape url_unescape);
 
-  my $string = 'test=23';
-  my $escaped = url_escape $string;
+  my $str = 'test=23';
+  my $escaped = url_escape $str;
   say url_unescape $escaped;
   say b64_encode $escaped, '';
 
@@ -432,22 +395,22 @@ L<Mojo::Util> implements the following functions.
 
 =head2 b64_decode
 
-  my $string = b64_decode $b64;
+  my $bytes = b64_decode $b64;
 
-Base64 decode string.
+Base64 decode bytes.
 
 =head2 b64_encode
 
-  my $b64 = b64_encode $string;
-  my $b64 = b64_encode $string, "\n";
+  my $b64 = b64_encode $bytes;
+  my $b64 = b64_encode $bytes, "\n";
 
-Base64 encode string, the line ending defaults to a newline.
+Base64 encode bytes, the line ending defaults to a newline.
 
 =head2 camelize
 
   my $camelcase = camelize $snakecase;
 
-Convert snake case string to camel case and replace C<-> with C<::>.
+Convert snake_case string to CamelCase and replace C<-> with C<::>.
 
   # "FooBar"
   camelize 'foo_bar';
@@ -464,10 +427,17 @@ Convert snake case string to camel case and replace C<-> with C<::>.
 
 Convert a class name to a file.
 
-  Foo::Bar -> foo_bar
-  FOO::Bar -> foobar
-  FooBar   -> foo_bar
-  FOOBar   -> foobar
+  # "foo_bar"
+  class_to_file 'Foo::Bar';
+
+  # "foobar"
+  class_to_file 'FOO::Bar';
+
+  # "foo_bar"
+  class_to_file 'FooBar';
+
+  # "foobar"
+  class_to_file 'FOOBar';
 
 =head2 class_to_path
 
@@ -475,14 +445,17 @@ Convert a class name to a file.
 
 Convert class name to path.
 
-  Foo::Bar -> Foo/Bar.pm
-  FooBar   -> FooBar.pm
+  # "Foo/Bar.pm"
+  class_to_path 'Foo::Bar';
+
+  # "FooBar.pm"
+  class_to_path 'FooBar';
 
 =head2 decamelize
 
   my $snakecase = decamelize $camelcase;
 
-Convert camel case string to snake case and replace C<::> with C<->.
+Convert CamelCase string to snake_case and replace C<::> with C<->.
 
   # "foo_bar"
   decamelize 'FooBar';
@@ -514,40 +487,34 @@ Encode characters to bytes.
 
 =head2 get_line
 
-  my $line = get_line \$string;
+  my $line = get_line \$str;
 
 Extract whole line from string or return C<undef>. Lines are expected to end
 with C<0x0d 0x0a> or C<0x0a>.
 
-=head2 hmac_md5_sum
-
-  my $checksum = hmac_md5_sum $string, 'passw0rd';
-
-Generate HMAC-MD5 checksum for string.
-
 =head2 hmac_sha1_sum
 
-  my $checksum = hmac_sha1_sum $string, 'passw0rd';
+  my $checksum = hmac_sha1_sum $bytes, 'passw0rd';
 
-Generate HMAC-SHA1 checksum for string.
+Generate HMAC-SHA1 checksum for bytes.
 
 =head2 html_unescape
 
-  my $string = html_unescape $escaped;
+  my $str = html_unescape $escaped;
 
 Unescape all HTML entities in string.
 
 =head2 md5_bytes
 
-  my $checksum = md5_bytes $string;
+  my $checksum = md5_bytes $bytes;
 
-Generate binary MD5 checksum for string.
+Generate binary MD5 checksum for bytes.
 
 =head2 md5_sum
 
-  my $checksum = md5_sum $string;
+  my $checksum = md5_sum $bytes;
 
-Generate MD5 checksum for string.
+Generate MD5 checksum for bytes.
 
 =head2 monkey_patch
 
@@ -563,45 +530,60 @@ Monkey patch functions into package.
 
 =head2 punycode_decode
 
-  my $string = punycode_decode $punycode;
+  my $str = punycode_decode $punycode;
 
 Punycode decode string.
 
 =head2 punycode_encode
 
-  my $punycode = punycode_encode $string;
+  my $punycode = punycode_encode $str;
 
 Punycode encode string.
 
 =head2 quote
 
-  my $quoted = quote $string;
+  my $quoted = quote $str;
 
 Quote string.
 
 =head2 secure_compare
 
-  my $success = secure_compare $string1, $string2;
+  my $success = secure_compare $str1, $str2;
 
 Constant time comparison algorithm to prevent timing attacks.
 
 =head2 sha1_bytes
 
-  my $checksum = sha1_bytes $string;
+  my $checksum = sha1_bytes $bytes;
 
-Generate binary SHA1 checksum for string.
+Generate binary SHA1 checksum for bytes.
 
 =head2 sha1_sum
 
-  my $checksum = sha1_sum $string;
+  my $checksum = sha1_sum $bytes;
 
-Generate SHA1 checksum for string.
+Generate SHA1 checksum for bytes.
 
 =head2 slurp
 
   my $content = slurp '/etc/passwd';
 
 Read all data at once from file.
+
+=head2 split_header
+
+   my $tree = split_header 'foo="bar baz"; test=123, yada';
+
+Split HTTP header value.
+
+  # "one"
+  split_header('one; two="three four", five=six')->[0][0];
+
+  # "three four"
+  split_header('one; two="three four", five=six')->[0][3];
+
+  # "five"
+  split_header('one; two="three four", five=six')->[1][0];
 
 =head2 spurt
 
@@ -611,7 +593,7 @@ Write all data at once to file.
 
 =head2 squish
 
-  my $squished = squish $string;
+  my $squished = squish $str;
 
 Trim whitespace characters from both ends of string and then change all
 consecutive groups of whitespace into one space each.
@@ -625,39 +607,39 @@ available through L<Time::HiRes>.
 
 =head2 trim
 
-  my $trimmed = trim $string;
+  my $trimmed = trim $str;
 
 Trim whitespace characters from both ends of string.
 
 =head2 unquote
 
-  my $string = unquote $quoted;
+  my $str = unquote $quoted;
 
 Unquote string.
 
 =head2 url_escape
 
-  my $escaped = url_escape $string;
-  my $escaped = url_escape $string, '^A-Za-z0-9\-._~';
+  my $escaped = url_escape $str;
+  my $escaped = url_escape $str, '^A-Za-z0-9\-._~';
 
 Percent encode unsafe characters in string, the pattern used defaults to
 C<^A-Za-z0-9\-._~>.
 
 =head2 url_unescape
 
-  my $string = url_unescape $escaped;
+  my $str = url_unescape $escaped;
 
 Decode percent encoded characters in string.
 
 =head2 xml_escape
 
-  my $escaped = xml_escape $string;
+  my $escaped = xml_escape $str;
 
 Escape unsafe characters C<&>, C<E<lt>>, C<E<gt>>, C<"> and C<'> in string.
 
 =head2 xor_encode
 
-  my $encoded = xor_encode $string, $key;
+  my $encoded = xor_encode $str, $key;
 
 XOR encode string with variable length key.
 

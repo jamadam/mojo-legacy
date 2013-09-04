@@ -2,7 +2,7 @@ package Mojo::Path;
 use Mojo::Base -base;
 use overload
   '@{}'    => sub { shift->parts },
-  'bool'   => sub {1},
+  bool     => sub {1},
   '""'     => sub { shift->to_string },
   fallback => 1;
 
@@ -20,15 +20,11 @@ sub canonicalize {
 
     # ".."
     if ($part eq '..') {
-      unless (@parts && $parts[-1] ne '..') { push @parts, '..' }
-      else                                  { pop @parts }
-      next;
+      (@parts && $parts[-1] ne '..') ? pop @parts : push @parts, '..';
     }
 
-    # "."
-    next if grep { $_ eq $part } '.', '';
-
-    push @parts, $part;
+    # Something else than "."
+    elsif ($part ne '.' && $part ne '') { push @parts, $part }
   }
   $self->trailing_slash(undef) unless @parts;
 
@@ -38,7 +34,7 @@ sub canonicalize {
 sub clone {
   my $self = shift;
 
-  my $clone = Mojo::Path->new->charset($self->charset);
+  my $clone = $self->new->charset($self->charset);
   if (my $parts = $self->{parts}) {
     $clone->{$_} = $self->{$_} for qw(leading_slash trailing_slash);
     $clone->{parts} = [@$parts];
@@ -182,7 +178,7 @@ following new ones.
   my $path = Mojo::Path->new;
   my $path = Mojo::Path->new('/foo%2Fbar%3B/baz.html');
 
-Construct a new L<Mojo::Path> object.
+Construct a new L<Mojo::Path> object and C<parse> path if necessary.
 
 =head2 canonicalize
 
@@ -249,7 +245,7 @@ Parse path.
 
 =head2 to_abs_string
 
-  my $string = $path->to_abs_string;
+  my $str = $path->to_abs_string;
 
 Turn path into an absolute string.
 
@@ -292,8 +288,8 @@ Turn path into a route.
 
 =head2 to_string
 
-  my $string = $path->to_string;
-  my $string = "$path";
+  my $str = $path->to_string;
+  my $str = "$path";
 
 Turn path into a string.
 

@@ -5,14 +5,14 @@ use Carp 'croak';
 use Mojo::Message::Request;
 use Mojo::Message::Response;
 
-has [qw(kept_alive local_address local_port previous remote_port)];
+has [qw(kept_alive local_address local_port remote_port)];
 has req => sub { Mojo::Message::Request->new };
 has res => sub { Mojo::Message::Response->new };
 
 sub client_close {
   my $self = shift;
   $self->res->finish;
-  return $self->server_close(@_);
+  return $self->server_close;
 }
 
 sub client_read  { croak 'Method "client_read" not implemented by subclass' }
@@ -36,11 +36,7 @@ sub is_finished { do {my $tmp = shift->{state}; defined $tmp ? $tmp : ''} eq 'fi
 
 sub is_websocket {undef}
 
-sub is_writing {
-  return 1 unless my $state = shift->{state};
-  return !!grep { $_ eq $state }
-    qw(write write_start_line write_headers write_body);
-}
+sub is_writing { do {my $tmp = shift->{state}; defined $tmp ? $tmp : 'write'} eq 'write' }
 
 sub remote_address {
   my $self = shift;
@@ -61,25 +57,23 @@ sub remote_address {
   return $self->{remote_address};
 }
 
-sub resume {
-  my $self = shift;
-  if ((defined $self->{state} ? $self->{state} : '') eq 'paused') { $self->{state} = 'write_body' }
-  elsif (!$self->is_writing) { $self->{state} = 'write' }
-  return $self->emit('resume');
-}
-
-sub server_close {
-  my $self = shift;
-  $self->{state} = 'finished';
-  return $self->emit('finish');
-}
+sub resume       { shift->_state(qw(write resume)) }
+sub server_close { shift->_state(qw(finished finish)) }
 
 sub server_read  { croak 'Method "server_read" not implemented by subclass' }
 sub server_write { croak 'Method "server_write" not implemented by subclass' }
 
 sub success { $_[0]->error ? undef : $_[0]->res }
 
+sub _state {
+  my ($self, $state, $event) = @_;
+  $self->{state} = $state;
+  return $self->emit($event);
+}
+
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -155,16 +149,6 @@ Local interface address.
   $tx      = $tx->local_port(8080);
 
 Local interface port.
-
-=head2 previous
-
-  my $previous = $tx->previous;
-  $tx          = $tx->previous(Mojo::Transaction->new);
-
-Previous transaction that triggered this followup transaction.
-
-  # Path of previous request
-  say $tx->previous->req->url->path;
 
 =head2 remote_port
 

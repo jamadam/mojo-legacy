@@ -2,7 +2,7 @@ use Mojo::Base -strict;
 
 use Test::More;
 use File::Basename 'dirname';
-use File::Spec::Functions 'catdir';
+use File::Spec::Functions qw(catdir catfile);
 use File::Temp 'tempdir';
 use Mojo::Asset::File;
 use Mojo::Asset::Memory;
@@ -145,6 +145,7 @@ $file = Mojo::Asset::File->new;
 $file->add_chunk('bcd');
 $tmp = Mojo::Asset::File->new;
 $tmp->add_chunk('x');
+isnt $file->path, $tmp->path, 'different paths';
 $path = $tmp->path;
 ok -e $path, 'file exists';
 undef $tmp;
@@ -161,10 +162,19 @@ ok !-e $path, 'file has been cleaned up';
 
 # Upgrade
 my $asset = Mojo::Asset::Memory->new(max_memory_size => 5, auto_upgrade => 1);
+my $upgrade;
+$asset->on(upgrade => sub { $upgrade++ });
 $asset = $asset->add_chunk('lala');
+ok !$upgrade, 'upgrade event has not been emitted';
 ok !$asset->is_file, 'stored in memory';
 $asset = $asset->add_chunk('lala');
+is $upgrade, 1, 'upgrade event has been emitted once';
 ok $asset->is_file, 'stored in file';
+$asset = $asset->add_chunk('lala');
+is $upgrade, 1, 'upgrade event was not emitted again';
+ok $asset->is_file, 'stored in file';
+is $asset->slurp,   'lalalalalala', 'right content';
+ok $asset->cleanup, 'file will be cleaned up';
 $asset = Mojo::Asset::Memory->new(max_memory_size => 5);
 $asset = $asset->add_chunk('lala');
 ok !$asset->is_file, 'stored in memory';
@@ -180,6 +190,21 @@ ok !$asset->is_file, 'stored in memory';
   $file->add_chunk('works!');
   is $file->slurp, 'works!', 'right content';
   is dirname($file->path), $tmpdir, 'same directory';
+}
+
+# Custom temporary file
+{
+  my $tmpdir = tempdir CLEANUP => 1;
+  my $path = catfile $tmpdir, 'test.file';
+  ok !-e $path, 'file does not exist';
+  $file = Mojo::Asset::File->new(path => $path);
+  is $file->path, $path, 'right path';
+  ok !-e $path, 'file still does not exist';
+  $file->add_chunk('works!');
+  ok -e $path, 'file exists';
+  is $file->slurp, 'works!', 'right content';
+  undef $file;
+  ok !-e $path, 'file has been cleaned up';
 }
 
 # Temporary file without cleanup

@@ -5,6 +5,8 @@ use Carp 'croak';
 use IO::Poll qw(POLLERR POLLHUP POLLIN);
 use Mojo::Loader;
 
+sub again { croak 'Method "again" not implemented by subclass' }
+
 sub detect {
   my $try = $ENV{MOJO_REACTOR} || 'Mojo::Reactor::EV';
   return Mojo::Loader->new->load($try) ? 'Mojo::Reactor::Poll' : $try;
@@ -35,6 +37,8 @@ sub watch      { croak 'Method "watch" not implemented by subclass' }
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Reactor - Low level event reactor base class
@@ -46,6 +50,7 @@ Mojo::Reactor - Low level event reactor base class
 
   $ENV{MOJO_REACTOR} ||= 'Mojo::Reactor::MyEventLoop';
 
+  sub again      {...}
   sub io         {...}
   sub is_running {...}
   sub one_tick   {...}
@@ -83,6 +88,12 @@ Emitted safely for exceptions caught in callbacks.
 
 L<Mojo::Reactor> inherits all methods from L<Mojo::EventEmitter> and
 implements the following new ones.
+
+=head2 again
+
+  $reactor->again($id);
+
+Restart active timer. Meant to be overloaded in a subclass.
 
 =head2 detect
 

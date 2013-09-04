@@ -129,7 +129,7 @@ sub get_start_line_chunk {
 sub is_empty {
   my $self = shift;
   return undef unless my $code = $self->code;
-  return $self->is_status_class(100) || grep { $_ eq $code } qw(204 304);
+  return $self->is_status_class(100) || $code eq 204 || $code eq 304;
 }
 
 sub is_status_class {
@@ -140,6 +140,8 @@ sub is_status_class {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Message::Response - HTTP response
@@ -149,7 +151,7 @@ Mojo::Message::Response - HTTP response
   use Mojo::Message::Response;
 
   # Parse
-  my $res = Mojo::Message::Reponse->new;
+  my $res = Mojo::Message::Response->new;
   $res->parse("HTTP/1.0 200 OK\x0a\x0d");
   $res->parse("Content-Length: 12\x0a\x0d\x0a\x0d");
   $res->parse("Content-Type: text/plain\x0a\x0d\x0a\x0d");
@@ -214,7 +216,7 @@ Generate default response message for code.
 
 =head2 extract_start_line
 
-  my $success = $res->extract_start_line(\$string);
+  my $success = $res->extract_start_line(\$str);
 
 Extract status line from string.
 

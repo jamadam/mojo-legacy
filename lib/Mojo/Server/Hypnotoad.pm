@@ -56,7 +56,7 @@ sub run {
     exit 0 if $pid;
     setsid or die "Can't start a new session: $!";
 
-    # Close file handles
+    # Close filehandles
     open STDIN,  '</dev/null';
     open STDOUT, '>/dev/null';
     open STDERR, '>&STDOUT';
@@ -146,6 +146,8 @@ sub _stop {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Server::Hypnotoad - ALL GLORY TO THE HYPNOTOAD!
@@ -161,10 +163,11 @@ Mojo::Server::Hypnotoad - ALL GLORY TO THE HYPNOTOAD!
 
 L<Mojo::Server::Hypnotoad> is a full featured, UNIX optimized, preforking
 non-blocking I/O HTTP and WebSocket server, built around the very well tested
-and reliable L<Mojo::Server::Prefork>, with C<IPv6>, C<TLS>, C<Comet> (long
-polling), multiple event loop and hot deployment support that just works. Note
-that the server uses signals for process management, so you should avoid
-modifying signal handlers in your applications.
+and reliable L<Mojo::Server::Prefork>, with IPv6, TLS, Comet (long polling),
+keep-alive, connection pooling, timeout, cookie, multipart, multiple event
+loop and hot deployment support that just works. Note that the server uses
+signals for process management, so you should avoid modifying signal handlers
+in your applications.
 
 To start applications with it you can use the L<hypnotoad> script.
 
@@ -179,10 +182,11 @@ You can run the same command again for automatic hot deployment.
 For L<Mojolicious> and L<Mojolicious::Lite> applications it will default to
 C<production> mode.
 
-Optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
-L<IO::Socket::SSL> (1.75+) are supported transparently through
-L<Mojo::IOLoop>, and used if installed. Individual features can also be
-disabled with the MOJO_NO_IPV6 and MOJO_NO_TLS environment variables.
+For better scalability (epoll, kqueue) and to provide IPv6 as well as TLS
+support, the optional modules L<EV> (4.0+), L<IO::Socket::IP> (0.16+) and
+L<IO::Socket::SSL> (1.75+) will be used automatically by L<Mojo::IOLoop> if
+they are installed. Individual features can also be disabled with the
+MOJO_NO_IPV6 and MOJO_NO_TLS environment variables.
 
 See L<Mojolicious::Guides::Cookbook> for more.
 
@@ -255,9 +259,9 @@ L<Mojolicious::Guides::Cookbook/"Hypnotoad"> for examples.
 
   accept_interval => 0.5
 
-Interval in seconds for trying to reacquire the accept mutex and connection
-management, defaults to C<0.025>. Note that changing this value can affect
-performance and idle CPU usage.
+Interval in seconds for trying to reacquire the accept mutex, defaults to
+C<0.025>. Note that changing this value can affect performance and idle CPU
+usage.
 
 =head2 accepts
 
@@ -322,7 +326,7 @@ be inactive indefinitely.
 
   keep_alive_requests => 50
 
-Number of keep alive requests per connection, defaults to C<25>.
+Number of keep-alive requests per connection, defaults to C<25>.
 
 =head2 listen
 
@@ -340,10 +344,11 @@ appended, defaults to a random temporary path.
 
 =head2 lock_timeout
 
-  lock_timeout => 1
+  lock_timeout => 0.5
 
 Maximum amount of time in seconds a worker may block when waiting for the
-accept mutex, defaults to C<0.5>.
+accept mutex, defaults to C<1>. Note that changing this value can affect
+performance and idle CPU usage.
 
 =head2 multi_accept
 

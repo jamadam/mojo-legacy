@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_MODE}    = 'development';
   $ENV{MOJO_NO_IPV6} = 1;
@@ -19,6 +18,8 @@ app->log->handle(undef);
 app->log->level($ENV{MOJO_LOG_LEVEL} = 'debug');
 my $log = '';
 app->log->on(message => sub { shift; $log .= join ':', @_ });
+
+helper dead_helper => sub { die "dead helper!\n" };
 
 get '/logger' => sub {
   my $self  = shift;
@@ -44,10 +45,16 @@ get '/double_dead_action_☃' => sub {
 get '/trapped' => sub {
   my $self = shift;
   eval { die {foo => 'bar'} };
-  $self->render_text($@->{foo} || 'failed');
+  $self->render(text => $@->{foo} || 'failed');
 };
 
 get '/missing_template';
+
+get '/missing_template/too' => sub {
+  my $self = shift;
+  $self->render('does_not_exist')
+    or $self->res->headers->header('X-Not-Found' => 1);
+};
 
 # Dummy exception object
 package MyException;
@@ -61,29 +68,33 @@ package main;
 get '/trapped/too' => sub {
   my $self = shift;
   eval { die MyException->new(error => 'works') };
-  $self->render_text("$@" || 'failed');
+  $self->render(text => "$@" || 'failed');
 };
 
-# Reuse exception
-my $exception;
+# Reuse exception and snapshot
+my ($exception, $snapshot);
 hook after_dispatch => sub {
-  my $self = shift;
-  return unless $self->req->url->path->contains('/reuse/exception');
-  $exception = $self->stash('exception');
+  my $c = shift;
+  return unless $c->req->url->path->contains('/reuse/exception');
+  $exception = $c->stash('exception');
+  $snapshot  = $c->stash('snapshot');
 };
 
 # Custom exception handling
 hook around_dispatch => sub {
-  my ($next, $self) = @_;
+  my ($next, $c) = @_;
   unless (eval { $next->(); 1 }) {
     die $@ unless $@ eq "CUSTOM\n";
-    $self->render(text => 'Custom handling works!');
+    $c->render(text => 'Custom handling works!');
   }
 };
 
-get '/reuse/exception' => sub { die "Reusable exception.\n" };
+get '/reuse/exception' => {foo => 'bar'} =>
+  sub { die "Reusable exception.\n" };
 
 get '/custom' => sub { die "CUSTOM\n" };
+
+get '/dead_helper';
 
 my $t = Test::Mojo->new;
 
@@ -165,6 +176,9 @@ $t->get_ok('/trapped/too')->status_is(200)->content_is('works');
 # Custom exception handling
 $t->get_ok('/custom')->status_is(200)->content_is('Custom handling works!');
 
+# Exception in helper
+$t->get_ok('/dead_helper')->status_is(500)->content_like(qr/dead helper!/);
+
 # Missing template
 $t->get_ok('/missing_template')->status_is(404)
   ->content_type_is('text/html;charset=UTF-8')
@@ -180,12 +194,20 @@ $t->get_ok('/missing_template.json')->status_is(404)
   ->content_type_is('text/html;charset=UTF-8')
   ->content_like(qr/Page not found/);
 
+# Missing template (failed rendering)
+$t->get_ok('/missing_template/too')->status_is(404)
+  ->header_is('X-Not-Found' => 1)->content_type_is('text/html;charset=UTF-8')
+  ->content_like(qr/Page not found/);
+
 # Reuse exception
 ok !$exception, 'no exception';
+ok !$snapshot,  'no snapshot';
 $t->get_ok('/reuse/exception')->status_is(500)
   ->content_like(qr/Reusable exception/);
 isa_ok $exception, 'Mojo::Exception',      'right exception class';
 like $exception,   qr/Reusable exception/, 'right exception';
+is $snapshot->{foo}, 'bar', 'right snapshot value';
+ok !$snapshot->{exception}, 'no exception in snapshot';
 
 # Bundled static files
 $t->get_ok('/mojo/jquery/jquery.js')->status_is(200)
@@ -228,3 +250,6 @@ works!
 
 @@ not_found.development.xml.ep
 <somewhat>bad</somewhat>
+
+@@ dead_helper.html.ep
+% dead_helper;

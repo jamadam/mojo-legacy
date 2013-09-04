@@ -34,7 +34,7 @@ has reactor      => sub {
 sub DESTROY {
   my $self = shift;
   if (my $port = $self->{port}) { $ENV{MOJO_REUSE} =~ s/(?:^|\,)${port}:\d+// }
-  return unless my $reactor = $self->{reactor};
+  return unless my $reactor = $self->reactor;
   $self->stop if $self->{handle};
   $reactor->remove($_) for values %{$self->{handles}};
 }
@@ -56,8 +56,8 @@ sub listen {
   my $handle;
   my $class = IPV6 ? 'IO::Socket::IP' : 'IO::Socket::INET';
   if (defined $fd) {
-    $handle = $class->new;
-    $handle->fdopen($fd, 'r') or croak "Can't open file descriptor $fd: $!";
+    $handle = $class->new_from_fd($fd, 'r')
+      or croak "Can't open file descriptor $fd: $!";
   }
 
   # New socket
@@ -68,10 +68,11 @@ sub listen {
       LocalPort => $port,
       Proto     => 'tcp',
       ReuseAddr => 1,
+      ReusePort => $args->{reuse},
       Type      => SOCK_STREAM
     );
     $options{LocalAddr} =~ s/[\[\]]//g;
-    $handle = $class->new(%options) or croak "Can't create listen socket: $!";
+    $handle = $class->new(%options) or croak "Can't create listen socket: $@";
     $fd = fileno $handle;
     $ENV{MOJO_REUSE} .= length $ENV{MOJO_REUSE} ? ",$reuse:$fd" : "$reuse:$fd";
   }
@@ -81,11 +82,11 @@ sub listen {
   return unless $args->{tls};
   croak "IO::Socket::SSL 1.75 required for TLS support" unless TLS;
 
-  # Options (Prioritize RC4 to mitigate BEAST attack)
+  # Prioritize RC4 to mitigate BEAST attack and use Perfect Forward Secrecy
   my $options = $self->{tls} = {
     SSL_cert_file => $args->{tls_cert} || $CERT,
     SSL_cipher_list =>
-      '!aNULL:!eNULL:!EXPORT:!DSS:!DES:!SSLv2:!LOW:RC4-SHA:RC4-MD5:ALL',
+      'ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH',
     SSL_honor_cipher_order => 1,
     SSL_key_file           => $args->{tls_key} || $KEY,
     SSL_startHandshake     => 0,
@@ -101,6 +102,8 @@ sub generate_port {
   IO::Socket::INET->new(Listen => 5, LocalAddr => '127.0.0.1', Proto => 'tcp')
     ->sockport;
 }
+
+sub handle { shift->{handle} }
 
 sub start {
   my $self = shift;
@@ -139,8 +142,7 @@ sub _tls {
   # Accepted
   if ($handle->accept_SSL) {
     $self->reactor->remove($handle);
-    delete $self->{handles}{$handle};
-    return $self->emit_safe(accept => $handle);
+    return $self->emit_safe(accept => delete $self->{handles}{$handle});
   }
 
   # Switch between reading and writing
@@ -150,6 +152,8 @@ sub _tls {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -229,33 +233,56 @@ These options are currently available:
 
 =item address
 
+  address => '127.0.0.1'
+
 Local address to listen on, defaults to all.
 
 =item backlog
+
+  backlog => 128
 
 Maximum backlog size, defaults to C<SOMAXCONN>.
 
 =item port
 
+  port => 80
+
 Port to listen on.
 
+=item reuse
+
+  reuse => 1
+
+Allow multiple servers to use the same port with the C<SO_REUSEPORT> socket
+option.
+
 =item tls
+
+  tls => 1
 
 Enable TLS.
 
 =item tls_ca
 
+  tls_ca => '/etc/tls/ca.crt'
+
 Path to TLS certificate authority file.
 
 =item tls_cert
+
+  tls_cert => '/etc/tls/server.crt'
 
 Path to the TLS cert file, defaults to a built-in test certificate.
 
 =item tls_key
 
+  tls_key => '/etc/tls/server.key'
+
 Path to the TLS key file, defaults to a built-in test key.
 
 =item tls_verify
+
+  tls_verify => 0x00
 
 TLS verification mode, defaults to C<0x03>.
 
@@ -266,6 +293,12 @@ TLS verification mode, defaults to C<0x03>.
   my $port = $server->generate_port;
 
 Find a free TCP port, this is a utility function primarily used for tests.
+
+=head2 handle
+
+  my $handle = $server->handle;
+
+Get handle for server.
 
 =head2 start
 

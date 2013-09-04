@@ -19,9 +19,8 @@ sub emit_chain {
     my $next = $wrapper;
     $wrapper = sub { $cb->($next, @args) };
   }
-  $wrapper->();
 
-  return $self;
+  !$wrapper ? return : return $wrapper->();
 }
 
 sub emit_hook_reverse {
@@ -60,6 +59,8 @@ sub _load {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -101,8 +102,7 @@ Renderer for plain embedded Perl templates, loaded automatically.
 
 =item L<Mojolicious::Plugin::EPRenderer>
 
-Renderer for more sophisiticated embedded Perl templates, loaded
-automatically.
+Renderer for more sophisticated embedded Perl templates, loaded automatically.
 
 =item L<Mojolicious::Plugin::HeaderCondition>
 
@@ -120,14 +120,6 @@ Mount whole L<Mojolicious> applications.
 
 Renderer for turning POD into HTML and documentation browser for
 L<Mojolicious::Guides>.
-
-=item L<Mojolicious::Plugin::PoweredBy>
-
-Add an C<X-Powered-By> header to outgoing responses, loaded automatically.
-
-=item L<Mojolicious::Plugin::RequestTimer>
-
-Log timing information, loaded automatically.
 
 =item L<Mojolicious::Plugin::TagHelpers>
 
@@ -160,8 +152,8 @@ implements the following new ones.
 
 =head2 emit_chain
 
-  $plugins = $plugins->emit_chain('foo');
-  $plugins = $plugins->emit_chain(foo => 123);
+  $plugins->emit_chain('foo');
+  $plugins->emit_chain(foo => 123);
 
 Emit events as chained hooks.
 

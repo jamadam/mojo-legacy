@@ -53,6 +53,8 @@ sub parse {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Content::Single - HTTP content
@@ -145,7 +147,7 @@ Clone content if possible, otherwise return C<undef>.
 
   my $bytes = $single->get_body_chunk(0);
 
-Get a chunk of content starting from a specfic position.
+Get a chunk of content starting from a specific position.
 
 =head2 parse
 
@@ -154,7 +156,7 @@ Get a chunk of content starting from a specfic position.
     = $single->parse("Content-Type: multipart/form-data\x0d\x0a\x0d\x0a");
 
 Parse content chunk and upgrade to L<Mojo::Content::MultiPart> object if
-possible.
+necessary.
 
 =head1 SEE ALSO
 

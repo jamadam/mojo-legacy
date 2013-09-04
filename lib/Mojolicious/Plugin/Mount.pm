@@ -24,6 +24,8 @@ sub register {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojolicious::Plugin::Mount - Application mount plugin
@@ -41,13 +43,13 @@ Mojolicious::Plugin::Mount - Application mount plugin
   $example->to(message => 'It works great!');
 
   # Mount application with host
-  plugin Mount => {'mojolicio.us' => '/home/sri/myapp.pl'};
+  plugin Mount => {'example.com' => '/home/sri/myapp.pl'};
 
   # Host and path
-  plugin Mount => {'mojolicio.us/myapp' => '/home/sri/myapp.pl'};
+  plugin Mount => {'example.com/myapp' => '/home/sri/myapp.pl'};
 
   # Or even hosts with wildcard subdomains
-  plugin Mount => {'*.mojolicio.us/myapp' => '/home/sri/myapp.pl'};
+  plugin Mount => {'*.example.com/myapp' => '/home/sri/myapp.pl'};
 
 =head1 DESCRIPTION
 

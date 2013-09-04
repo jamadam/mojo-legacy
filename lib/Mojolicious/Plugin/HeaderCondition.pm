@@ -32,6 +32,8 @@ sub _headers {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojolicious::Plugin::HeaderCondition - Header condition plugin
@@ -76,7 +78,7 @@ L<Mojolicious::Plugin> and implements the following new ones.
 
   $plugin->register(Mojolicious->new);
 
-Register condition in L<Mojolicious> application.
+Register conditions in L<Mojolicious> application.
 
 =head1 SEE ALSO
 

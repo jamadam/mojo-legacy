@@ -41,6 +41,8 @@ sub register {
 1;
 <% %>__END__
 
+<% %>=encoding utf8
+
 <% %>=head1 NAME
 
 <%= $class %> - Mojolicious Plugin
@@ -86,7 +88,7 @@ plugin '<%= $name %>';
 
 get '/' => sub {
   my $self = shift;
-  $self->render_text('Hello Mojo!');
+  $self->render(text => 'Hello Mojo!');
 };
 
 my $t = Test::Mojo->new;
@@ -110,6 +112,9 @@ WriteMakefile(
 );
 
 __END__
+
+=encoding utf8
+
 =head1 NAME
 
 Mojolicious::Command::generate::plugin - Plugin generator command

@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable libev and proxy detection
 BEGIN {
   $ENV{MOJO_PROXY}   = 0;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -90,12 +89,12 @@ ok $tx->error,       'has error';
 $tx = $ua->build_tx(GET => 'http://cdeabcdeffoobarnonexisting.com');
 $ua->start($tx);
 ok $tx->is_finished, 'transaction is finished';
-is $tx->error, "Couldn't connect", 'right error';
+like $tx->error, qr/^Couldn't connect/, 'right error';
 
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
 
-# Keep alive
+# Keep-alive
 $ua->get('http://mojolicio.us' => sub { Mojo::IOLoop->singleton->stop });
 Mojo::IOLoop->singleton->start;
 my $kept_alive;
@@ -109,7 +108,7 @@ $ua->get(
 Mojo::IOLoop->singleton->start;
 ok $kept_alive, 'connection was kept alive';
 
-# Nested keep alive
+# Nested keep-alive
 my @kept_alive;
 $ua->get(
   'http://mojolicio.us' => sub {
@@ -136,7 +135,7 @@ is_deeply \@kept_alive, [1, 1, 1], 'connections kept alive';
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
 
-# Custom non keep alive request
+# Custom non keep-alive request
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('http://metacpan.org');
@@ -153,7 +152,7 @@ is h('mojolicio.us')->body,          '',  'no content';
 is p('mojolicio.us/lalalala')->code, 404, 'right status';
 is g('http://mojolicio.us')->code,   200, 'right status';
 is p('http://mojolicio.us')->code,   404, 'right status';
-my $res = p('search.cpan.org/search' => form => {query => 'mojolicious'});
+my $res = p('https://metacpan.org/search' => form => {q => 'mojolicious'});
 like $res->body, qr/Mojolicious/, 'right content';
 is $res->code,   200,             'right status';
 
@@ -167,7 +166,7 @@ is $tx->req->method, 'GET',               'right method';
 is $tx->req->url,    'http://google.com', 'right url';
 is $tx->res->code,   301,                 'right status';
 
-# Simple keep alive requests
+# Simple keep-alive requests
 $tx = $ua->get('http://www.wikipedia.org');
 is $tx->req->method, 'GET',                      'right method';
 is $tx->req->url,    'http://www.wikipedia.org', 'right url';
@@ -207,31 +206,35 @@ is $tx->req->url,    'https://ipv6.google.com', 'right url';
 is $tx->res->code,   200,                       'right status';
 
 # HTTPS request that requires SNI
-$tx = $ua->get('https://google.de');
-like $ua->ioloop->stream($tx->connection)
-  ->handle->peer_certificate('commonName'), qr/google\.de/, 'right name';
+SKIP: {
+  skip 'SNI support required!', 1
+    unless IO::Socket::SSL->can('can_client_sni')
+    && IO::Socket::SSL->can_client_sni;
+
+  $tx = $ua->get('https://google.de');
+  like $ua->ioloop->stream($tx->connection)
+    ->handle->peer_certificate('commonName'), qr/google\.de/, 'right name';
+}
 
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
 
-# Simple keep alive form POST
-$tx = $ua->post(
-  'http://search.cpan.org/search' => form => {query => 'mojolicious'});
+# Simple keep-alive form POST
+$tx = $ua->post('https://metacpan.org/search' => form => {q => 'mojolicious'});
 is $tx->req->method, 'POST', 'right method';
-is $tx->req->url, 'http://search.cpan.org/search', 'right url';
-is $tx->req->headers->content_length, 17, 'right content length';
-is $tx->req->body,   'query=mojolicious', 'right content';
-like $tx->res->body, qr/Mojolicious/,     'right content';
-is $tx->res->code,   200,                 'right status';
+is $tx->req->url, 'https://metacpan.org/search', 'right url';
+is $tx->req->headers->content_length, 13, 'right content length';
+is $tx->req->body,   'q=mojolicious', 'right content';
+like $tx->res->body, qr/Mojolicious/, 'right content';
+is $tx->res->code,   200,             'right status';
 ok $tx->keep_alive, 'connection will be kept alive';
-$tx = $ua->post(
-  'http://search.cpan.org/search' => form => {query => 'mojolicious'});
+$tx = $ua->post('https://metacpan.org/search' => form => {q => 'mojolicious'});
 is $tx->req->method, 'POST', 'right method';
-is $tx->req->url, 'http://search.cpan.org/search', 'right url';
-is $tx->req->headers->content_length, 17, 'right content length';
-is $tx->req->body,   'query=mojolicious', 'right content';
-like $tx->res->body, qr/Mojolicious/,     'right content';
-is $tx->res->code,   200,                 'right status';
+is $tx->req->url, 'https://metacpan.org/search', 'right url';
+is $tx->req->headers->content_length, 13, 'right content length';
+is $tx->req->body,   'q=mojolicious', 'right content';
+like $tx->res->body, qr/Mojolicious/, 'right content';
+is $tx->res->code,   200,             'right status';
 ok $tx->kept_alive, 'connection was kept alive';
 
 # Simple request with redirect
@@ -244,13 +247,17 @@ is $tx->res->code,   200,                                 'right status';
 is $tx->previous->req->method, 'GET', 'right method';
 is $tx->previous->req->url, 'http://www.wikipedia.org/wiki/Perl', 'right url';
 is $tx->previous->res->code, 301, 'right status';
+is $tx->redirects->[-1]->req->method, 'GET', 'right method';
+is $tx->redirects->[-1]->req->url, 'http://www.wikipedia.org/wiki/Perl',
+  'right url';
+is $tx->redirects->[-1]->res->code, 301, 'right status';
 
 # Custom chunked request
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('http://www.google.com');
 $tx->req->headers->transfer_encoding('chunked');
-$tx->req->write_chunk(
+$tx->req->content->write_chunk(
   'hello world!' => sub {
     shift->write_chunk('hello world2!' => sub { shift->write_chunk('') });
   }

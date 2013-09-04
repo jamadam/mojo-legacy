@@ -4,20 +4,19 @@ use Mojo::Base 'Mojolicious::Command';
 use Getopt::Long 'GetOptions';
 use List::Util 'max';
 use Mojo::Server;
-use Mojo::Util 'deprecated';
 
-has hint => <<"EOF";
+has hint => <<EOF;
 
 These options are available for all commands:
     -h, --help          Get more information on a specific command.
         --home <path>   Path to your applications home directory, defaults to
                         the value of MOJO_HOME or auto detection.
-    -m, --mode <name>   Run mode of your application, defaults to the value
-                        of MOJO_MODE or "development".
+    -m, --mode <name>   Operating mode for your application, defaults to the
+                        value of MOJO_MODE/PLACK_ENV or "development".
 
 See '$0 help COMMAND' for more information on a specific command.
 EOF
-has message => <<"EOF";
+has message => <<EOF;
 usage: $0 COMMAND [OPTIONS]
 
 Tip: CGI and PSGI environments can be automatically detected very often and
@@ -104,15 +103,6 @@ sub run {
   return print $self->hint;
 }
 
-# DEPRECATED in Rainbow!
-sub start {
-  deprecated 'Mojolicious::Commands::start is DEPRECATED in favor of '
-    . 'Mojolicious::Commands::start_app';
-  my $self = shift;
-  return $self->start_app($ENV{MOJO_APP} => @_) if $ENV{MOJO_APP};
-  return $self->new->app->start(@_);
-}
-
 sub start_app {
   my $self = shift;
   return Mojo::Server->new->build_app(shift)->start(@_);
@@ -126,6 +116,8 @@ sub _command {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -178,7 +170,7 @@ Upload files to CPAN.
 
   $ ./myapp.pl daemon
 
-Start application with standalone HTTP and WebSocket server server.
+Start application with standalone HTTP and WebSocket server.
 
 =head2 eval
 

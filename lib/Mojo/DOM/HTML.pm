@@ -1,14 +1,14 @@
 package Mojo::DOM::HTML;
 use Mojo::Base -base;
 
-use Mojo::Util qw(decode encode html_unescape xml_escape);
+use Mojo::Util qw(html_unescape xml_escape);
 use Scalar::Util 'weaken';
 
-has [qw(charset xml)];
+has 'xml';
 has tree => sub { ['root'] };
 
 my $ATTR_RE = qr/
-  ([^=\s>]+)       # Key
+  ([^<>=\s]+)      # Key
   (?:
     \s*=\s*
     (?:
@@ -40,10 +40,12 @@ my $TOKEN_RE = qr/
   |
     <(
       \s*
-      [^>\s]+                                       # Tag
+      [^<>\s]+                                      # Tag
       \s*
       (?:$ATTR_RE)*                                 # Attributes
     )>
+  |
+    (<)                                             # Runaway "<"
   )??
 /xis;
 
@@ -76,34 +78,34 @@ my %INLINE = map { $_ => 1 } (
 sub parse {
   my ($self, $html) = @_;
 
-  if (my $charset = $self->charset) {
-    if (defined(my $chars = decode $charset, $html)) { $html = $chars }
-    else                                             { $self->charset(undef) }
-  }
-
-  my $tree    = ['root'];
-  my $current = $tree;
+  my $current = my $tree = ['root'];
   while ($html =~ m/\G$TOKEN_RE/gcs) {
-    my ($text, $pi, $comment, $cdata, $doctype, $tag)
-      = ($1, $2, $3, $4, $5, $6);
+    my ($text, $pi, $comment, $cdata, $doctype, $tag, $runaway)
+      = ($1, $2, $3, $4, $5, $6, $11);
 
-    # Text
+    # Text (and runaway "<")
+    $text .= '<' if defined $runaway;
     if (length $text) {
-      $text = html_unescape $text if (index $text, '&') >= 0;
-      $self->_text($text, \$current);
+      $text = html_unescape $text;
+      my $sibling = $current->[-1];
+      if (ref $sibling && $sibling->[0] eq 'text') { $sibling->[1] .= $text }
+      else { push @$current, ['text', $text] }
     }
 
     # DOCTYPE
-    if ($doctype) { $self->_doctype($doctype, \$current) }
+    if ($doctype) { push @$current, ['doctype', $doctype] }
 
     # Comment
-    elsif ($comment) { $self->_comment($comment, \$current) }
+    elsif ($comment) { push @$current, ['comment', $comment] }
 
     # CDATA
-    elsif ($cdata) { $self->_cdata($cdata, \$current) }
+    elsif ($cdata) { push @$current, ['cdata', $cdata] }
 
-    # Processing instruction
-    elsif ($pi) { $self->_pi($pi, \$current) }
+    # Processing instruction (try to detect XML)
+    elsif ($pi) {
+      $self->xml(1) if !defined $self->xml && $pi =~ /xml/i;
+      push @$current, ['pi', $pi];
+    }
 
     # End
     next unless $tag;
@@ -123,12 +125,10 @@ sub parse {
         # Empty tag
         next if $key eq '/';
 
-        # Add unescaped value
-        $value = html_unescape $value if $value && (index $value, '&') >= 0;
-        $attrs{$key} = $value;
+        $attrs{$key} = defined $value ? html_unescape($value) : $value;
       }
 
-      # Start
+      # Tag
       $self->_start($start, \%attrs, \$current);
 
       # Empty element
@@ -136,9 +136,9 @@ sub parse {
         if (!$self->xml && $VOID{$start}) || $attr =~ m!/\s*$!;
 
       # Relaxed "script" or "style"
-      if (grep { $_ eq $start } qw(script style)) {
+      if ($start eq 'script' || $start eq 'style') {
         if ($html =~ m!\G(.*?)<\s*/\s*$start\s*>!gcsi) {
-          $self->_raw($1, \$current);
+          push @$current, ['raw', $1];
           $self->_end($start, \$current);
         }
       }
@@ -148,17 +148,7 @@ sub parse {
   return $self->tree($tree);
 }
 
-sub render {
-  my $self    = shift;
-  my $content = $self->_render($self->tree);
-  my $charset = $self->charset;
-  return $charset ? encode($charset, $content) : $content;
-}
-
-sub _cdata {
-  my ($self, $cdata, $current) = @_;
-  push @$$current, ['cdata', $cdata];
-}
+sub render { $_[0]->_render($_[0]->tree) }
 
 sub _close {
   my ($self, $current, $tags, $stop) = @_;
@@ -167,8 +157,7 @@ sub _close {
 
   # Check if parents need to be closed
   my $parent = $$current;
-  while ($parent) {
-    last if $parent->[0] eq 'root' || $parent->[1] eq $stop;
+  while ($parent->[0] ne 'root' && $parent->[1] ne $stop) {
 
     # Close
     $tags->{$parent->[1]} and $self->_end($parent->[1], $current);
@@ -178,27 +167,13 @@ sub _close {
   }
 }
 
-sub _comment {
-  my ($self, $comment, $current) = @_;
-  push @$$current, ['comment', $comment];
-}
-
-sub _doctype {
-  my ($self, $doctype, $current) = @_;
-  push @$$current, ['doctype', $doctype];
-}
-
 sub _end {
   my ($self, $end, $current) = @_;
-
-  # Not a tag
-  return if $$current->[0] eq 'root';
 
   # Search stack for start tag
   my $found = 0;
   my $next  = $$current;
-  while ($next) {
-    last if $next->[0] eq 'root';
+  while ($next->[0] ne 'root') {
 
     # Right tag
     ++$found and last if $next->[1] eq $end;
@@ -206,7 +181,6 @@ sub _end {
     # Inline elements can only cross other inline elements
     return if !$self->xml && $INLINE{$end} && !$INLINE{$next->[1]};
 
-    # Parent
     $next = $next->[3];
   }
 
@@ -215,17 +189,14 @@ sub _end {
 
   # Walk backwards
   $next = $$current;
-  while ($$current = $next) {
-    last if $$current->[0] eq 'root';
+  while (($$current = $next) && $$current->[0] ne 'root') {
     $next = $$current->[3];
 
     # Match
     if ($end eq $$current->[1]) { return $$current = $$current->[3] }
 
     # Optional elements
-    elsif ($OPTIONAL{$$current->[1]}) {
-      $self->_end($$current->[1], $current);
-    }
+    elsif ($OPTIONAL{$$current->[1]}) { $self->_end($$current->[1], $current) }
 
     # Table
     elsif ($end eq 'table') { $self->_close($current) }
@@ -233,18 +204,6 @@ sub _end {
     # Missing end tag
     $self->_end($$current->[1], $current);
   }
-}
-
-# Try to detect XML from processing instructions
-sub _pi {
-  my ($self, $pi, $current) = @_;
-  $self->xml(1) if !defined $self->xml && $pi =~ /xml/i;
-  push @$$current, ['pi', $pi];
-}
-
-sub _raw {
-  my ($self, $raw, $current) = @_;
-  push @$$current, ['raw', $raw];
 }
 
 sub _render {
@@ -258,16 +217,16 @@ sub _render {
   return $tree->[1] if $e eq 'raw';
 
   # DOCTYPE
-  return "<!DOCTYPE" . $tree->[1] . ">" if $e eq 'doctype';
+  return '<!DOCTYPE' . $tree->[1] . '>' if $e eq 'doctype';
 
   # Comment
-  return "<!--" . $tree->[1] . "-->" if $e eq 'comment';
+  return '<!--' . $tree->[1] . '-->' if $e eq 'comment';
 
   # CDATA
-  return "<![CDATA[" . $tree->[1] . "]]>" if $e eq 'cdata';
+  return '<![CDATA[' . $tree->[1] . ']]>' if $e eq 'cdata';
 
   # Processing instruction
-  return "<?" . $tree->[1] . "?>" if $e eq 'pi';
+  return '<?' . $tree->[1] . '?>' if $e eq 'pi';
 
   # Start tag
   my $start = $e eq 'root' ? 1 : 2;
@@ -340,21 +299,18 @@ sub _start {
     elsif ($start eq 'tr') { $self->_close($current, {tr => 1}) }
 
     # "<th>" and "<td>"
-    elsif (grep { $_ eq $start } qw(th td)) {
-      $self->_close($current, {th => 1});
-      $self->_close($current, {td => 1});
+    elsif ($start eq 'th' || $start eq 'td') {
+      $self->_close($current, {$_ => 1}) for qw(th td);
     }
 
     # "<dt>" and "<dd>"
-    elsif (grep { $_ eq $start } qw(dt dd)) {
-      $self->_end('dt', $current);
-      $self->_end('dd', $current);
+    elsif ($start eq 'dt' || $start eq 'dd') {
+      $self->_end($_, $current) for qw(dt dd);
     }
 
     # "<rt>" and "<rp>"
-    elsif (grep { $_ eq $start } qw(rt rp)) {
-      $self->_end('rt', $current);
-      $self->_end('rp', $current);
+    elsif ($start eq 'rt' || $start eq 'rp') {
+      $self->_end($_, $current) for qw(rt rp);
     }
   }
 
@@ -365,12 +321,9 @@ sub _start {
   $$current = $new;
 }
 
-sub _text {
-  my ($self, $text, $current) = @_;
-  push @$$current, ['text', $text];
-}
-
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -393,19 +346,13 @@ L<Mojo::DOM::HTML> is the HTML/XML engine used by L<Mojo::DOM>.
 
 L<Mojo::DOM::HTML> implements the following attributes.
 
-=head2 charset
-
-  my $charset = $html->charset;
-  $html       = $html->charset('UTF-8');
-
-Charset used for decoding and encoding HTML/XML.
-
 =head2 tree
 
   my $tree = $html->tree;
-  $html    = $html->tree(['root', [qw(text lalala)]]);
+  $html    = $html->tree(['root', ['text', 'foo']]);
 
-Document Object Model.
+Document Object Model. Note that this structure should only be used very
+carefully since it is very dynamic.
 
 =head2 xml
 

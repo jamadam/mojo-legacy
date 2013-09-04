@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_NO_IPV6} = 1;
   $ENV{MOJO_REACTOR} = 'Mojo::Reactor::Poll';
@@ -131,11 +130,14 @@ Mojo::IOLoop->client(
 );
 $handle = $delay->wait->steal_handle;
 my $stream = Mojo::IOLoop::Stream->new($handle);
+is $stream->timeout, 15, 'right default';
+is $stream->timeout(16)->timeout, 16, 'right timeout';
 $id = Mojo::IOLoop->stream($stream);
 $stream->on(close => sub { Mojo::IOLoop->stop });
 $stream->on(read => sub { $buffer .= pop });
 $stream->write('hello');
 ok(Mojo::IOLoop->stream($id), 'stream exists');
+is $stream->timeout, 16, 'right timeout';
 Mojo::IOLoop->start;
 Mojo::IOLoop->timer(0.25 => sub { Mojo::IOLoop->stop });
 Mojo::IOLoop->start;
@@ -238,7 +240,7 @@ is $client, 'works!', 'full message has been written';
 $err = '';
 $loop = Mojo::IOLoop->new(max_connections => 0);
 $loop->remove($loop->client({port => $loop->generate_port} => sub { }));
-$loop->timer(1 => sub { shift->stop; $err = 'failed' });
+$loop->timer(3 => sub { shift->stop; $err = 'failed' });
 $loop->start;
 ok !$err, 'no error';
 is $loop->max_connections, 0, 'right value';
@@ -250,7 +252,7 @@ $port = $loop->generate_port;
 $loop->server(
   {address => '127.0.0.1', port => $port} => sub { shift; shift->close });
 $loop->client({port => $port} => sub { });
-$loop->timer(1 => sub { shift->stop; $err = 'failed' });
+$loop->timer(3 => sub { shift->stop; $err = 'failed' });
 $loop->start;
 ok !$err, 'no error';
 is $loop->max_accepts, 1, 'right value';

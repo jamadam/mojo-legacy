@@ -8,7 +8,7 @@ use Getopt::Long qw(GetOptionsFromArray :config no_auto_abbrev no_ignore_case);
 use Mojo::Home;
 
 has description => "Run unit tests.\n";
-has usage       => <<"EOF";
+has usage       => <<EOF;
 usage: $0 test [OPTIONS] [TESTS]
 
 These options are available:
@@ -31,7 +31,7 @@ sub run {
     die "Can't find test directory.\n" unless -d $path;
 
     my $home = Mojo::Home->new($path);
-    /\.t$/ and push(@args, $home->rel_file($_)) for @{$home->list_files};
+    /\.t$/ and push @args, $home->rel_file($_) for @{$home->list_files};
     say "Running tests from '", realpath($path), "'.";
   }
 
@@ -41,6 +41,8 @@ sub run {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 

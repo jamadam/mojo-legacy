@@ -1,5 +1,5 @@
 package Mojo::ByteStream;
-use Mojo::Base -base;
+use Mojo::Base -strict;
 use overload '""' => sub { shift->to_string }, fallback => 1;
 
 use Exporter 'import';
@@ -10,12 +10,11 @@ our @EXPORT_OK = ('b');
 
 # Turn most functions from Mojo::Util into methods
 my @UTILS = (
-  qw(b64_decode b64_encode camelize decamelize hmac_md5_sum hmac_sha1_sum),
-  qw(html_unescape md5_bytes md5_sum punycode_decode punycode_encode quote),
-  qw(sha1_bytes sha1_sum slurp spurt squish trim unquote url_escape),
-  qw(url_unescape xml_escape xor_encode)
+  qw(b64_decode b64_encode camelize decamelize hmac_sha1_sum html_unescape),
+  qw(md5_bytes md5_sum punycode_decode punycode_encode quote sha1_bytes),
+  qw(sha1_sum slurp spurt squish trim unquote url_escape url_unescape),
+  qw(xml_escape xor_encode)
 );
-push @UTILS, 'html_escape';    # DEPRECATED in Rainbow!
 for my $name (@UTILS) {
   my $sub = Mojo::Util->can($name);
   Mojo::Util::monkey_patch __PACKAGE__, $name, sub {
@@ -48,11 +47,10 @@ sub encode {
 
 {
   no warnings 'redefine';
-  sub say {
-    my ($self, $handle) = @_;
-    $handle ||= \*STDOUT;
-    print $handle $$self. "\n";
-  }
+sub say {
+  my ($self, $handle) = @_;
+  $handle ||= \*STDOUT;
+  say $handle $$self;
 }
 
 sub secure_compare { Mojo::Util::secure_compare ${shift()}, @_ }
@@ -64,9 +62,13 @@ sub split {
   return Mojo::Collection->new(map { $self->new($_) } split $pattern, $$self);
 }
 
+sub tap { shift->Mojo::Base::tap(@_) }
+
 sub to_string { ${$_[0]} }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -105,8 +107,7 @@ Construct a new scalar-based L<Mojo::ByteStream> object.
 
 =head1 METHODS
 
-L<Mojo::ByteStream> inherits all methods from L<Mojo::Base> and implements the
-following new ones.
+L<Mojo::ByteStream> implements the following methods.
 
 =head2 new
 
@@ -165,12 +166,6 @@ Encode bytestream with L<Mojo::Util/"encode">, defaults to C<UTF-8>.
 
   $stream->trim->quote->encode->say;
 
-=head2 hmac_md5_sum
-
-  $stream = $stream->hmac_md5_sum('passw0rd');
-
-Generate HMAC-MD5 checksum for bytestream with L<Mojo::Util/"hmac_md5_sum">.
-
 =head2 hmac_sha1_sum
 
   $stream = $stream->hmac_sha1_sum('passw0rd');
@@ -226,7 +221,7 @@ Print bytestream to handle and append a newline, defaults to C<STDOUT>.
 
 =head2 secure_compare
 
-  my $success = $stream->secure_compare($string);
+  my $success = $stream->secure_compare($str);
 
 Compare bytestream with L<Mojo::Util/"secure_compare">.
 
@@ -270,9 +265,10 @@ Write all data from bytestream at once to file with L<Mojo::Util/"spurt">.
 
   my $collection = $stream->split(',');
 
-Turn bytestream into L<Mojo::Collection>.
+Turn bytestream into L<Mojo::Collection> object containing L<Mojo::ByteStream>
+objects.
 
-  b('a,b,c')->split(',')->pluck('quote')->join(',')->say;
+  b('a,b,c')->split(',')->quote->join(',')->say;
 
 =head2 squish
 
@@ -282,10 +278,16 @@ Trim whitespace characters from both ends of bytestream and then change all
 consecutive groups of whitespace into one space each with
 L<Mojo::Util/"squish">.
 
+=head2 tap
+
+  $stream = $stream->tap(sub {...});
+
+Alias for L<Mojo::Base/"tap">.
+
 =head2 to_string
 
-  my $string = $stream->to_string;
-  my $string = "$stream";
+  my $str = $stream->to_string;
+  my $str = "$stream";
 
 Stringify bytestream.
 
@@ -333,6 +335,12 @@ bytestream with L<Mojo::Util/"xml_escape">.
   $stream = $stream->xor_encode($key);
 
 XOR encode bytestream with L<Mojo::Util/"xor_encode">.
+
+=head1 BYTESTREAM
+
+Direct scalar reference access to the bytestream is also possible.
+
+  $$stream .= 'foo';
 
 =head1 SEE ALSO
 

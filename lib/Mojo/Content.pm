@@ -18,7 +18,7 @@ sub body_size { croak 'Method "body_size" not implemented by subclass' }
 
 sub boundary {
   return undef unless my $type = shift->headers->content_type;
-  $type =~ m!multipart.*boundary=(?:"([^"]+)"|([\w'(),.:?\-+/]+))!i
+  $type =~ m!multipart.*boundary\s*=\s*(?:"([^"]+)"|([\w'(),.:?\-+/]+))!i
     and return defined $1 ? $1 : $2;
   return undef;
 }
@@ -28,7 +28,7 @@ sub build_headers { shift->_build('get_header_chunk') }
 
 sub charset {
   my $type = do {my $tmp = shift->headers->content_type; defined $tmp ? $tmp : ''};
-  return $type =~ /charset="?([^"\s;]+)"?/i ? $1 : undef;
+  return $type =~ /charset\s*=\s*"?([^"\s;]+)"?/i ? $1 : undef;
 }
 
 sub clone {
@@ -63,8 +63,6 @@ sub get_header_chunk {
 
   return substr $self->{header_buffer}, $offset, 131072;
 }
-
-sub has_leftovers { !!length shift->leftovers }
 
 sub header_size { length shift->build_headers }
 
@@ -155,7 +153,7 @@ sub parse_body {
 sub progress {
   my $self = shift;
   return 0 unless my $state = $self->{state};
-  return 0 unless grep { $_ eq $state } qw(body finished);
+  return 0 unless $state eq 'body' || $state eq 'finished';
   return $self->{raw_size} - ($self->{header_size} || 0);
 }
 
@@ -222,7 +220,7 @@ sub _parse_chunked {
     # Start new chunk (ignore the chunk extension)
     unless ($self->{chunk_len}) {
       last
-        unless $self->{pre_buffer} =~ s/^(?:\x0d?\x0a)?([[:xdigit:]]+).*\x0a//;
+        unless $self->{pre_buffer} =~ s/^(?:\x0d?\x0a)?([0-9a-fA-F]+).*\x0a//;
       next if $self->{chunk_len} = hex $1;
 
       # Last chunk
@@ -307,6 +305,8 @@ sub _uncompress {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -449,13 +449,13 @@ Extract multipart boundary from C<Content-Type> header.
 
 =head2 build_body
 
-  my $string = $content->build_body;
+  my $str = $content->build_body;
 
 Render whole body.
 
 =head2 build_headers
 
-  my $string = $content->build_headers;
+  my $str = $content->build_headers;
 
 Render all headers.
 
@@ -481,20 +481,14 @@ Generate dynamic content.
 
   my $bytes = $content->get_body_chunk(0);
 
-Get a chunk of content starting from a specfic position. Meant to be
+Get a chunk of content starting from a specific position. Meant to be
 overloaded in a subclass.
 
 =head2 get_header_chunk
 
   my $bytes = $content->get_header_chunk(13);
 
-Get a chunk of the headers starting from a specfic position.
-
-=head2 has_leftovers
-
-  my $success = $content->has_leftovers;
-
-Check if there are leftovers.
+Get a chunk of the headers starting from a specific position.
 
 =head2 header_size
 

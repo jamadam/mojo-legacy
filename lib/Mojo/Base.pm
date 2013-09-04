@@ -23,10 +23,9 @@ sub import {
   elsif ($flag eq '-strict') { $flag = undef }
 
   # Module
-  else {
-    my $file = $flag;
-    $file =~ s/::|'/\//g;
-    require "$file.pm" unless $flag->can('new');
+  elsif ((my $file = $flag) && !$flag->can('new')) {
+    $file =~ s!::|'!/!g;
+    require "$file.pm";
   }
 
   # ISA
@@ -35,9 +34,6 @@ sub import {
     push @{"${caller}::ISA"}, $flag;
     *{"${caller}::has"} = sub { attr($caller, @_) };
   }
-
-  my $caller = caller;
-  *{"${caller}::say"} = sub { say(@_) };
 
   # Mojo modules are strict!
   strict->import;
@@ -102,6 +98,8 @@ sub tap {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -212,7 +210,7 @@ pass it either a hash or a hash reference with attribute values.
 Create attribute accessor for hash-based objects, an array reference can be
 used to create more than one at a time. Pass an optional second argument to
 set a default value, it should be a constant or a callback. The callback will
-be excuted at accessor read time if there's no set value. Accessors can be
+be executed at accessor read time if there's no set value. Accessors can be
 chained, that means they return their invocant when they are called with an
 argument.
 
@@ -221,8 +219,8 @@ argument.
   $object = $object->tap(sub {...});
 
 K combinator, tap into a method chain to perform operations on an object
-within the chain. The object will be the first argument passed to the closure
-and is also available via C<$_>.
+within the chain. The object will be the first argument passed to the callback
+and is also available as C<$_>.
 
 =head1 DEBUGGING
 

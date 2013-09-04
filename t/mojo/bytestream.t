@@ -6,6 +6,9 @@ use File::Temp 'tempdir';
 use FindBin;
 use Mojo::ByteStream 'b';
 
+# Tap into method chain
+is b('test')->tap(sub { $$_ .= '1' })->camelize, 'Test1', 'right result';
+
 # camelize
 is b('foo_bar_baz')->camelize, 'FooBarBaz', 'right camelized result';
 
@@ -74,13 +77,9 @@ is unpack('H*', b('foo bar baz')->sha1_bytes),
 is b('foo bar baz')->sha1_sum, 'c7567e8b39e2428e38bf9c9226ac68de4c67dc39',
   'right sha1 checksum';
 
-# hmac_md5_sum
-is b('Hi there')->hmac_md5_sum(1234567890),
-  'e3b5fab1b3f5b9d1fe391d09fce7b2ae', 'right hmac md5 checksum';
-
 # hmac_sha1_sum
-is b('Hi there')->hmac_sha1_sum(1234567890),
-  '4fd7160f392dc54308608cae6587e137c62c2e39', 'right hmac sha1 checksum';
+is b('Hi there')->hmac_sha1_sum('abc1234567890'),
+  '5344f37e1948dd3ffb07243a4d9201a227abd6e1', 'right hmac sha1 checksum';
 
 # secure_compare
 ok b('hello')->secure_compare('hello'), 'values are equal';
@@ -109,6 +108,7 @@ is $stream->split('/')->map(sub { $_->quote })->join(', '), '"1", "2", "3"',
   'right result';
 is $stream->split('/')->map(sub { shift->quote })->join(', '),
   '"1", "2", "3"', 'right result';
+is $stream->split('/')->quote->join(', '), '"1", "2", "3"', 'right result';
 
 # length
 is b('foo bar baz')->size, 11, 'size is 11';

@@ -1,6 +1,5 @@
 use Mojo::Base -strict;
 
-# Disable IPv6 and libev
 BEGIN {
   $ENV{MOJO_MODE}    = 'testing';
   $ENV{MOJO_NO_IPV6} = 1;
@@ -22,7 +21,7 @@ get '/hello' => sub {
   my $self    = shift;
   my $name    = $self->stash('name');
   my $counter = ++$self->session->{counter};
-  $self->render_text("Hello from the $name ($counter) app!");
+  $self->render(text => "Hello from the $name ($counter) app!");
 };
 
 package MyTestApp::Test1;
@@ -42,7 +41,7 @@ get '/bye' => sub {
   $self->ua->app(main::app())->get(
     '/hello/hello' => sub {
       my ($ua, $tx) = @_;
-      $self->render_text($tx->res->body . "$name! $nb");
+      $self->render(text => $tx->res->body . "$name! $nb");
     }
   );
   $nb .= 'success!';
@@ -55,7 +54,7 @@ get '/' => sub {
   my $self = shift;
   my $name = $self->param('name');
   my $url  = $self->url_for;
-  $self->render_text("Bye from the $name app! $url!");
+  $self->render(text => "Bye from the $name app! $url!");
 };
 
 package MyTestApp::Basic;
@@ -87,7 +86,7 @@ plugin Mount => {'mojolicious.org' => $external};
 plugin(Mount => ('/y/♥' => "$FindBin::Bin/external/myapp2.pl"))
   ->to(message => 'works 3!');
 plugin Mount => {'MOJOLICIO.US/' => $external};
-plugin Mount => {'*.kraih.com'   => $external};
+plugin Mount => {'*.example.com' => $external};
 plugin(Mount => ('*.foo-bar.de/♥/123' => $external))
   ->to(message => 'works 3!');
 
@@ -175,6 +174,7 @@ $t->get_ok('/x/1/')->status_is(200)->content_is(<<'EOF');
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/x/1/">Test</a>
 <form action="/x/1/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -206,6 +206,7 @@ $t->get_ok('/x/♥/')->status_is(200)->content_is(<<'EOF');
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/x/%E2%99%A5/">Test</a>
 <form action="/x/%E2%99%A5/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -265,6 +266,7 @@ $t->get_ok('/' => {Host => 'mojolicious.org'})->status_is(200)
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/">Test</a>
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -280,6 +282,7 @@ $t->get_ok('/' => {Host => 'mojolicio.us'})->status_is(200)
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/">Test</a>
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -290,26 +293,28 @@ $t->get_ok('/host' => {Host => 'mojolicio.us'})->status_is(200)
   ->header_is('X-Message' => 'it works!')->content_is('mojolicio.us');
 
 # Template from myapp.pl with wildcard domain
-$t->get_ok('/' => {Host => 'kraih.com'})->status_is(200)->content_is(<<'EOF');
+$t->get_ok('/' => {Host => 'example.com'})->status_is(200)
+  ->content_is(<<'EOF');
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/">Test</a>
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
 EOF
 
 # Host from myapp.pl with wildcard domain
-$t->get_ok('/host' => {Host => 'KRaIH.CoM'})->status_is(200)
-  ->header_is('X-Message' => 'it works!')->content_is('KRaIH.CoM');
+$t->get_ok('/host' => {Host => 'ExAmPlE.CoM'})->status_is(200)
+  ->header_is('X-Message' => 'it works!')->content_is('ExAmPlE.CoM');
 
 # Host from myapp.pl with wildcard domain again
-$t->get_ok('/host' => {Host => 'www.kraih.com'})->status_is(200)
-  ->header_is('X-Message' => 'it works!')->content_is('www.kraih.com');
+$t->get_ok('/host' => {Host => 'www.example.com'})->status_is(200)
+  ->header_is('X-Message' => 'it works!')->content_is('www.example.com');
 
 # Host from myapp.pl with wildcard domain again
-$t->get_ok('/host' => {Host => 'foo.bar.kraih.com'})->status_is(200)
-  ->header_is('X-Message' => 'it works!')->content_is('foo.bar.kraih.com');
+$t->get_ok('/host' => {Host => 'foo.bar.example.com'})->status_is(200)
+  ->header_is('X-Message' => 'it works!')->content_is('foo.bar.example.com');
 
 # Template from myapp.pl with wildcard domain and unicode prefix
 $t->get_ok('/♥/123/' => {Host => 'foo-bar.de'})->status_is(200)
@@ -317,6 +322,7 @@ $t->get_ok('/♥/123/' => {Host => 'foo-bar.de'})->status_is(200)
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/%E2%99%A5/123/">Test</a>
 <form action="/%E2%99%A5/123/%E2%98%83">
   <input type="submit" value="☃" />
 </form>

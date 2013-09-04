@@ -8,13 +8,13 @@ has max_line_size => sub { $ENV{MOJO_MAX_LINE_SIZE} || 10240 };
 # Common headers
 my @HEADERS = (
   qw(Accept Accept-Charset Accept-Encoding Accept-Language Accept-Ranges),
-  qw(Authorization Cache-Control Connection Content-Disposition),
+  qw(Allow Authorization Cache-Control Connection Content-Disposition),
   qw(Content-Encoding Content-Length Content-Range Content-Type Cookie DNT),
-  qw(Date ETag Expect Expires Host If-Modified-Since Last-Modified Location),
-  qw(Origin Proxy-Authenticate Proxy-Authorization Range),
+  qw(Date ETag Expect Expires Host If-Modified-Since Last-Modified Link),
+  qw(Location Origin Proxy-Authenticate Proxy-Authorization Range),
   qw(Sec-WebSocket-Accept Sec-WebSocket-Extensions Sec-WebSocket-Key),
   qw(Sec-WebSocket-Protocol Sec-WebSocket-Version Server Set-Cookie Status),
-  qw(TE Trailer Transfer-Encoding Upgrade User-Agent WWW-Authenticate)
+  qw(TE Trailer Transfer-Encoding Upgrade User-Agent Vary WWW-Authenticate)
 );
 for my $header (@HEADERS) {
   my $name = lc $header;
@@ -22,20 +22,26 @@ for my $header (@HEADERS) {
   monkey_patch __PACKAGE__, $name, sub { scalar shift->header($header => @_) };
 }
 
-# Lower case headers
+# Lowercase headers
 my %NORMALCASE = map { lc($_) => $_ } @HEADERS;
 
 sub add {
   my ($self, $name) = (shift, shift);
 
   # Make sure we have a normal case entry for name
-  my $lcname = lc $name;
-  $self->{normalcase}{$lcname} = defined $self->{normalcase}{$lcname} ? $self->{normalcase}{$lcname} : $name unless $NORMALCASE{$lcname};
+  my $key = lc $name;
+  $self->{normalcase}{$key} = defined $self->{normalcase}{$key} ? $self->{normalcase}{$key} : $name unless $NORMALCASE{$key};
 
   # Add lines
-  push @{$self->{headers}{$lcname}}, map { ref $_ eq 'ARRAY' ? $_ : [$_] } @_;
+  push @{$self->{headers}{$key}}, map { ref $_ eq 'ARRAY' ? $_ : [$_] } @_;
 
   return $self;
+}
+
+sub append {
+  my ($self, $name, $value) = @_;
+  my $old = $self->header($name);
+  return $self->header($name => defined $old ? "$old, $value" : $value);
 }
 
 sub clone {
@@ -149,6 +155,8 @@ sub to_string {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Headers - Headers
@@ -233,6 +241,29 @@ Shortcut for the C<Accept-Ranges> header.
   $headers = $headers->add(Foo => ['first line', 'second line']);
 
 Add one or more header values with one or more lines.
+
+  # "Vary: Accept"
+  # "Vary: Accept-Encoding"
+  $headers->vary('Accept')->add(Vary => 'Accept-Encoding')->to_string;
+
+=head2 allow
+
+  my $allow = $headers->allow;
+  $headers  = $headers->allow('GET, POST');
+
+Shortcut for the C<Allow> header.
+
+=head2 append
+
+  $headers = $headers->append(Vary => 'Accept-Encoding');
+
+Append value to header and flatten it if necessary.
+
+  # "Vary: Accept"
+  $headers->append(Vary => 'Accept')->to_string;
+
+  # "Vary: Accept, Accept-Encoding"
+  $headers->vary('Accept')->append(Vary => 'Accept-Encoding')->to_string;
 
 =head2 authorization
 
@@ -403,6 +434,13 @@ Shortcut for the C<Last-Modified> header.
 
 Get leftover data from header parser.
 
+=head2 link
+
+  my $link = $headers->link;
+  $headers = $headers->link('<http://127.0.0.1/foo/3>; rel="next"');
+
+Shortcut for the C<Link> header from RFC 5988.
+
 =head2 location
 
   my $location = $headers->location;
@@ -414,7 +452,10 @@ Shortcut for the C<Location> header.
 
   my $names = $headers->names;
 
-Generate a list of all currently defined headers.
+Return a list of all currently defined headers.
+
+  # Names of all headers
+  say for @{$headers->names};
 
 =head2 origin
 
@@ -453,7 +494,7 @@ Shortcut for the C<Range> header.
 =head2 referrer
 
   my $referrer = $headers->referrer;
-  $headers     = $headers->referrer('http://mojolicio.us');
+  $headers     = $headers->referrer('http://example.com');
 
 Shortcut for the C<Referer> header, there was a typo in RFC 2068 which
 resulted in C<Referer> becoming an official header.
@@ -539,7 +580,7 @@ multiline values are disabled by default.
 
 =head2 to_string
 
-  my $string = $headers->to_string;
+  my $str = $headers->to_string;
 
 Turn headers into a string, suitable for HTTP messages.
 
@@ -570,6 +611,13 @@ Shortcut for the C<Upgrade> header.
   $headers  = $headers->user_agent('Mojo/1.0');
 
 Shortcut for the C<User-Agent> header.
+
+=head2 vary
+
+  my $vary = $headers->vary;
+  $headers = $headers->vary('*');
+
+Shortcut for the C<Vary> header.
 
 =head2 www_authenticate
 
