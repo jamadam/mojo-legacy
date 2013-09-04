@@ -7,7 +7,8 @@ use Mojo::IOLoop;
 app->defaults(secret => 'Insecure too!');
 
 # Caching helper for state variable test
-helper my_cache => sub { state $cache = shift->param('cache') };
+our %cache;
+helper my_cache => sub { my $app = $_[0]->app; $cache{$app} = defined $cache{$app} ? $cache{$app} : shift->param('cache') };
 
 # Delay dispatching
 hook around_dispatch => sub {

@@ -35,6 +35,9 @@ sub import {
     *{"${caller}::has"} = sub { attr($caller, @_) };
   }
 
+  my $caller = caller;
+  *{"${caller}::say"} = sub { say(@_) };
+
   # Mojo modules are strict!
   strict->import;
   warnings->import;

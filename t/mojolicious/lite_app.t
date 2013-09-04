@@ -24,7 +24,8 @@ app->defaults(default => 23);
 # Test helpers
 helper test_helper  => sub { shift->param(@_) };
 helper test_helper2 => sub { shift->app->controller_class };
-helper test_helper3 => sub { state $cache = {} };
+our $cache = {};
+helper test_helper3 => sub { $cache };
 helper dead         => sub { die $_[1] || 'works!' };
 is app->test_helper('foo'), undef, 'no value yet';
 is app->test_helper2, 'Mojolicious::Controller', 'right value';

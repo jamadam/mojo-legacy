@@ -47,10 +47,11 @@ sub encode {
 
 {
   no warnings 'redefine';
-sub say {
-  my ($self, $handle) = @_;
-  $handle ||= \*STDOUT;
-  say $handle $$self;
+  sub say {
+    my ($self, $handle) = @_;
+    $handle ||= \*STDOUT;
+    print $handle $$self. "\n";
+  }
 }
 
 sub secure_compare { Mojo::Util::secure_compare ${shift()}, @_ }

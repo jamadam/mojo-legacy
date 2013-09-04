@@ -3,7 +3,7 @@ use Mojo::Base 'Exporter';
 
 use Carp qw(carp croak);
 use Digest::MD5 qw(md5 md5_hex);
-BEGIN {eval {require Digest::SHA; import Digest::SHA qw(sha1 sha1_hex)}}
+BEGIN {eval {require Digest::SHA; import Digest::SHA qw(hmac_sha1 sha1 sha1_hex)}}
 use Encode 'find_encoding';
 use File::Basename 'dirname';
 use File::Spec::Functions 'catfile';

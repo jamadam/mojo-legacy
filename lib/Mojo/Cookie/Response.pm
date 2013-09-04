@@ -30,7 +30,8 @@ sub parse {
 
       # "expires" is a special case, thank you Netscape...
       if ($name =~ /^expires$/i) {
-        push @$pairs, @{ do { my $tmp = shift @$tree; defined $tmp ? $tmp : [] } };
+        my $tmp = shift @$tree;
+        push @$pairs, @{ defined $tmp ? $tmp : [] };
         my $len = (defined $pairs->[0] ? $pairs->[0] : '') =~ /-/ ? 6 : 10;
         $value .= join ' ', ',', grep {defined} splice @$pairs, 0, $len;
       }
