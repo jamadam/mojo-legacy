@@ -37,7 +37,6 @@ get '/bye' => sub {
   my $self = shift;
   my $name = $self->stash('name');
   my $nb   = '';
-  $self->render_later;
   $self->ua->app(main::app())->get(
     '/hello/hello' => sub {
       my ($ua, $tx) = @_;
@@ -174,6 +173,7 @@ $t->get_ok('/x/1/')->status_is(200)->content_is(<<'EOF');
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/x/1/">Test</a>
 <form action="/x/1/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -205,6 +205,7 @@ $t->get_ok('/x/♥/')->status_is(200)->content_is(<<'EOF');
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/x/%E2%99%A5/">Test</a>
 <form action="/x/%E2%99%A5/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -264,6 +265,7 @@ $t->get_ok('/' => {Host => 'mojolicious.org'})->status_is(200)
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/">Test</a>
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -279,6 +281,7 @@ $t->get_ok('/' => {Host => 'mojolicio.us'})->status_is(200)
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/">Test</a>
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -294,6 +297,7 @@ $t->get_ok('/' => {Host => 'example.com'})->status_is(200)
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/">Test</a>
 <form action="/%E2%98%83">
   <input type="submit" value="☃" />
 </form>
@@ -317,6 +321,7 @@ $t->get_ok('/♥/123/' => {Host => 'foo-bar.de'})->status_is(200)
 works ♥!Insecure!Insecure!
 
 too!works!!!Mojolicious::Plugin::Config::Sandbox
+<a href="/%E2%99%A5/123/">Test</a>
 <form action="/%E2%99%A5/123/%E2%98%83">
   <input type="submit" value="☃" />
 </form>

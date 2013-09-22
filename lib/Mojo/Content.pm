@@ -18,7 +18,7 @@ sub body_size { croak 'Method "body_size" not implemented by subclass' }
 
 sub boundary {
   return undef unless my $type = shift->headers->content_type;
-  $type =~ m!multipart.*boundary=(?:"([^"]+)"|([\w'(),.:?\-+/]+))!i
+  $type =~ m!multipart.*boundary\s*=\s*(?:"([^"]+)"|([\w'(),.:?\-+/]+))!i
     and return defined $1 ? $1 : $2;
   return undef;
 }
@@ -27,8 +27,8 @@ sub build_body    { shift->_build('get_body_chunk') }
 sub build_headers { shift->_build('get_header_chunk') }
 
 sub charset {
-  my $type = do {my $tmp = shift->headers->content_type; defined $tmp ? $tmp : ''};
-  return $type =~ /charset="?([^"\s;]+)"?/i ? $1 : undef;
+  my $type = do { my $type = shift->headers->content_type; defined $type ? $type : ''};
+  return $type =~ /charset\s*=\s*"?([^"\s;]+)"?/i ? $1 : undef;
 }
 
 sub clone {
@@ -220,7 +220,7 @@ sub _parse_chunked {
     # Start new chunk (ignore the chunk extension)
     unless ($self->{chunk_len}) {
       last
-        unless $self->{pre_buffer} =~ s/^(?:\x0d?\x0a)?([[:xdigit:]]+).*\x0a//;
+        unless $self->{pre_buffer} =~ s/^(?:\x0d?\x0a)?([0-9a-fA-F]+).*\x0a//;
       next if $self->{chunk_len} = hex $1;
 
       # Last chunk
@@ -305,6 +305,8 @@ sub _uncompress {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 

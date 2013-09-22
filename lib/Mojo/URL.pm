@@ -1,9 +1,6 @@
 package Mojo::URL;
 use Mojo::Base -base;
-use overload
-  'bool'   => sub {1},
-  '""'     => sub { shift->to_string },
-  fallback => 1;
+use overload bool => sub {1}, '""' => sub { shift->to_string }, fallback => 1;
 
 use Mojo::Parameters;
 use Mojo::Path;
@@ -243,7 +240,6 @@ Mojo::URL - Uniform Resource Locator
   $url->host('example.com');
   $url->port(3000);
   $url->path('/foo/bar');
-  $url->path('baz');
   $url->query->param(foo => 'bar');
   $url->fragment(23);
   say "$url";

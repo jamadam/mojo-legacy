@@ -6,7 +6,7 @@ BEGIN {
 }
 
 use Test::More;
-use IO::Compress::Gzip 'gzip';
+BEGIN {eval {require IO::Compress::Gzip; import IO::Compress::Gzip qw(gzip)}}
 use Mojo::IOLoop;
 use Mojo::Message::Request;
 use Mojo::UserAgent;
@@ -23,7 +23,6 @@ get '/timeout' => sub {
   Mojo::IOLoop->stream($self->tx->connection)
     ->timeout($self->param('timeout'));
   $self->on(finish => sub { $timeout = 1 });
-  $self->render_later;
 };
 
 get '/no_length' => sub {
@@ -145,6 +144,8 @@ $ua->get(
     Mojo::IOLoop->stop;
   }
 );
+eval { $ua->get('/') };
+like $@, qr/^Non-blocking requests in progress/, 'right error';
 Mojo::IOLoop->start;
 ok $success, 'successful';
 is $code,    200, 'right status';
@@ -325,6 +326,29 @@ ok !$tx->success, 'not successful';
 is(($tx->error)[0], 'Not Found', 'right error');
 is(($tx->error)[1], 404,         'right status');
 
+# Fork safety
+$tx = $ua->get('/');
+is $tx->res->body, 'works!', 'right content';
+my $last = $tx->connection;
+my $port = $ua->app_url->port;
+$tx = $ua->get('/');
+is $tx->res->body, 'works!', 'right content';
+is $tx->connection, $last, 'same connection';
+is $ua->app_url->port, $port, 'same port';
+{
+  local $$ = -23;
+  $tx = $ua->get('/');
+  is $tx->res->body, 'works!', 'right content';
+  isnt $tx->connection, $last, 'new connection';
+  isnt $ua->app_url->port, $port, 'new port';
+  $port = $ua->app_url->port;
+  $last = $tx->connection;
+  $tx   = $ua->get('/');
+  is $tx->res->body, 'works!', 'right content';
+  is $tx->connection, $last, 'same connection';
+  is $ua->app_url->port, $port, 'same port';
+}
+
 # Introspect
 my $req = my $res = '';
 my $start = $ua->on(
@@ -450,8 +474,8 @@ is $tx->res->code, 200,      'right status';
 is $tx->res->body, 'works!', 'right content';
 
 # Unexpected 1xx responses
-my $port = Mojo::IOLoop->generate_port;
-$req = Mojo::Message::Request->new;
+$port = Mojo::IOLoop->generate_port;
+$req  = Mojo::Message::Request->new;
 Mojo::IOLoop->server(
   {address => '127.0.0.1', port => $port} => sub {
     my ($loop, $stream) = @_;
@@ -478,14 +502,5 @@ is $unexpected[1]->code, 101, 'right status';
 ok $tx->success, 'successful';
 is $tx->res->code, 200,   'right status';
 is $tx->res->body, 'Hi!', 'right content';
-
-# Premature connection close
-$port = Mojo::IOLoop->generate_port;
-Mojo::IOLoop->server(
-  {address => '127.0.0.1', port => $port} => sub { Mojo::IOLoop->remove(pop) }
-);
-$tx = $ua->get("http://localhost:$port/");
-ok !$tx->success, 'not successful';
-is $tx->error, 'Premature connection close', 'right error';
 
 done_testing();

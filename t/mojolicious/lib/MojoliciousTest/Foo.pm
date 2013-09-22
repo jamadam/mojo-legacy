@@ -1,22 +1,29 @@
 package MojoliciousTest::Foo;
 use Mojo::Base 'Mojolicious::Controller';
 
-sub authenticated {
-  my $self = shift;
-  $self->render(text => $self->stash('action'));
-}
+sub DESTROY { shift->stash->{destroyed} = 1 }
 
 sub config {
   my $self = shift;
   $self->render(text => $self->stash('config')->{test});
 }
 
-sub fun { shift->render(text => 'Have fun!') }
+sub fun { shift->render }
 
 sub index {
   my $self = shift;
   $self->layout('default');
   $self->stash(handler => 'xpl', msg => 'Hello World!');
+}
+
+sub longpoll {
+  my $self = shift;
+  $self->on(finish => sub { shift->stash->{finished} = 1 });
+  $self->write_chunk(
+    sub {
+      shift->write_chunk('Poll!' => sub { shift->write_chunk('') });
+    }
+  );
 }
 
 sub plugin_camel_case {
@@ -52,9 +59,20 @@ sub stage1 {
   return undef;
 }
 
-sub stage2 {
+sub stage2 { return shift->some_plugin }
+
+sub suspended {
   my $self = shift;
-  $self->render(text => $self->some_plugin);
+
+  $self->res->headers->append('X-Suspended' => $self->match->current);
+  Mojo::IOLoop->timer(
+    0 => sub {
+      $self->res->headers->append('X-Suspended' => $self->match->current);
+      $self->continue;
+    }
+  );
+
+  return 0;
 }
 
 sub syntaxerror { shift->render('syntaxerror', format => 'html') }
@@ -74,12 +92,15 @@ sub url_for_missing {
 
 sub willdie { die 'for some reason' }
 
-sub withblock { shift->render(template => 'withblock') }
+sub withBlock { shift->render(template => 'withblock') }
 
-sub withlayout { shift->stash(template => 'withlayout') }
+sub withlayout { shift->stash(template => 'WithGreenLayout') }
 
 1;
 __DATA__
+
+@@ foo/fun.html.ep
+Have fun!\
 
 @@ just/some/template.html.epl
 Development template with high precedence.

@@ -1,9 +1,6 @@
 package Mojo::Home;
 use Mojo::Base -base;
-use overload
-  'bool'   => sub {1},
-  '""'     => sub { shift->to_string },
-  fallback => 1;
+use overload bool => sub {1}, '""' => sub { shift->to_string }, fallback => 1;
 
 use Cwd 'abs_path';
 use File::Basename 'dirname';
@@ -52,10 +49,7 @@ sub lib_dir {
 sub list_files {
   my ($self, $dir) = @_;
 
-  # Files relative to directory
-  my $parts = $self->{parts} || [];
-  my $root = catdir @$parts;
-  $dir = catdir $root, split '/', ($dir || '');
+  $dir = catdir @{$self->{parts} || []}, split '/', (defined $dir ? $dir : '');
   return [] unless -d $dir;
   my @files;
   find {
@@ -83,6 +77,8 @@ sub rel_file { catfile(@{shift->{parts} || []}, split '/', shift) }
 sub to_string { catdir(@{shift->{parts} || []}) }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 

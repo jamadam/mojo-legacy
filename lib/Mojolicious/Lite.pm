@@ -147,6 +147,9 @@ every change.
   $ morbo myapp.pl
   Server available at http://127.0.0.1:3000.
 
+For more information about how to deploy your application see also
+L<Mojolicious::Guides::Cookbook/"DEPLOYMENT">.
+
 =head2 Routes
 
 Routes are basically just fancy paths that can contain different kinds of
@@ -169,7 +172,7 @@ L<Mojolicious::Controller/"render">, but more about that later.
 
 =head2 GET/POST parameters
 
-All C<GET> and C<POST> parameters sent with the request are accessible via
+All GET and POST parameters sent with the request are accessible via
 L<Mojolicious::Controller/"param">.
 
   use Mojolicious::Lite;
@@ -213,13 +216,19 @@ full access to all HTTP features and information.
 
   use Mojolicious::Lite;
 
-  # Access request and reponse information
+  # Access request information
   get '/agent' => sub {
     my $self = shift;
     my $host = $self->req->url->to_abs->host;
     my $ua   = $self->req->headers->user_agent;
-    $self->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
     $self->render(text => "Request by $ua reached $host.");
+  };
+
+  # Echo the request body and send custom header with response
+  get '/echo' => sub {
+    my $self = shift;
+    $self->res->headers->header('X-Bender' => 'Bite my shiny metal ass!');
+    $self->render(data => $self->req->body);
   };
 
   app->start;
@@ -279,6 +288,9 @@ L<Mojolicious::Plugin::DefaultHelpers/"content">.
     <head><title><%= title %></title></head>
     <body><%= content %></body>
   </html>
+
+The stash or helpers like L<Mojolicious::Plugin::DefaultHelpers/"title"> can
+be used to pass additional data to the layout.
 
 =head2 Blocks
 
@@ -564,10 +576,10 @@ Prefixing multiple routes is another good use for C<under>.
   get '/baz' => {text => 'foo baz'};
 
   # / (reset)
-  under '/' => {message => 'whatever'};
+  under '/' => {msg => 'whatever'};
 
   # /bar
-  get '/bar' => {inline => '<%= $message %> works'};
+  get '/bar' => {inline => '<%= $msg %> works'};
 
   app->start;
 
@@ -830,8 +842,8 @@ temporary file.
     </body>
   </html>
 
-To protect you from excessively large files there is also a limit of C<5MB> by
-default, which you can tweak with the MOJO_MAX_MESSAGE_SIZE environment
+To protect you from excessively large files there is also a limit of C<10MB>
+by default, which you can tweak with the MOJO_MAX_MESSAGE_SIZE environment
 variable.
 
   # Increase limit to 1GB
@@ -839,20 +851,50 @@ variable.
 
 =head2 User agent
 
-With L<Mojolicious::Controller/"ua"> there's a full featured HTTP and
+With L<Mojo::UserAgent>, which is available through the helper
+L<Mojolicious::Plugin::DefaultHelpers/"ua">, there's a full featured HTTP and
 WebSocket user agent built right in. Especially in combination with
 L<Mojo::JSON> and L<Mojo::DOM> this can be a very powerful tool.
 
   use Mojolicious::Lite;
 
+  # Blocking
   get '/headers' => sub {
     my $self = shift;
     my $url  = $self->param('url') || 'http://mojolicio.us';
     my $dom  = $self->ua->get($url)->res->dom;
-    $self->render(json => [$dom->find('h1, h2, h3')->pluck('text')->each]);
+    $self->render(json => [$dom->find('h1, h2, h3')->text->each]);
+  };
+
+  # Non-blocking
+  get '/title' => sub {
+    my $self = shift;
+    $self->ua->get('mojolicio.us' => sub {
+      my ($ua, $tx) = @_;
+      $self->render(data => $tx->res->dom->at('title')->text);
+    });
+  };
+
+  # Parallel non-blocking
+  get '/titles' => sub {
+    my $self = shift;
+    my $delay = Mojo::IOLoop->delay(sub {
+      my ($delay, @titles) = @_;
+      $self->render(json => \@titles);
+    });
+    for my $url ('http://mojolicio.us', 'https://metacpan.org') {
+      my $end = $delay->begin(0);
+      $self->ua->get($url => sub {
+        my ($ua, $tx) = @_;
+        $end->($tx->res->dom->html->head->title->text);
+      });
+    }
   };
 
   app->start;
+
+For more information about the user agent see also
+L<Mojolicious::Guides::Cookbook/"USER AGENT">.
 
 =head2 WebSockets
 
@@ -901,14 +943,18 @@ L<Mojolicious::Guides::Cookbook/"REAL-TIME WEB">.
 
 You can use the L<Mojo::Log> object from L<Mojo/"log"> to portably collect
 debug messages and automatically disable them later in a production setup by
-changing the L<Mojolicious> operating mode.
+changing the L<Mojolicious> operating mode, which can also be retrieved from
+the attribute L<Mojolicious/"mode">.
 
   use Mojolicious::Lite;
 
+  # Prepare mode specific message during startup
+  my $msg = app->mode eq 'development' ? 'Development!' : 'Something else!';
+
   get '/' => sub {
     my $self = shift;
-    $self->app->log->debug('Rendering "Hello World!" message.');
-    $self->render(text => 'Hello World!');
+    $self->app->log->debug('Rendering mode specific message.');
+    $self->render(text => $msg);
   };
 
   app->log->debug('Starting application.');
@@ -926,7 +972,7 @@ C<log> directory exists.
 
   $ mkdir log
 
-Mode changes also affects a few other aspects of the framework, such as mode
+Mode changes also affect a few other aspects of the framework, such as mode
 specific C<exception> and C<not_found> templates.
 
 =head2 Testing
@@ -980,13 +1026,13 @@ The L<Mojolicious::Lite> application.
   my $route = del '/:foo' => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"delete">, matching only
-C<DELETE> requests. See also the tutorial above for more argument variations.
+DELETE requests. See also the tutorial above for more argument variations.
 
 =head2 get
 
   my $route = get '/:foo' => sub {...};
 
-Generate route with L<Mojolicious::Routes::Route/"get">, matching only C<GET>
+Generate route with L<Mojolicious::Routes::Route/"get">, matching only GET
 requests. See also the tutorial above for more argument variations.
 
 =head2 group
@@ -1012,7 +1058,7 @@ Share code with L<Mojolicious/"hook">.
   my $route = options '/:foo' => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"options">, matching only
-C<OPTIONS> requests. See also the tutorial above for more argument
+OPTIONS requests. See also the tutorial above for more argument
 variations.
 
 =head2 patch
@@ -1020,7 +1066,7 @@ variations.
   my $route = patch '/:foo' => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"patch">, matching only
-C<PATCH> requests. See also the tutorial above for more argument variations.
+PATCH requests. See also the tutorial above for more argument variations.
 
 =head2 plugin
 
@@ -1033,13 +1079,13 @@ Load a plugin with L<Mojolicious/"plugin">.
   my $route = post '/:foo' => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"post">, matching only
-C<POST> requests. See also the tutorial above for more argument variations.
+POST requests. See also the tutorial above for more argument variations.
 
 =head2 put
 
   my $route = put '/:foo' => sub {...};
 
-Generate route with L<Mojolicious::Routes::Route/"put">, matching only C<PUT>
+Generate route with L<Mojolicious::Routes::Route/"put">, matching only PUT
 requests. See also the tutorial above for more argument variations.
 
 =head2 under

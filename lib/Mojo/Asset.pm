@@ -20,6 +20,8 @@ sub slurp   { croak 'Method "slurp" not implemented by subclass' }
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo::Asset - HTTP content storage base class
@@ -58,7 +60,7 @@ Pretend file ends earlier.
 =head2 start_range
 
   my $start = $asset->start_range;
-  $asset    = $asset->start_range(0);
+  $asset    = $asset->start_range(3);
 
 Pretend file starts later.
 

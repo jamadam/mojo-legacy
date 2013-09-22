@@ -40,7 +40,8 @@ app->types->type(txt => 'text/plain;charset=UTF-8');
 
 get '/☃' => sub {
   my $self = shift;
-  $self->render(text => $self->url_for . $self->url_for('current'));
+  $self->render(
+    text => $self->url_for . $self->url_for({}) . $self->url_for('current'));
 };
 
 get '/uni/aäb' => sub {
@@ -165,11 +166,10 @@ get '/stream' => sub {
   $self->rendered;
 };
 
-my $finished;
 get '/finished' => sub {
   my $self = shift;
-  $self->on(finish => sub { $finished += 2 });
-  $finished = 1;
+  $self->on(finish => sub { shift->stash->{finished} *= 2 });
+  $self->stash->{finished} = 1;
   $self->render(text => 'so far so good!');
 };
 
@@ -359,8 +359,10 @@ get '/redirect_named' => sub {
   shift->redirect_to('index', format => 'txt')->render(text => 'Redirecting!');
 };
 
+get '/redirect_twice' => sub { shift->redirect_to('/redirect_named') };
+
 get '/redirect_no_render' => sub {
-  shift->redirect_to('index', format => 'txt');
+  shift->redirect_to('index', {format => 'txt'});
 };
 
 get '/redirect_callback' => sub {
@@ -442,12 +444,15 @@ my $t = Test::Mojo->new;
 is $t->app->test_helper2, 'Mojolicious::Controller', 'right class';
 is $t->app, app->commands->app, 'applications are equal';
 is $t->app->moniker, 'lite_app', 'right moniker';
+my $log = '';
+my $cb = $t->app->log->on(message => sub { $log .= pop });
+is $t->app->secret, $t->app->moniker, 'secret defaults to moniker';
+like $log, qr/Your secret passphrase needs to be changed!!!/, 'right message';
+$t->app->log->unsubscribe(message => $cb);
 
 # Unicode snowman
-$t->get_ok('/☃')->status_is(200)->content_is('/%E2%98%83/%E2%98%83');
-
-# Unicode snowman with trailing slash
-$t->get_ok('/☃/')->status_is(200)->content_is('/%E2%98%83//%E2%98%83/');
+$t->get_ok('/☃')->status_is(200)
+  ->content_is('/%E2%98%83/%E2%98%83/%E2%98%83');
 
 # Umlaut
 $t->get_ok('/uni/aäb')->status_is(200)->content_is('/uni/a%C3%A4b');
@@ -661,9 +666,11 @@ $t->get_ok('/maybe/ajax' => {'X-Requested-With' => 'XMLHttpRequest'})
   ->content_is('is ajax');
 
 # With finish event
+my $stash;
+$t->app->plugins->once(before_dispatch => sub { $stash = shift->stash });
 $t->get_ok('/finished')->status_is(200)
   ->header_is(Server => 'Mojolicious (Perl)')->content_is('so far so good!');
-is $finished, 3, 'finished';
+is $stash->{finished}, 2, 'finish event has been emitted once';
 
 # IRI
 $t->get_ok('/привет/мир')->status_is(200)
@@ -728,8 +735,13 @@ $t->get_ok('/source')->status_is(200)->header_isnt('X-Missing' => 1)
   ->content_like(qr!get_ok\('/source!);
 
 # File does not exist
+$log = '';
+$cb = $t->app->log->on(message => sub { $log .= pop });
 $t->get_ok('/source?fail=1')->status_is(404)->header_is('X-Missing' => 1)
   ->content_is("Oops!\n");
+like $log, qr/File "does_not_exist.txt" not found, public directory missing\?/,
+  'right message';
+$t->app->log->unsubscribe(message => $cb);
 
 # With body and max message size
 {
@@ -917,6 +929,17 @@ $t->get_ok('/redirect_named')->status_is(302)
   ->header_is(Server           => 'Mojolicious (Perl)')
   ->header_is('Content-Length' => 12)
   ->header_like(Location => qr!/template.txt$!)->content_is('Redirecting!');
+
+# Redirect twice
+$t->ua->max_redirects(3);
+$t->get_ok('/redirect_twice')->status_is(200)
+  ->header_is(Server => 'Mojolicious (Perl)')
+  ->text_is('div#☃' => 'Redirect works!');
+my $redirects = $t->tx->redirects;
+is scalar @$redirects, 2, 'two redirects';
+is $redirects->[0]->req->url->path, '/redirect_twice', 'right path';
+is $redirects->[1]->req->url->path, '/redirect_named', 'right path';
+$t->ua->max_redirects(0);
 
 # Redirect without rendering
 $t->get_ok('/redirect_no_render')->status_is(302)

@@ -20,8 +20,8 @@ app->renderer->paths->[0] = app->home->rel_dir('does_not_exist');
 
 # Reverse filter
 hook after_render => sub {
-  my ($self, $output, $format) = @_;
-  return unless $self->stash->{reverse};
+  my ($c, $output, $format) = @_;
+  return unless $c->stash->{reverse};
   $$output = reverse $$output . $format;
 };
 
@@ -123,7 +123,8 @@ $t->get_ok('/works?blue=1')->status_is(200)
   ->content_is("BlueJust worksThis <template> just works!\n\n");
 
 # Mixed formats
-$t->get_ok('/mixed')->status_is(200)->content_type_is('text/plain')
+$t->get_ok('/mixed')->status_is(200)
+  ->content_type_is('text/plain;charset=UTF-8')
   ->content_is("Mixed formats\n\n");
 
 # Missing template

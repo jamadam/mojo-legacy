@@ -2,7 +2,7 @@ package Mojo::Path;
 use Mojo::Base -base;
 use overload
   '@{}'    => sub { shift->parts },
-  'bool'   => sub {1},
+  bool     => sub {1},
   '""'     => sub { shift->to_string },
   fallback => 1;
 
@@ -188,6 +188,9 @@ Canonicalize path.
 
   # "/foo/baz"
   Mojo::Path->new('/foo/./bar/../baz')->canonicalize;
+
+  # "/../baz"
+  Mojo::Path->new('/foo/../bar/../../baz')->canonicalize;
 
 =head2 clone
 

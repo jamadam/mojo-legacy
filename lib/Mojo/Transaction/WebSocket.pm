@@ -69,12 +69,12 @@ sub build_frame {
     warn "-- Extended 64bit payload ($len)\n$payload\n" if DEBUG;
     vec($prefix, 0, 8) = $masked ? (127 | 0b10000000) : 127;
     $frame .= $prefix;
-    $frame .= pack('NN', 0, $len & 0xFFFFFFFF);
+    $frame .= pack('NN', 0, $len & 0xffffffff);
   }
 
   # Mask payload
   if ($masked) {
-    my $mask = pack 'N', int(rand 9999999);
+    my $mask = pack 'N', int(rand 9 x 7);
     $payload = $mask . xor_encode($payload, $mask x 128);
   }
 
@@ -95,9 +95,9 @@ sub client_handshake {
   $headers->connection('Upgrade')     unless $headers->connection;
   $headers->sec_websocket_version(13) unless $headers->sec_websocket_version;
 
-  # Generate WebSocket challenge
-  $headers->sec_websocket_key(b64_encode(pack('N*', int(rand 9999999)), ''))
-    unless $headers->sec_websocket_key;
+  # Generate 16 byte WebSocket challenge
+  my $challenge = b64_encode sprintf('%16u', int(rand 9 x 16)), '';
+  $headers->sec_websocket_key($challenge) unless $headers->sec_websocket_key;
 }
 
 sub client_read  { shift->server_read(@_) }
@@ -211,8 +211,8 @@ sub send {
       : [1, 0, 0, 0, BINARY, $frame->{binary}];
   }
 
-  # Text or object (forcing stringification)
-  $frame = [1, 0, 0, 0, TEXT, encode('UTF-8', "$frame")]
+  # Text
+  $frame = [1, 0, 0, 0, TEXT, encode('UTF-8', $frame)]
     if ref $frame ne 'ARRAY';
 
   $self->once(drain => $cb) if $cb;
@@ -301,6 +301,8 @@ sub _message {
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 
@@ -615,7 +617,6 @@ Resume C<handshake> transaction.
   $ws = $ws->send({text   => $bytes});
   $ws = $ws->send({json   => {test => [1, 2, 3]}});
   $ws = $ws->send([$fin, $rsv1, $rsv2, $rsv3, $op, $bytes]);
-  $ws = $ws->send(Mojo::ByteStream->new($chars));
   $ws = $ws->send($chars);
   $ws = $ws->send($chars => sub {...});
 

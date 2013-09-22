@@ -58,6 +58,8 @@ sub _dict {
 
 1;
 
+=encoding utf8
+
 =head1 NAME
 
 Mojo - Duct tape for the HTML5 web!
@@ -92,7 +94,7 @@ frameworks. It provides all the basic tools and helpers needed to write
 simple web applications and higher level web frameworks, such as
 L<Mojolicious>.
 
-See L<Mojolicious> for more!
+See L<Mojolicious::Guides> for more!
 
 =head1 ATTRIBUTES
 
@@ -130,7 +132,7 @@ plugins, since non-blocking requests that are already in progress will
 interfere with new blocking ones.
 
   # Perform blocking request
-  my $body = $app->ua->get('example.com')->res->body;
+  say $app->ua->get('example.com')->res->body;
 
 =head1 METHODS
 

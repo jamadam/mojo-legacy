@@ -46,12 +46,14 @@ sub parse {
 
   # Content needs to be upgraded to multipart
   $self->unsubscribe(read => $self->{read});
-  my $multi = Mojo::Content::MultiPart->new($self);
+  my $multi = Mojo::Content::MultiPart->new(%$self);
   $self->emit(upgrade => $multi);
   return $multi->parse;
 }
 
 1;
+
+=encoding utf8
 
 =head1 NAME
 

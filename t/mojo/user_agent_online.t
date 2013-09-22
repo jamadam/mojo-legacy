@@ -51,11 +51,7 @@ $ua = Mojo::UserAgent->new;
 
 # Local address
 $ua->app(app);
-my $sock = IO::Socket::INET->new(
-  PeerAddr => 'mojolicio.us',
-  PeerPort => 80,
-  Proto    => 'tcp'
-);
+my $sock = IO::Socket::INET->new(PeerAddr => 'mojolicio.us', PeerPort => 80);
 my $address = $sock->sockhost;
 isnt $address, '127.0.0.1', 'different address';
 $ua->local_address('127.0.0.1')->max_connections(0);
@@ -89,7 +85,7 @@ ok $tx->error,       'has error';
 $tx = $ua->build_tx(GET => 'http://cdeabcdeffoobarnonexisting.com');
 $ua->start($tx);
 ok $tx->is_finished, 'transaction is finished';
-is $tx->error, "Couldn't connect", 'right error';
+like $tx->error, qr/^Couldn't connect/, 'right error';
 
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
@@ -145,7 +141,7 @@ ok $tx->is_finished, 'transaction is finished';
 is $tx->res->code, 301, 'right status';
 like $tx->res->headers->connection, qr/close/i, 'right "Connection" header';
 
-# Oneliner
+# One-liner
 is g('mojolicio.us')->code,          200, 'right status';
 is h('mojolicio.us')->code,          200, 'right status';
 is h('mojolicio.us')->body,          '',  'no content';
@@ -206,9 +202,15 @@ is $tx->req->url,    'https://ipv6.google.com', 'right url';
 is $tx->res->code,   200,                       'right status';
 
 # HTTPS request that requires SNI
-$tx = $ua->get('https://google.de');
-like $ua->ioloop->stream($tx->connection)
-  ->handle->peer_certificate('commonName'), qr/google\.de/, 'right name';
+SKIP: {
+  skip 'SNI support required!', 1
+    unless IO::Socket::SSL->can('can_client_sni')
+    && IO::Socket::SSL->can_client_sni;
+
+  $tx = $ua->get('https://google.de');
+  like $ua->ioloop->stream($tx->connection)
+    ->handle->peer_certificate('commonName'), qr/google\.de/, 'right name';
+}
 
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
@@ -241,6 +243,10 @@ is $tx->res->code,   200,                                 'right status';
 is $tx->previous->req->method, 'GET', 'right method';
 is $tx->previous->req->url, 'http://www.wikipedia.org/wiki/Perl', 'right url';
 is $tx->previous->res->code, 301, 'right status';
+is $tx->redirects->[-1]->req->method, 'GET', 'right method';
+is $tx->redirects->[-1]->req->url, 'http://www.wikipedia.org/wiki/Perl',
+  'right url';
+is $tx->redirects->[-1]->res->code, 301, 'right status';
 
 # Custom chunked request
 $tx = Mojo::Transaction::HTTP->new;
