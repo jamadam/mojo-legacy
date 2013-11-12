@@ -50,12 +50,10 @@ sub search {
 sub _all {
   my $class = shift;
 
-  # Refresh or use cached data
   my $handle = do { no strict 'refs'; \*{"${class}::DATA"} };
-  return $CACHE{$class} || {} unless fileno $handle;
+  return $CACHE{$class} || {} if $CACHE{$class} || !fileno $handle;
   seek $handle, 0, 0;
   my $data = join '', <$handle>;
-  close $handle;
 
   # Ignore everything before __DATA__ (Windows will seek to start of file)
   $data =~ s/^.*\n__DATA__\r?\n/\n/s;
@@ -64,8 +62,7 @@ sub _all {
   $data =~ s/\n__END__\r?\n.*$/\n/s;
 
   # Split files
-  my @files = split /^@@\s*(.+?)\s*\r?\n/m, $data;
-  shift @files;
+  (undef, my @files) = split /^@@\s*(.+?)\s*\r?\n/m, $data;
 
   # Find data
   my $all = $CACHE{$class} = {};
@@ -122,7 +119,7 @@ Extract embedded file from the C<DATA> section of a class.
 
 =head2 is_binary
 
-  my $success = $loader->is_binary('Foo::Bar', 'test.png');
+  my $bool = $loader->is_binary('Foo::Bar', 'test.png');
 
 Check if embedded file from the C<DATA> section of a class was Base64 encoded.
 

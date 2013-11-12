@@ -87,20 +87,18 @@ sub listen {
   return unless $args->{tls};
   croak "IO::Socket::SSL 1.75 required for TLS support" unless TLS;
 
-  # Prioritize RC4 to mitigate BEAST attack and use Perfect Forward Secrecy
-  my $options = $self->{tls} = {
+  # Prioritize RC4 to mitigate BEAST attack
+  $self->{tls} = {
+    SSL_ca_file => $args->{tls_ca}
+      && -T $args->{tls_ca} ? $args->{tls_ca} : undef,
     SSL_cert_file => $args->{tls_cert} || $CERT,
-    SSL_cipher_list =>
-      'ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH',
+    SSL_cipher_list => defined $args->{tls_ciphers} ? $args->{tls_ciphers}
+      : 'ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH',
     SSL_honor_cipher_order => 1,
     SSL_key_file           => $args->{tls_key} || $KEY,
     SSL_startHandshake     => 0,
-    SSL_verify_mode        => 0x00
+    SSL_verify_mode => defined $args->{tls_verify} ? $args->{tls_verify} : $args->{tls_ca} ? 0x03 : 0x00
   };
-  return unless $args->{tls_ca};
-  $options->{SSL_ca_file} = -T $args->{tls_ca} ? $args->{tls_ca} : undef;
-  $options->{SSL_verify_mode}
-    = defined $args->{tls_verify} ? $args->{tls_verify} : 0x03;
 }
 
 sub start {
@@ -283,6 +281,12 @@ Path to TLS certificate authority file.
   tls_cert => '/etc/tls/server.crt'
 
 Path to the TLS cert file, defaults to a built-in test certificate.
+
+=item tls_ciphers
+
+  tls_ciphers => 'AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH'
+
+Cipher specification string.
 
 =item tls_key
 

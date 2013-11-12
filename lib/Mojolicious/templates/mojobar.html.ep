@@ -25,19 +25,26 @@
       float: right;
       height: 60px;
       margin-right: 5em;
-      margin-top: 1em;
+      margin-top: 0.8em;
     }
     #mojobar-links a {
       color: #ccc;
       font: 1em 'Helvetica Neue', Helvetica, sans-serif;
       font-weight: 300;
       margin-left: 0.5em;
-      padding-bottom: 1em;
-      padding-top: 1em;
       text-decoration: none;
       transition: all 200ms ease-in-out;
     }
     #mojobar-links a:hover { color: #fff }
+    #mojobar-links input {
+      border: 0;
+      border-radius: 10px;
+      display: inline;
+      margin-left: 1em;
+      padding: 3px;
+    }
+    #mojobar-links input:focus { outline: 0 }
+    #mojobar-links form { display: inline }
   % end
   <div id="mojobar-logo">
     %= link_to 'http://mojolicio.us' => begin
@@ -52,6 +59,11 @@
     %= link_to MailingList => 'http://groups.google.com/group/mojolicious'
     %= link_to Blog => 'http://blog.kraih.com'
     %= link_to Twitter => 'http://twitter.com/kraih'
+    %= form_for 'http://google.com/cse' => (target => '_blank') => begin
+      %= hidden_field cx => '014527573091551588235:pwfplkjpgbi'
+      %= hidden_field ie => 'UTF-8'
+      %= search_field 'q', placeholder => 'Search'
+    %= end
   </div>
 </div>
 %= javascript begin
@@ -76,6 +88,7 @@
     });
   });
   $(document).ready(function() {
+    $('a[href^="#"]').addClass('mojoscroll');
     $(".mojoscroll").click(function(e) {
       e.preventDefault();
       e.stopPropagation();

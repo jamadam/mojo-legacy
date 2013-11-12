@@ -6,11 +6,11 @@ has 'tree';
 my $ESCAPE_RE = qr/\\[^0-9a-fA-F]|\\[0-9a-fA-F]{1,6}/;
 my $ATTR_RE   = qr/
   \[
-  ((?:$ESCAPE_RE|[\w\-])+)        # Key
+  ((?:$ESCAPE_RE|[\w\-])+)           # Key
   (?:
-    (\W)?                         # Operator
+    (\W)?                            # Operator
     =
-    (?:"((?:\\"|[^"])*)"|(\S+))   # Value
+    (?:"((?:\\"|[^"])*)"|([^\]]+))   # Value
   )?
   \]
 /x;
@@ -210,7 +210,7 @@ sub _parent {
   my ($self, $selectors, $current, $tree) = @_;
   return undef unless my $parent = $current->[3];
   return undef if $parent->[0] eq 'root';
-  return $self->_combinator($selectors, $parent, $tree) ? 1 : undef;
+  return $self->_combinator($selectors, $parent, $tree);
 }
 
 sub _pc {
@@ -592,7 +592,7 @@ Elements of type C<E>, C<F> and C<G>.
 
 An C<E> element whose attributes match all following attribute selectors.
 
-  my $links = $css->select('a[foo^="b"][foo$="ar"]');
+  my $links = $css->select('a[foo^=b][foo$=ar]');
 
 =head1 ATTRIBUTES
 
@@ -613,15 +613,15 @@ following new ones.
 
 =head2 match
 
-  my $success = $css->match('head > title');
+  my $bool = $css->match('head > title');
 
-Match CSS selector against first node in C<tree>.
+Match CSS selector against first node in L</"tree">.
 
 =head2 select
 
   my $results = $css->select('head > title');
 
-Run CSS selector against C<tree>.
+Run CSS selector against L</"tree">.
 
 =head1 SEE ALSO
 

@@ -194,6 +194,26 @@ is $res->message,     'Internal Server Error', 'right message';
 is $res->version,     '1.0', 'right version';
 is $res->headers->content_type,   'text/plain', 'right "Content-Type" value';
 is $res->headers->content_length, 27,           'right "Content-Length" value';
+is $res->body, "Hello World!\n1234\nlalalala\n", 'right content';
+
+# Parse full HTTP 1.0 response (no limit)
+{
+  local $ENV{MOJO_MAX_MESSAGE_SIZE} = 0;
+  $res = Mojo::Message::Response->new;
+  is $res->max_message_size, 0, 'right size';
+  $res->parse("HTTP/1.0 500 Internal Server Error\x0d\x0a");
+  $res->parse("Content-Type: text/plain\x0d\x0a");
+  $res->parse("Content-Length: 27\x0d\x0a\x0d\x0a");
+  $res->parse("Hello World!\n1234\nlalalala\n");
+  ok $res->is_finished, 'response is finished';
+  ok !$res->error, 'no error';
+  is $res->code,    500,                     'right status';
+  is $res->message, 'Internal Server Error', 'right message';
+  is $res->version, '1.0',                   'right version';
+  is $res->headers->content_type, 'text/plain', 'right "Content-Type" value';
+  is $res->headers->content_length, 27, 'right "Content-Length" value';
+  is $res->body, "Hello World!\n1234\nlalalala\n", 'right content';
+}
 
 # Parse full HTTP 1.0 response (missing Content-Length)
 $res = Mojo::Message::Response->new;
@@ -548,7 +568,7 @@ like $res->content->asset->slurp, qr/hallo welt/, 'right content';
 
 # Parse HTTP 1.1 gzip compressed response
 my $uncompressed = 'abc' x 1000;
-gzip \$uncompressed, \my $compressed;
+gzip(\$uncompressed, \my $compressed);
 $res = Mojo::Message::Response->new;
 $res->parse("HTTP/1.1 200 OK\x0d\x0a");
 $res->parse("Content-Type: text/plain\x0d\x0a");
@@ -575,7 +595,7 @@ is $res->body, $uncompressed, 'right content';
 # Parse HTTP 1.1 chunked gzip compressed response
 $uncompressed = 'abc' x 1000;
 $compressed   = undef;
-gzip \$uncompressed, \$compressed;
+gzip(\$uncompressed, \$compressed);
 $res = Mojo::Message::Response->new;
 $res->parse("HTTP/1.1 200 OK\x0d\x0a");
 $res->parse("Content-Type: text/plain\x0d\x0a");

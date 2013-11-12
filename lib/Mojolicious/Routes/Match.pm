@@ -72,7 +72,7 @@ sub _match {
   if (($endpoint && $empty) || $r->inline) {
     push @{$self->stack}, {%$captures};
     return $self->endpoint($r) if $endpoint && $empty;
-    delete $captures->{$_} for qw(app cb);
+    delete @$captures{qw(app cb)};
   }
 
   # Match children
@@ -145,7 +145,7 @@ L<Mojolicious::Routes::Match> implements the following attributes.
   my $current = $match->current;
   $match      = $match->current(2);
 
-Current position on the C<stack>, defaults to C<0>.
+Current position on the L</"stack">, defaults to C<0>.
 
 =head2 endpoint
 
@@ -177,7 +177,8 @@ implements the following new ones.
 
   $match->match(Mojolicious::Controller->new, {method => 'GET', path => '/'});
 
-Match controller and options against C<root> to find appropriate C<endpoint>.
+Match controller and options against L</"root"> to find appropriate
+L</"endpoint">.
 
 =head2 path_for
 

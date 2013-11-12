@@ -121,6 +121,7 @@ ok $t->app->routes->is_hidden('stash'),            'is hidden';
 ok $t->app->routes->is_hidden('tap'),              'is hidden';
 ok $t->app->routes->is_hidden('tx'),               'is hidden';
 ok $t->app->routes->is_hidden('url_for'),          'is hidden';
+ok $t->app->routes->is_hidden('validation'),       'is hidden';
 ok $t->app->routes->is_hidden('write'),            'is hidden';
 ok $t->app->routes->is_hidden('write_chunk'),      'is hidden';
 
@@ -170,7 +171,7 @@ like $log,
 $t->app->log->unsubscribe(message => $cb);
 
 # Foo::fun
-my $url = $t->ua->app_url;
+my $url = $t->ua->server->url;
 $url->path('/fun/time');
 $t->get_ok($url => {'X-Test' => 'Hi there!'})->status_isnt(404)
   ->status_is(200)->header_isnt('X-Bender' => 'Bite my shiny metal ass!')
@@ -251,7 +252,7 @@ $t->get_ok('/fun/time' => {'X-Test' => 'Hi there!'})->status_is(200)
   ->content_is('Have fun!');
 
 # Foo::fun
-$url = $t->ua->app_url;
+$url = $t->ua->server->url;
 $url->path('/fun/time');
 $t->get_ok($url => {'X-Test' => 'Hi there!'})->status_is(200)
   ->header_is('X-Bender' => undef)->header_is(Server => 'Mojolicious (Perl)')

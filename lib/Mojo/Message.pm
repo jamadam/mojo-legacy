@@ -14,7 +14,7 @@ use Mojo::Util 'decode';
 has content => sub { Mojo::Content::Single->new };
 has default_charset  => 'UTF-8';
 has max_line_size    => sub { $ENV{MOJO_MAX_LINE_SIZE} || 10240 };
-has max_message_size => sub { $ENV{MOJO_MAX_MESSAGE_SIZE} || 10485760 };
+has max_message_size => sub { defined $ENV{MOJO_MAX_MESSAGE_SIZE} ? $ENV{MOJO_MAX_MESSAGE_SIZE} : 10485760 };
 has version          => '1.1';
 
 sub body {
@@ -28,7 +28,7 @@ sub body {
   # Get
   return $content->asset->slurp unless @_;
 
-  # Set raw content
+  # Set
   $content->asset(Mojo::Asset::Memory->new->add_chunk(@_));
 
   return $self;
@@ -153,8 +153,9 @@ sub parse {
   my ($self, $chunk) = @_;
 
   # Check message size
+  my $max = $self->max_message_size;
   return $self->_limit('Maximum message size exceeded', 413)
-    if ($self->{raw_size} += length($chunk = defined $chunk ? $chunk : '')) > $self->max_message_size;
+    if $max && ($self->{raw_size} += length($chunk = defined $chunk ? $chunk : '')) > $max;
 
   $self->{buffer} .= $chunk;
 
@@ -276,9 +277,9 @@ sub _parse_formdata {
     }
 
     next unless my $disposition = $part->headers->content_disposition;
-    my ($filename) = $disposition =~ /[; ]filename\s*=\s*"?([^"]*)"?/;
+    my ($filename) = $disposition =~ /[; ]filename\s*=\s*"?((?:\\"|[^"])*)"?/i;
     next if ($upload && !defined $filename) || (!$upload && defined $filename);
-    my ($name) = $disposition =~ /[; ]name\s*=\s*"?([^";]+)"?/;
+    my ($name) = $disposition =~ /[; ]name\s*=\s*"?((?:\\"|[^";])+)"?/i;
     if ($charset) {
       $name     = do {my $tmp = decode($charset, $name); defined $tmp ? $tmp : $name} if $name;
       $filename = do {my $tmp = decode($charset, $filename); defined $tmp ? $tmp : $filename} if $filename;
@@ -392,10 +393,11 @@ MOJO_MAX_LINE_SIZE environment variable or C<10240>.
   $msg     = $msg->max_message_size(1024);
 
 Maximum message size in bytes, defaults to the value of the
-MOJO_MAX_MESSAGE_SIZE environment variable or C<10485760>. Note that
-increasing this value can also drastically increase memory usage, should you
-for example attempt to parse an excessively large message body with the
-C<body_params>, C<dom> or C<json> methods.
+MOJO_MAX_MESSAGE_SIZE environment variable or C<10485760>. Setting the value
+to C<0> will allow messages of indefinite size. Note that increasing this
+value can also drastically increase memory usage, should you for example
+attempt to parse an excessively large message body with the L</"body_params">,
+L</"dom"> or L</"json"> methods.
 
 =head2 version
 
@@ -414,8 +416,8 @@ implements the following new ones.
   my $bytes = $msg->body;
   $msg      = $msg->body('Hello!');
 
-Slurp or replace C<content>, L<Mojo::Content::MultiPart> will be automatically
-downgraded to L<Mojo::Content::Single>.
+Slurp or replace L</"content">, L<Mojo::Content::MultiPart> will be
+automatically downgraded to L<Mojo::Content::Single>.
 
 =head2 body_params
 
@@ -503,7 +505,7 @@ Error and code.
 
 =head2 extract_start_line
 
-  my $success = $msg->extract_start_line(\$str);
+  my $bool = $msg->extract_start_line(\$str);
 
 Extract start line from string. Meant to be overloaded in a subclass.
 
@@ -552,15 +554,15 @@ Message headers, usually a L<Mojo::Headers> object.
 
 =head2 is_finished
 
-  my $success = $msg->is_finished;
+  my $bool = $msg->is_finished;
 
 Check if message parser/generator is finished.
 
 =head2 is_limit_exceeded
 
-  my $success = $msg->is_limit_exceeded;
+  my $bool = $msg->is_limit_exceeded;
 
-Check if message has exceeded C<max_line_size> or C<max_message_size>.
+Check if message has exceeded L</"max_line_size"> or L</"max_message_size">.
 
 =head2 json
 
@@ -606,7 +608,7 @@ Size of the start line in bytes.
 
   my $str = $msg->text;
 
-Retrieve C<body> and try to decode it if a charset could be extracted with
+Retrieve L</"body"> and try to decode it if a charset could be extracted with
 L<Mojo::Content/"charset">.
 
 =head2 to_string

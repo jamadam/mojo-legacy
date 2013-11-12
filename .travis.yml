@@ -6,14 +6,9 @@ perl:
   - "5.12"
   - "5.10"
 env:
-  - "HARNESS_OPTIONS=j9 TEST_POD=1"
+  - "HARNESS_OPTIONS=j9 TEST_POD=1 TEST_EV=1"
 install:
-  - "cpanm -n Test::Pod Test::Pod::Coverage"
+  - "cpanm -n Test::Pod Test::Pod::Coverage EV"
   - "cpanm -n --installdeps ."
 notifications:
   email: false
-  irc:
-    on_success: change
-    on_failure: always
-    channels:
-      - "irc.perl.org#mojo"

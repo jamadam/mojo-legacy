@@ -4,7 +4,8 @@ use Mojo::Base 'Mojolicious::Plugin';
 use Mojo::Asset::File;
 use Mojo::ByteStream 'b';
 use Mojo::DOM;
-use Mojo::Util qw'slurp url_escape';
+use Mojo::URL;
+use Mojo::Util qw(slurp url_escape);
 BEGIN {eval {require Pod::Simple::HTML; import Pod::Simple::HTML}}
 BEGIN {eval {require Pod::Simple::Search; import Pod::Simple::Search}}
 
@@ -27,7 +28,7 @@ sub register {
   $app->helper(pod_to_html => sub { shift; b(_pod_to_html(@_)) });
 
   # Perldoc browser
-  return if $conf->{no_perldoc};
+  return undef if $conf->{no_perldoc};
   my $defaults = {module => 'Mojolicious/Guides', format => 'html'};
   return $app->routes->any(
     '/perldoc/:module' => $defaults => [module => qr/[^.]+/] => \&_perldoc);
@@ -54,7 +55,7 @@ sub _html {
   }
 
   # Rewrite headers
-  my $url = $self->req->url->clone;
+  my $toc = Mojo::URL->new->fragment('toc');
   my (%anchors, @parts);
   for my $e ($dom->find('h1, h2, h3')->each) {
 
@@ -68,10 +69,8 @@ sub _html {
 
     # Rewrite
     push @parts, [] if $e->type eq 'h1' || !@parts;
-    push @{$parts[-1]}, $text, $url->to_abs->fragment($anchor);
-    my $toc = $url->to_abs->fragment('toc');
-    $e->replace_content(
-      $self->link_to($text => $toc, class => 'mojoscroll', id => $anchor));
+    push @{$parts[-1]}, $text, Mojo::URL->new->fragment($anchor);
+    $e->replace_content($self->link_to($text => $toc, id => $anchor));
   }
 
   # Try to find a title
