@@ -493,21 +493,23 @@ is $dom->at('number')->ancestors('meta')->first->{xmlns}, 'uri:meta-ns',
 ok !!$dom->at('nons')->match('book > nons'),           'element did match';
 ok !$dom->at('title')->match('book > nons > section'), 'element did not match';
 
-# Namespace with dot
+# Dots
 $dom = Mojo::DOM->new(<<EOF);
 <?xml version="1.0"?>
 <foo xmlns:foo.bar="uri:first">
   <bar xmlns:fooxbar="uri:second">
     <foo.bar:baz>First</fooxbar:baz>
-    <fooxbar:yada>Second</foo.bar:yada>
+    <fooxbar:ya.da>Second</foo.bar:ya.da>
   </bar>
 </foo>
 EOF
-is $dom->at('foo bar baz')->text,  'First',      'right text';
-is $dom->at('baz')->namespace,     'uri:first',  'right namespace';
-is $dom->at('foo bar yada')->text, 'Second',     'right text';
-is $dom->at('yada')->namespace,    'uri:second', 'right namespace';
-is $dom->at('foo')->namespace,     '',           'no namespace';
+is $dom->at('foo bar baz')->text,    'First',      'right text';
+is $dom->at('baz')->namespace,       'uri:first',  'right namespace';
+is $dom->at('foo bar ya\.da')->text, 'Second',     'right text';
+is $dom->at('ya\.da')->namespace,    'uri:second', 'right namespace';
+is $dom->at('foo')->namespace,       '',           'no namespace';
+is $dom->at('[xml\.s]'), undef, 'no result';
+is $dom->at('b\.z'),     undef, 'no result';
 
 # Yadis
 $dom = Mojo::DOM->new->parse(<<'EOF');
@@ -1746,16 +1748,18 @@ is $element->type, 'Element', 'right child';
 is $element->parent->type, 'XMLTest', 'right parent';
 ok $element->root->xml, 'XML mode active';
 $dom->replace('<XMLTest2 />');
-ok !$dom->xml, 'XML mode not detected';
-is $dom->children->[0], '<xmltest2></xmltest2>', 'right result';
-$dom->replace(<<EOF);
-<?xml version='1.0' encoding='UTF-8'?>
-<XMLTest3 />
-EOF
-ok $dom->xml, 'XML mode detected';
-is $dom->children->[0], '<XMLTest3 />', 'right result';
+ok $dom->xml, 'XML mode active';
+is $dom, '<XMLTest2 />', 'right result';
+
+# Ensure HTML semantics
+ok !Mojo::DOM->new->xml(undef)->parse('<?xml version="1.0"?>')->xml,
+  'XML mode not detected';
+$dom
+  = Mojo::DOM->new->xml(0)->parse('<?xml version="1.0"?><br><div>Test</div>');
+is $dom->at('div:root')->text, 'Test', 'right text';
 
 # Ensure XML semantics
+ok !!Mojo::DOM->new->xml(1)->parse('<foo />')->xml, 'XML mode active';
 $dom = Mojo::DOM->new->parse(<<'EOF');
 <?xml version='1.0' encoding='UTF-8'?>
 <table>
@@ -2127,26 +2131,27 @@ EOF
 is $dom->find('a[accesskey]')->[0]->text, 'Zero',    'right text';
 is $dom->find('a[accesskey]')->[1]->text, 'O&gTn>e', 'right text';
 is $dom->find('a[accesskey]')->[2], undef, 'no result';
-is $dom->find('a[accesskey="0"]')->[0]->text, 'Zero', 'right text';
-is $dom->find('a[accesskey="0"]')->[1], undef, 'no result';
-is $dom->find('a[accesskey^="0"]')->[0]->text, 'Zero', 'right text';
-is $dom->find('a[accesskey^="0"]')->[1], undef, 'no result';
-is $dom->find('a[accesskey$="0"]')->[0]->text, 'Zero', 'right text';
-is $dom->find('a[accesskey$="0]')->[1], undef, 'no result';
-is $dom->find('a[accesskey~="0"]')->[0]->text, 'Zero', 'right text';
-is $dom->find('a[accesskey~="0]')->[1], undef, 'no result';
-is $dom->find('a[accesskey*="0"]')->[0]->text, 'Zero', 'right text';
-is $dom->find('a[accesskey*="0]')->[1], undef, 'no result';
-is $dom->find('a[accesskey="1"]')->[0]->text, 'O&gTn>e', 'right text';
-is $dom->find('a[accesskey="1"]')->[1], undef, 'no result';
-is $dom->find('a[accesskey^="1"]')->[0]->text, 'O&gTn>e', 'right text';
-is $dom->find('a[accesskey^="1"]')->[1], undef, 'no result';
-is $dom->find('a[accesskey$="1"]')->[0]->text, 'O&gTn>e', 'right text';
-is $dom->find('a[accesskey$="1]')->[1], undef, 'no result';
-is $dom->find('a[accesskey~="1"]')->[0]->text, 'O&gTn>e', 'right text';
-is $dom->find('a[accesskey~="1]')->[1], undef, 'no result';
-is $dom->find('a[accesskey*="1"]')->[0]->text, 'O&gTn>e', 'right text';
-is $dom->find('a[accesskey*="1]')->[1], undef, 'no result';
+is $dom->find('a[accesskey=0]')->[0]->text, 'Zero', 'right text';
+is $dom->find('a[accesskey=0]')->[1], undef, 'no result';
+is $dom->find('a[accesskey^=0]')->[0]->text, 'Zero', 'right text';
+is $dom->find('a[accesskey^=0]')->[1], undef, 'no result';
+is $dom->find('a[accesskey$=0]')->[0]->text, 'Zero', 'right text';
+is $dom->find('a[accesskey$=0]')->[1], undef, 'no result';
+is $dom->find('a[accesskey~=0]')->[0]->text, 'Zero', 'right text';
+is $dom->find('a[accesskey~=0]')->[1], undef, 'no result';
+is $dom->find('a[accesskey*=0]')->[0]->text, 'Zero', 'right text';
+is $dom->find('a[accesskey*=0]')->[1], undef, 'no result';
+is $dom->find('a[accesskey=1]')->[0]->text, 'O&gTn>e', 'right text';
+is $dom->find('a[accesskey=1]')->[1], undef, 'no result';
+is $dom->find('a[accesskey^=1]')->[0]->text, 'O&gTn>e', 'right text';
+is $dom->find('a[accesskey^=1]')->[1], undef, 'no result';
+is $dom->find('a[accesskey$=1]')->[0]->text, 'O&gTn>e', 'right text';
+is $dom->find('a[accesskey$=1]')->[1], undef, 'no result';
+is $dom->find('a[accesskey~=1]')->[0]->text, 'O&gTn>e', 'right text';
+is $dom->find('a[accesskey~=1]')->[1], undef, 'no result';
+is $dom->find('a[accesskey*=1]')->[0]->text, 'O&gTn>e', 'right text';
+is $dom->find('a[accesskey*=1]')->[1], undef, 'no result';
+is $dom->at('a[accesskey*="."]'), undef, 'no result';
 
 # Empty attribute value
 $dom = Mojo::DOM->new->parse(<<EOF);
@@ -2206,6 +2211,10 @@ $dom = Mojo::DOM->new('0');
 is "$dom", '0', 'right result';
 $dom->append_content('☃');
 is "$dom", '0☃', 'right result';
+is $dom->parse('<!DOCTYPE 0>'),  '<!DOCTYPE 0>',  'successful roundtrip';
+is $dom->parse('<!--0-->'),      '<!--0-->',      'successful roundtrip';
+is $dom->parse('<![CDATA[0]]>'), '<![CDATA[0]]>', 'successful roundtrip';
+is $dom->parse('<?0?>'),         '<?0?>',         'successful roundtrip';
 
 # Comments
 $dom = Mojo::DOM->new(<<EOF);

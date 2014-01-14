@@ -13,7 +13,7 @@ our @EXPORT_OK = ('c');
 sub AUTOLOAD {
   my $self = shift;
 
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
+  my ($package, $method) = split /::(\w+)$/, our $AUTOLOAD;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
@@ -58,7 +58,7 @@ sub grep {
   return $self->new(grep { $_ =~ $cb } @$self);
 }
 
-sub join { Mojo::ByteStream->new(join $_[1], map({"$_"} @{$_[0]})) }
+sub join { Mojo::ByteStream->new(join defined $_[1] ? $_[1] : '', map({"$_"} @{$_[0]})) }
 
 sub map {
   my ($self, $cb) = @_;
@@ -98,7 +98,7 @@ sub _flatten {
   map { _ref($_) ? _flatten(@$_) : $_ } @_;
 }
 
-sub _ref { ref $_[0] && (ref $_[0] eq 'ARRAY' || $_[0]->isa(__PACKAGE__)) }
+sub _ref { ref $_[0] eq 'ARRAY' || (blessed $_[0] && $_[0]->isa(__PACKAGE__)) }
 
 1;
 
@@ -110,14 +110,21 @@ Mojo::Collection - Collection
 
 =head1 SYNOPSIS
 
-  # Manipulate collections
   use Mojo::Collection;
+
+  # Manipulate collection
   my $collection = Mojo::Collection->new(qw(just works));
   unshift @$collection, 'it';
-  $collection->map(sub { ucfirst })->each(sub {
+
+  # Chain methods
+  $collection->map(sub { ucfirst })->shuffle->each(sub {
     my ($word, $count) = @_;
     say "$count: $word";
   });
+
+  # Stringify collection
+  say $collection->join("\n");
+  say "$collection";
 
   # Use the alternative constructor
   use Mojo::Collection 'c';
@@ -202,6 +209,7 @@ argument passed to the callback and is also available as C<$_>.
 
 =head2 join
 
+  my $stream = $collection->join;
   my $stream = $collection->join("\n");
 
 Turn collection into L<Mojo::ByteStream>.
@@ -282,7 +290,7 @@ elements in the collection directly and create a new collection from the
 results, similar to L</"pluck">.
 
   push @$collection, Mojo::DOM->new("<div><h1>$_</h1></div>") for 1 .. 9;
-  say $collection->at('h1')->type('h2')->prepend_content('Test ')->root;
+  say $collection->find('h1')->type('h2')->prepend_content('Test ')->root;
 
 =head1 ELEMENTS
 

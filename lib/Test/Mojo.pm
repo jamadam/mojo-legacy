@@ -16,7 +16,7 @@ use Mojo::UserAgent;
 use Mojo::Util qw(decode encode);
 use Test::More ();
 
-has [qw(message tx)];
+has [qw(message success tx)];
 has ua => sub { Mojo::UserAgent->new->ioloop(Mojo::IOLoop->singleton) };
 
 # Silent or loud tests
@@ -215,7 +215,7 @@ sub options_ok { shift->_request_ok(options => @_) }
 
 sub or {
   my ($self, $cb) = @_;
-  $self->$cb unless $self->{latest};
+  $self->$cb unless $self->success;
   return $self;
 }
 
@@ -298,7 +298,7 @@ sub websocket_ok {
   Mojo::IOLoop->start;
 
   my $desc = encode 'UTF-8', "WebSocket $url";
-  return $self->_test('ok', $self->tx->res->code eq 101, $desc);
+  return $self->_test('ok', $self->tx->is_websocket, $desc);
 }
 
 sub _json {
@@ -339,8 +339,7 @@ sub _request_ok {
 sub _test {
   my ($self, $name, @args) = @_;
   local $Test::Builder::Level = $Test::Builder::Level + 2;
-  $self->{latest} = Test::More->can($name)->(@args);
-  return $self;
+  return $self->success(!!Test::More->can($name)->(@args));
 }
 
 sub _text {
@@ -409,6 +408,25 @@ Current WebSocket message.
     ->json_message_has('/foo/bar')
     ->json_message_hasnt('/bar')
     ->json_message_is('/foo/baz' => {yada => [1, 2, 3]});
+
+=head2 success
+
+  my $bool = $t->success;
+  $t       = $t->success($bool);
+
+True if the last test was successful.
+
+  # Build custom tests
+  my $location_is = sub {
+    my ($t, $value, $desc) = @_;
+    $desc ||= "Location: $value";
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    return $t->success(is($t->tx->res->headers->location, $value, $desc));
+  };
+  $t->get_ok('/')
+    ->status_is(302)
+    ->$location_is('http://mojolicio.us')
+    ->or(sub { diag 'Must have been Joel!' });
 
 =head2 tx
 
@@ -591,6 +609,9 @@ Wait for WebSocket connection to be closed gracefully and check status.
 Perform a GET request and check for transport errors, takes the same
 arguments as L<Mojo::UserAgent/"get">, except for the callback.
 
+  # Run tests against remote host
+  $t->get_ok('http://mojolicio.us/perldoc')->status_is(200);
+
 =head2 head_ok
 
   $t = $t->head_ok('/foo');
@@ -744,7 +765,7 @@ arguments as L<Mojo::UserAgent/"options">, except for the callback.
 
   $t = $t->or(sub {...});
 
-Invoke callback if previous test failed.
+Invoke callback if the value of L</"success"> is false.
 
   # Diagnostics
   $t->get_ok('/bad')->or(sub { diag 'Must have been Glen!' })
@@ -775,7 +796,7 @@ arguments as L<Mojo::UserAgent/"post">, except for the callback.
     ->status_is(200);
 
   # Test JSON API
-  $t->post_json_ok('/hello.json' => json => {hello => 'world'})
+  $t->post_ok('/hello.json' => json => {hello => 'world'})
     ->status_is(200)
     ->json_is({bye => 'world'});
 

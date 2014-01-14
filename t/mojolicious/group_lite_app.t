@@ -11,6 +11,8 @@ use Mojo::UserAgent::CookieJar;
 use Mojolicious::Lite;
 use Test::Mojo;
 
+app->secrets(['test1']);
+
 get '/expiration' => sub {
   my $self = shift;
   if ($self->param('redirect')) {
@@ -199,7 +201,8 @@ like $log, qr!GET "/suspended"\.!,      'right message';
 like $log, qr/Routing to a callback\./, 'right message';
 like $log, qr/Nothing has been rendered, expecting delayed response\./,
   'right message';
-like $log, qr/Rendering inline template\./, 'right message';
+like $log, qr/Rendering inline template "f75d6f5993c626fa8049366389f77928"\./,
+  'right message';
 $t->app->log->unsubscribe(message => $cb);
 
 # Suspended bridge (stopped)
@@ -262,7 +265,7 @@ $t->app->log->unsubscribe(message => $cb);
 # Broken session cookie
 $t->reset_session;
 my $session = b("☃☃☃☃☃")->encode->b64_encode('');
-my $hmac    = $session->clone->hmac_sha1_sum($t->app->secret);
+my $hmac    = $session->clone->hmac_sha1_sum($t->app->secrets->[0]);
 $t->get_ok('/bridge2stash' => {Cookie => "mojolicious=$session--$hmac"})
   ->status_is(200)->content_is("stash too!!!!!!!!\n");
 
@@ -291,14 +294,16 @@ $t->get_ok('/bridge2stash')->status_is(200)
   ->content_is(
   "stash too!cookie!!signed_cookie!!bad_cookie--12345678!session!flash!\n");
 
-# With cookies and session but no flash
+# With cookies and session but no flash (rotating secrets)
+$t->app->secrets(['test2', 'test1']);
 $t->get_ok('/bridge2stash' => {'X-Flash2' => 1})->status_is(200)
   ->content_is(
   "stash too!cookie!!signed_cookie!!bad_cookie--12345678!session!!\n");
 ok $t->tx->res->cookie('mojolicious')->expires->epoch < time,
   'session cookie expires';
 
-# With cookies and session cleared
+# With cookies and session cleared (rotating secrets)
+$t->app->secrets(['test3', 'test2']);
 $t->get_ok('/bridge2stash')->status_is(200)
   ->content_is("stash too!cookie!!signed_cookie!!bad_cookie--12345678!!!\n");
 

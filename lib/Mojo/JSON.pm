@@ -96,10 +96,7 @@ sub decode {
   return $res;
 }
 
-sub encode {
-  my ($self, $ref) = @_;
-  return Mojo::Util::encode 'UTF-8', _encode_value($ref);
-}
+sub encode { Mojo::Util::encode 'UTF-8', _encode_value($_[1]) }
 
 sub false {$FALSE}
 
@@ -329,8 +326,9 @@ Mojo::JSON - Minimalistic JSON
 
 =head1 SYNOPSIS
 
-  # Encode and decode JSON
   use Mojo::JSON;
+
+  # Encode and decode JSON
   my $json  = Mojo::JSON->new;
   my $bytes = $json->encode({foo => [1, 2], bar => 'hello!', baz => \1});
   my $hash  = $json->decode($bytes);
@@ -347,9 +345,8 @@ Mojo::JSON - Minimalistic JSON
 
 =head1 DESCRIPTION
 
-L<Mojo::JSON> is a minimalistic and relaxed implementation of RFC 4627. While
-it is possibly the fastest pure-Perl JSON parser available, you should not use
-it for validation.
+L<Mojo::JSON> is a minimalistic and possibly the fastest pure-Perl
+implementation of L<RFC 4627|http://tools.ietf.org/search/rfc4627>.
 
 It supports normal Perl data types like C<Scalar>, C<Array> reference, C<Hash>
 reference and will try to call the C<TO_JSON> method on blessed references, or

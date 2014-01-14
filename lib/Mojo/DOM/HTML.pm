@@ -23,7 +23,7 @@ my $ATTR_RE = qr/
 /x;
 my $END_RE   = qr!^\s*/\s*(.+)\s*!;
 my $TOKEN_RE = qr/
-  ([^<]*)                                           # Text
+  ([^<]+)?                                          # Text
   (?:
     <\?(.*?)\?>                                     # Processing Instruction
   |
@@ -50,10 +50,21 @@ my $TOKEN_RE = qr/
 /xis;
 
 # HTML elements that break paragraphs
-my %PARAGRAPH = map { $_ => 1 } (
+my @PARAGRAPH = (
   qw(address article aside blockquote dir div dl fieldset footer form h1 h2),
   qw(h3 h4 h5 h6 header hr main menu nav ol p pre section table ul)
 );
+
+# HTML elements with optional end tags
+my %END = (
+  body => ['head'],
+  dd   => [qw(dt dd)],
+  dt   => [qw(dt dd)],
+  rp   => [qw(rt rp)],
+  rt   => [qw(rt rp)]
+);
+$END{$_} = [$_]  for qw(optgroup option);
+$END{$_} = ['p'] for @PARAGRAPH;
 
 # HTML table elements with optional end tags
 my %TABLE = map { $_ => 1 } qw(colgroup tbody td tfoot th thead tr);
@@ -85,79 +96,78 @@ sub parse {
 
     # Text (and runaway "<")
     $text .= '<' if defined $runaway;
-    push @$current, ['text', html_unescape $text] if length $text;
+    push @$current, ['text', html_unescape $text] if defined $text;
 
-    # DOCTYPE
-    if ($doctype) { push @$current, ['doctype', $doctype] }
+    # Tag
+    if (defined $tag) {
 
-    # Comment
-    elsif ($comment) { push @$current, ['comment', $comment] }
+      # End
+      my $xml = $self->xml;
+      if ($tag =~ $END_RE) { _end($xml ? $1 : lc($1), $xml, \$current) }
 
-    # CDATA
-    elsif ($cdata) { push @$current, ['cdata', $cdata] }
+      # Start
+      elsif ($tag =~ m!([^\s/]+)([\s\S]*)!) {
+        my ($start, $attr) = ($xml ? $1 : lc($1), $2);
 
-    # Processing instruction (try to detect XML)
-    elsif ($pi) {
-      $self->xml(1) if !defined $self->xml && $pi =~ /xml/i;
-      push @$current, ['pi', $pi];
+        # Attributes
+        my %attrs;
+        while ($attr =~ /$ATTR_RE/g) {
+          my ($key, $value) = ($xml ? $1 : lc($1), defined $2 ? $2 : defined $3 ? $3 : $4);
+
+          # Empty tag
+          next if $key eq '/';
+
+          $attrs{$key} = defined $value ? html_unescape($value) : $value;
+        }
+
+        _start($start, \%attrs, $xml, \$current);
+
+        # Element without end tag
+        _end($start, $xml, \$current)
+          if (!$xml && $VOID{$start}) || $attr =~ m!/\s*$!;
+
+        # Relaxed "script" or "style"
+        next unless $start eq 'script' || $start eq 'style';
+        next unless $html =~ m!\G(.*?)<\s*/\s*$start\s*>!gcsi;
+        push @$current, ['raw', $1];
+        _end($start, $xml, \$current);
+      }
     }
 
-    # End
-    next unless $tag;
-    my $cs = $self->xml;
-    if ($tag =~ $END_RE) { $self->_end($cs ? $1 : lc($1), \$current) }
+    # DOCTYPE
+    elsif (defined $doctype) { push @$current, ['doctype', $doctype] }
 
-    # Start
-    elsif ($tag =~ m!([^\s/]+)([\s\S]*)!) {
-      my ($start, $attr) = ($cs ? $1 : lc($1), $2);
+    # Comment
+    elsif (defined $comment) { push @$current, ['comment', $comment] }
 
-      # Attributes
-      my %attrs;
-      while ($attr =~ /$ATTR_RE/g) {
-        my $key = $cs ? $1 : lc($1);
-        my $value = defined $2 ? $2 : defined $3 ? $3 : $4;
+    # CDATA
+    elsif (defined $cdata) { push @$current, ['cdata', $cdata] }
 
-        # Empty tag
-        next if $key eq '/';
-
-        $attrs{$key} = defined $value ? html_unescape($value) : $value;
-      }
-
-      # Tag
-      $self->_start($start, \%attrs, \$current);
-
-      # Element without end tag
-      $self->_end($start, \$current)
-        if (!$self->xml && $VOID{$start}) || $attr =~ m!/\s*$!;
-
-      # Relaxed "script" or "style"
-      if ($start eq 'script' || $start eq 'style') {
-        if ($html =~ m!\G(.*?)<\s*/\s*$start\s*>!gcsi) {
-          push @$current, ['raw', $1];
-          $self->_end($start, \$current);
-        }
-      }
+    # Processing instruction (try to detect XML)
+    elsif (defined $pi) {
+      $self->xml(1) if !exists $self->{xml} && $pi =~ /xml/i;
+      push @$current, ['pi', $pi];
     }
   }
 
   return $self->tree($tree);
 }
 
-sub render { $_[0]->_render($_[0]->tree) }
+sub render { _render($_[0]->tree, $_[0]->xml) }
 
 sub _close {
-  my ($self, $current, $allowed, $scope) = @_;
+  my ($xml, $current, $allowed, $scope) = @_;
 
   # Close allowed parent elements in scope
   my $parent = $$current;
   while ($parent->[0] ne 'root' && $parent->[1] ne $scope) {
-    $self->_end($parent->[1], $current) if $allowed->{$parent->[1]};
+    _end($parent->[1], $xml, $current) if $allowed->{$parent->[1]};
     $parent = $parent->[3];
   }
 }
 
 sub _end {
-  my ($self, $end, $current) = @_;
+  my ($end, $xml, $current) = @_;
 
   # Search stack for start tag
   my $found = 0;
@@ -168,7 +178,7 @@ sub _end {
     ++$found and last if $next->[1] eq $end;
 
     # Phrasing content can only cross phrasing content
-    return if !$self->xml && $PHRASING{$end} && !$PHRASING{$next->[1]};
+    return if !$xml && $PHRASING{$end} && !$PHRASING{$next->[1]};
 
     $next = $next->[3];
   }
@@ -185,39 +195,39 @@ sub _end {
     if ($end eq $$current->[1]) { return $$current = $$current->[3] }
 
     # Table
-    elsif ($end eq 'table') { $self->_close($current, \%TABLE, $end) }
+    elsif ($end eq 'table') { _close($xml, $current, \%TABLE, $end) }
 
     # Missing end tag
-    $self->_end($$current->[1], $current);
+    _end($$current->[1], $xml, $current);
   }
 }
 
 sub _render {
-  my ($self, $tree) = @_;
+  my ($tree, $xml) = @_;
 
   # Text (escaped)
-  my $e = $tree->[0];
-  return xml_escape $tree->[1] if $e eq 'text';
+  my $type = $tree->[0];
+  return xml_escape $tree->[1] if $type eq 'text';
 
   # Raw text
-  return $tree->[1] if $e eq 'raw';
+  return $tree->[1] if $type eq 'raw';
 
   # DOCTYPE
-  return '<!DOCTYPE' . $tree->[1] . '>' if $e eq 'doctype';
+  return '<!DOCTYPE' . $tree->[1] . '>' if $type eq 'doctype';
 
   # Comment
-  return '<!--' . $tree->[1] . '-->' if $e eq 'comment';
+  return '<!--' . $tree->[1] . '-->' if $type eq 'comment';
 
   # CDATA
-  return '<![CDATA[' . $tree->[1] . ']]>' if $e eq 'cdata';
+  return '<![CDATA[' . $tree->[1] . ']]>' if $type eq 'cdata';
 
   # Processing instruction
-  return '<?' . $tree->[1] . '?>' if $e eq 'pi';
+  return '<?' . $tree->[1] . '?>' if $type eq 'pi';
 
   # Start tag
   my $start   = 1;
   my $content = '';
-  if ($e eq 'tag') {
+  if ($type eq 'tag') {
     $start = 4;
 
     # Open tag
@@ -235,11 +245,10 @@ sub _render {
       # Key and value
       push @attrs, qq{$key="} . xml_escape($value) . '"';
     }
-    my $attrs = join ' ', @attrs;
-    $content .= " $attrs" if $attrs;
+    $content .= join ' ', '', @attrs if @attrs;
 
     # Element without end tag
-    return $self->xml || $VOID{$tag} ? "$content />" : "$content></$tag>"
+    return $xml || $VOID{$tag} ? "$content />" : "$content></$tag>"
       unless $tree->[4];
 
     # Close tag
@@ -247,56 +256,35 @@ sub _render {
   }
 
   # Render whole tree
-  $content .= $self->_render($tree->[$_]) for $start .. $#$tree;
+  $content .= _render($tree->[$_], $xml) for $start .. $#$tree;
 
   # End tag
-  $content .= '</' . $tree->[1] . '>' if $e eq 'tag';
+  $content .= '</' . $tree->[1] . '>' if $type eq 'tag';
 
   return $content;
 }
 
 sub _start {
-  my ($self, $start, $attrs, $current) = @_;
+  my ($start, $attrs, $xml, $current) = @_;
 
   # Autoclose optional HTML elements
-  if (!$self->xml && $$current->[0] ne 'root') {
+  if (!$xml && $$current->[0] ne 'root') {
+    if (my $end = $END{$start}) { _end($_, 0, $current) for @$end }
 
     # "li"
-    if ($start eq 'li') { $self->_close($current, {li => 1}, 'ul') }
-
-    # "p"
-    elsif ($PARAGRAPH{$start}) { $self->_end('p', $current) }
-
-    # "head"
-    elsif ($start eq 'body') { $self->_end('head', $current) }
-
-    # "optgroup"
-    elsif ($start eq 'optgroup') { $self->_end('optgroup', $current) }
-
-    # "option"
-    elsif ($start eq 'option') { $self->_end('option', $current) }
+    elsif ($start eq 'li') { _close(0, $current, {li => 1}, 'ul') }
 
     # "colgroup", "thead", "tbody" and "tfoot"
     elsif (grep { $_ eq $start } qw(colgroup thead tbody tfoot)) {
-      $self->_close($current, \%TABLE, 'table');
+      _close(0, $current, \%TABLE, 'table');
     }
 
     # "tr"
-    elsif ($start eq 'tr') { $self->_close($current, {tr => 1}, 'table') }
+    elsif ($start eq 'tr') { _close(0, $current, {tr => 1}, 'table') }
 
     # "th" and "td"
     elsif ($start eq 'th' || $start eq 'td') {
-      $self->_close($current, {$_ => 1}, 'table') for qw(th td);
-    }
-
-    # "dt" and "dd"
-    elsif ($start eq 'dt' || $start eq 'dd') {
-      $self->_end($_, $current) for qw(dt dd);
-    }
-
-    # "rt" and "rp"
-    elsif ($start eq 'rt' || $start eq 'rp') {
-      $self->_end($_, $current) for qw(rt rp);
+      _close(0, $current, {$_ => 1}, 'table') for qw(th td);
     }
   }
 

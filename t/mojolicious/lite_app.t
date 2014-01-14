@@ -446,7 +446,7 @@ is $t->app, app->commands->app, 'applications are equal';
 is $t->app->moniker, 'lite_app', 'right moniker';
 my $log = '';
 my $cb = $t->app->log->on(message => sub { $log .= pop });
-is $t->app->secret, $t->app->moniker, 'secret defaults to moniker';
+is $t->app->secrets->[0], $t->app->moniker, 'secret defaults to moniker';
 like $log, qr/Your secret passphrase needs to be changed!!!/, 'right message';
 $t->app->log->unsubscribe(message => $cb);
 
@@ -583,7 +583,8 @@ $t->get_ok('/reserved?data=just-works&json=test')->status_is(200)
 # Exception in inline template
 $t->get_ok('/inline/exception')->status_is(500)
   ->header_is(Server => 'Mojolicious (Perl)')
-  ->content_is("Died at inline template line 1.\n\n");
+  ->content_is(
+  "Died at inline template 6635c7011166fa11bb23c21912900ea9 line 1.\n\n");
 
 # Exception in template from data section
 $t->get_ok('/data/exception')->status_is(500)
@@ -897,7 +898,7 @@ $t->get_ok('/helper' => {'User-Agent' => 'Explorer'})->status_is(200)
 
 # Exception in EP template
 $t->get_ok('/eperror')->status_is(500)
-  ->header_is(Server => 'Mojolicious (Perl)')->content_like(qr/\$c/);
+  ->header_is(Server => 'Mojolicious (Perl)')->content_like(qr/\$unknown/);
 
 # Subrequest
 $t->get_ok('/subrequest')->status_is(200)
@@ -1109,7 +1110,7 @@ app layout <%= content %><%= app->mode %>
 (<%= agent %>)\
 
 @@ eperror.html.ep
-%= $c->foo('bar');
+%= $unknown->foo('bar');
 
 @@ favicon.ico
 Not a favicon!

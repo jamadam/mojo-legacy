@@ -2,7 +2,8 @@ package Mojolicious::Plugin::DefaultHelpers;
 use Mojo::Base 'Mojolicious::Plugin';
 
 use Mojo::ByteStream;
-use Mojo::Util 'dumper';
+use Mojo::Collection;
+use Mojo::Util qw(dumper sha1_sum steady_time);
 
 sub register {
   my ($self, $app) = @_;
@@ -25,9 +26,12 @@ sub register {
     );
   }
 
+  $app->helper(b => sub { shift; Mojo::ByteStream->new(@_) });
+  $app->helper(c => sub { shift; Mojo::Collection->new(@_) });
   $app->helper(config => sub { shift->app->config(@_) });
   $app->helper(content       => \&_content);
   $app->helper(content_for   => \&_content_for);
+  $app->helper(csrf_token    => \&_csrf_token);
   $app->helper(current_route => \&_current_route);
   $app->helper(dumper        => sub { shift; dumper(@_) });
   $app->helper(include       => \&_include);
@@ -53,6 +57,12 @@ sub _content_for {
   return _content($self, $name) unless defined $content;
   my $c = $self->stash->{'mojo.content'} ||= {};
   return $c->{$name} .= ref $content eq 'CODE' ? $content->() : $content;
+}
+
+sub _csrf_token {
+  my $self = shift;
+  $self->session->{csrf_token}
+    ||= sha1_sum($self->app->secrets->[0] . steady_time . rand 999);
 }
 
 sub _current_route {
@@ -112,9 +122,21 @@ L<Mojolicious::Plugin::DefaultHelpers> implements the following helpers.
 
 =head2 app
 
-  %= app->secret
+  %= app->secrets->[0]
 
 Alias for L<Mojolicious::Controller/"app">.
+
+=head2 b
+
+  %= b('test 123')->b64_encode
+
+Turn string into a L<Mojo::ByteStream> object.
+
+=head2 c
+
+  %= c(qw(a b c))->shuffle->join
+
+Turn list into a L<Mojo::Collection> object.
 
 =head2 config
 
@@ -154,6 +176,12 @@ named buffers are shared with the L</"content"> helper.
     world!
   % end
   %= content_for 'message'
+
+=head2 csrf_token
+
+  %= csrf_token
+
+Get CSRF token from L</"session">, and generate one if none exists.
 
 =head2 current_route
 

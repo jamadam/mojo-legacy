@@ -204,7 +204,7 @@ Mojo::Transaction::HTTP - HTTP transaction
 =head1 DESCRIPTION
 
 L<Mojo::Transaction::HTTP> is a container for HTTP transactions as described
-in RFC 2616.
+in L<RFC 2616|http://tools.ietf.org/search/rfc2616>.
 
 =head1 EVENTS
 
@@ -262,9 +262,10 @@ and implements the following new ones.
 =head2 previous
 
   my $previous = $tx->previous;
-  $tx          = $tx->previous(Mojo::Transaction->new);
+  $tx          = $tx->previous(Mojo::Transaction::HTTP->new);
 
-Previous transaction that triggered this followup transaction.
+Previous transaction that triggered this followup transaction, usually a
+L<Mojo::Transaction::HTTP> object.
 
   # Paths of previous requests
   say $tx->previous->previous->req->url->path;

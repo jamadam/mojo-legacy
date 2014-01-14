@@ -118,8 +118,8 @@ sub interpret {
   };
 
   return undef unless my $compiled = $self->compiled;
-  my $output = eval { $compiled->(@_) };
-  return $output unless $@;
+  my $output;
+  return $output if eval { $output = $compiled->(@_); 1 };
 
   # Exception with template context
   return Mojo::Exception->new($@, [$self->template])->verbose(1);
@@ -326,9 +326,9 @@ Mojo::Template - Perl-ish templates!
 =head1 SYNOPSIS
 
   use Mojo::Template;
-  my $mt = Mojo::Template->new;
 
   # Simple
+  my $mt = Mojo::Template->new;
   my $output = $mt->render(<<'EOF');
   % use Time::Piece;
   <!DOCTYPE html>
@@ -642,20 +642,20 @@ following new ones.
 
   $mt = $mt->build;
 
-Build Perl code from tree.
+Build Perl L</"code"> from L</"tree">.
 
 =head2 compile
 
   my $exception = $mt->compile;
 
-Compile Perl code for template.
+Compile Perl L</"code"> for template.
 
 =head2 interpret
 
   my $output = $mt->interpret;
   my $output = $mt->interpret(@args);
 
-Interpret compiled template code.
+Interpret L</"compiled"> template code.
 
   # Reuse template
   say $mt->render('Hello <%= $_[0] %>!', 'Bender');
@@ -666,7 +666,7 @@ Interpret compiled template code.
 
   $mt = $mt->parse($template);
 
-Parse template into tree.
+Parse template into L</"tree">.
 
 =head2 render
 

@@ -12,7 +12,7 @@ has pattern    => sub { Mojolicious::Routes::Pattern->new };
 sub AUTOLOAD {
   my $self = shift;
 
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
+  my ($package, $method) = split /::(\w+)$/, our $AUTOLOAD;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
@@ -289,7 +289,7 @@ Allow L</"bridge"> semantics for this route.
   my $parent = $r->parent;
   $r         = $r->parent(Mojolicious::Routes::Route->new);
 
-The parent of this route, used for nesting routes.
+The parent of this route, usually a L<Mojolicious::Routes::Route> object.
 
 =head2 partial
 

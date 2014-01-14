@@ -27,7 +27,7 @@ my %RESERVED = map { $_ => 1 } (
 sub AUTOLOAD {
   my $self = shift;
 
-  my ($package, $method) = our $AUTOLOAD =~ /^([\w:]+)::(\w+)$/;
+  my ($package, $method) = split /::(\w+)$/, our $AUTOLOAD;
   Carp::croak "Undefined subroutine &${package}::$method called"
     unless Scalar::Util::blessed $self && $self->isa(__PACKAGE__);
 
@@ -324,31 +324,32 @@ sub signed_cookie {
   my ($self, $name, $value, $options) = @_;
 
   # Response cookie
-  my $secret = $self->stash->{'mojo.secret'};
+  my $secrets = $self->stash->{'mojo.secrets'};
   return $self->cookie($name,
-    "$value--" . Mojo::Util::hmac_sha1_sum($value, $secret), $options)
+    "$value--" . Mojo::Util::hmac_sha1_sum($value, $secrets->[0]), $options)
     if defined $value;
 
   # Request cookies
   my @results;
   for my $value ($self->cookie($name)) {
 
-    # Check signature
+    # Check signature with rotating secrets
     if ($value =~ s/--([^\-]+)$//) {
-      my $sig = $1;
+      my $signature = $1;
 
-      # Verified
-      my $check = Mojo::Util::hmac_sha1_sum $value, $secret;
-      if (Mojo::Util::secure_compare $sig, $check) { push @results, $value }
+      my $valid;
+      for my $secret (@$secrets) {
+        my $check = Mojo::Util::hmac_sha1_sum($value, $secret);
+        ++$valid and last if Mojo::Util::secure_compare($signature, $check);
+      }
+      if ($valid) { push @results, $value }
 
-      # Bad cookie
       else {
         $self->app->log->debug(
           qq{Bad signed cookie "$name", possible hacking attempt.});
       }
     }
 
-    # Not signed
     else { $self->app->log->debug(qq{Cookie "$name" not signed.}) }
   }
 
@@ -417,8 +418,17 @@ sub url_for {
 
 sub validation {
   my $self = shift;
-  return $self->stash->{'mojo.validation'}
-    ||= $self->app->validator->validation->input($self->req->params->to_hash);
+
+  my $stash = $self->stash;
+  return $stash->{'mojo.validation'} if $stash->{'mojo.validation'};
+
+  my $req    = $self->req;
+  my $token  = $self->session->{csrf_token};
+  my $header = $req->headers->header('X-CSRF-Token');
+  my $hash   = $req->params->to_hash;
+  $hash->{csrf_token} = defined $hash->{csrf_token} ? $hash->{csrf_token} : $header if $token && $header;
+  my $validation = $self->app->validator->validation->input($hash);
+  return $stash->{'mojo.validation'} = $validation->csrf_token($token);
 }
 
 sub write {
@@ -800,7 +810,7 @@ is set to the value C<XMLHttpRequest>.
   $c = $c->send({binary => $bytes});
   $c = $c->send({text   => $bytes});
   $c = $c->send({json   => {test => [1, 2, 3]}});
-  $c = $c->send([$fin, $rsv1, $rsv2, $rsv3, $op, $bytes]);
+  $c = $c->send([$fin, $rsv1, $rsv2, $rsv3, $op, $payload]);
   $c = $c->send($chars);
   $c = $c->send($chars => sub {...});
 
@@ -899,7 +909,7 @@ that all stash values with a C<mojo.*> prefix are reserved for internal use.
   my $url = $c->url_for('http://mojolicio.us/perldoc');
   my $url = $c->url_for('mailto:sri@example.com');
 
-Generate a portable L<Mojo::URL> object with base for a route, path or URL.
+Generate a portable L<Mojo::URL> object with base for a path, URL or route.
 
   # "http://127.0.0.1:3000/perldoc" if application has been started with Morbo
   $c->url_for('/perldoc')->to_abs;

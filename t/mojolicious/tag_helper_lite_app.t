@@ -15,6 +15,8 @@ patch 'more_tags';
 
 get 'small_tags';
 
+get 'circle';
+
 get 'tags_with_error';
 
 any [qw(GET POST)] => 'links';
@@ -60,6 +62,13 @@ $t->get_ok('/small_tags')->status_is(200)->content_is(<<EOF);
   <p>0</p>
 </div>
 <div>works</div>
+EOF
+
+# XML
+$t->get_ok('/circle.svg')->status_is(200)->content_is(<<EOF);
+<svg>
+<circle cx="75" cy="55" fill="red" r="35" stroke="black" stroke-width="2" />
+</svg>
 EOF
 
 # Tags with error
@@ -306,21 +315,26 @@ $t->put_ok('/selection')->status_is(200)
     . '<option value="f">f</option>'
     . '</optgroup>'
     . '<option value="g">g</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select multiple="multiple" name="foo">'
     . '<option value="bar">bar</option>'
     . '<option value="baz">baz</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select name="bar">'
     . '<option disabled="disabled" value="d">D</option>'
     . '<option value="baz">baz</option>'
-    . '</select>' . "\n  "
-    . '<input type="submit" value="Ok" />' . "\n"
-    . '</form>'
-    . "\n");
+    . "</select>\n  "
+    . '<select name="yada">'
+    . '<optgroup class="x" label="test">'
+    . '<option value="a">a</option>'
+    . '<option value="b">b</option>'
+    . '</optgroup>'
+    . "</select>\n  "
+    . '<input type="submit" value="Ok" />'
+    . "\n</form>\n");
 
 # Selection with values
-$t->put_ok('/selection?a=e&foo=bar&bar=baz')->status_is(200)
+$t->put_ok('/selection?a=e&foo=bar&bar=baz&yada=b')->status_is(200)
   ->content_is("<form action=\"/selection\">\n  "
     . '<select name="a">'
     . '<option value="b">b</option>'
@@ -330,21 +344,27 @@ $t->put_ok('/selection?a=e&foo=bar&bar=baz')->status_is(200)
     . '<option value="f">f</option>'
     . '</optgroup>'
     . '<option value="g">g</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select multiple="multiple" name="foo">'
     . '<option selected="selected" value="bar">bar</option>'
     . '<option value="baz">baz</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select name="bar">'
     . '<option disabled="disabled" value="d">D</option>'
     . '<option selected="selected" value="baz">baz</option>'
-    . '</select>' . "\n  "
-    . '<input type="submit" value="Ok" />' . "\n"
-    . '</form>'
-    . "\n");
+    . "</select>\n  "
+    . '<select name="yada">'
+    . '<optgroup class="x" label="test">'
+    . '<option value="a">a</option>'
+    . '<option selected="selected" value="b">b</option>'
+    . '</optgroup>'
+    . "</select>\n  "
+    . '<input type="submit" value="Ok" />'
+    . "\n</form>\n");
 
 # Selection with multiple values
-$t->put_ok('/selection?foo=bar&a=e&foo=baz&bar=d')->status_is(200)
+$t->put_ok('/selection?foo=bar&a=e&foo=baz&bar=d&yada=a&yada=b')
+  ->status_is(200)
   ->content_is("<form action=\"/selection\">\n  "
     . '<select name="a">'
     . '<option value="b">b</option>'
@@ -354,18 +374,23 @@ $t->put_ok('/selection?foo=bar&a=e&foo=baz&bar=d')->status_is(200)
     . '<option value="f">f</option>'
     . '</optgroup>'
     . '<option value="g">g</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select multiple="multiple" name="foo">'
     . '<option selected="selected" value="bar">bar</option>'
     . '<option selected="selected" value="baz">baz</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select name="bar">'
     . '<option disabled="disabled" selected="selected" value="d">D</option>'
     . '<option value="baz">baz</option>'
-    . '</select>' . "\n  "
-    . '<input type="submit" value="Ok" />' . "\n"
-    . '</form>'
-    . "\n");
+    . "</select>\n  "
+    . '<select name="yada">'
+    . '<optgroup class="x" label="test">'
+    . '<option selected="selected" value="a">a</option>'
+    . '<option selected="selected" value="b">b</option>'
+    . '</optgroup>'
+    . "</select>\n  "
+    . '<input type="submit" value="Ok" />'
+    . "\n</form>\n");
 
 # Selection with multiple values preselected
 $t->put_ok('/selection?preselect=1')->status_is(200)
@@ -378,18 +403,23 @@ $t->put_ok('/selection?preselect=1')->status_is(200)
     . '<option value="f">f</option>'
     . '</optgroup>'
     . '<option selected="selected" value="g">g</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select multiple="multiple" name="foo">'
     . '<option value="bar">bar</option>'
     . '<option value="baz">baz</option>'
-    . '</select>' . "\n  "
+    . "</select>\n  "
     . '<select name="bar">'
     . '<option disabled="disabled" value="d">D</option>'
     . '<option value="baz">baz</option>'
-    . '</select>' . "\n  "
-    . '<input type="submit" value="Ok" />' . "\n"
-    . '</form>'
-    . "\n");
+    . "</select>\n  "
+    . '<select name="yada">'
+    . '<optgroup class="x" label="test">'
+    . '<option value="a">a</option>'
+    . '<option value="b">b</option>'
+    . '</optgroup>'
+    . "</select>\n  "
+    . '<input type="submit" value="Ok" />'
+    . "\n</form>\n");
 
 # Snowman form
 $t->post_ok('/☃')->status_is(200)->content_is(<<'EOF');
@@ -458,6 +488,14 @@ __DATA__
 %= tag_with_error 'bar', class => 'test', 0
 %= tag_with_error 'bar', (class => 'test') => begin
   0
+%= end
+
+@@ circle.svg.ep
+%= tag svg => begin
+<%=
+  tag 'circle', cx => 75, cy => 55, r => 35, stroke => 'black',
+    'stroke-width' => 2, fill => 'red'
+%>
 %= end
 
 @@ links.html.ep
@@ -556,9 +594,10 @@ __DATA__
 @@ selection.html.ep
 % param a => qw(b g) if param 'preselect';
 %= form_for selection => begin
-  %= select_field a => ['b', {c => ['<d', [ E => 'e'], 'f']}, 'g']
+  %= select_field a => ['b', c(c => ['<d', [ E => 'e'], 'f']), 'g']
   %= select_field foo => [qw(bar baz)], multiple => 'multiple'
   %= select_field bar => [['D' => 'd', disabled => 'disabled'], 'baz']
+  %= select_field yada => [c(test => [qw(a b)], class => 'x')];
   %= submit_button
 %= end
 

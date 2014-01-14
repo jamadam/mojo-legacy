@@ -2,7 +2,8 @@ package Mojolicious::Plugin::TagHelpers;
 use Mojo::Base 'Mojolicious::Plugin';
 
 use Mojo::ByteStream;
-use Mojo::Util 'xml_escape';
+use Mojo::Util qw(deprecated xml_escape);
+use Scalar::Util 'blessed';
 
 sub register {
   my ($self, $app) = @_;
@@ -15,6 +16,7 @@ sub register {
 
   $app->helper(check_box =>
       sub { _input(shift, shift, value => shift, @_, type => 'checkbox') });
+  $app->helper(csrf_field => \&_csrf_field);
   $app->helper(file_field =>
       sub { shift; _tag('input', name => shift, @_, type => 'file') });
 
@@ -39,6 +41,11 @@ sub register {
 
   $app->helper(tag_with_error => \&_tag_with_error);
   $app->helper(text_area      => \&_text_area);
+}
+
+sub _csrf_field {
+  my $self = shift;
+  return $self->hidden_field(csrf_token => $self->csrf_token, @_);
 }
 
 sub _form_for {
@@ -151,11 +158,18 @@ sub _select_field {
   my $groups = '';
   for my $group (@$options) {
 
-    # "optgroup" tag
+    # DEPRECATED in Top Hat!
     if (ref $group eq 'HASH') {
-      my ($label, $values) = each %$group;
+      deprecated
+        'hash references are DEPRECATED in favor of Mojo::Collection objects';
+      $group = Mojo::Collection->new(each %$group);
+    }
+
+    # "optgroup" tag
+    if (blessed $group && $group->isa('Mojo::Collection')) {
+      my ($label, $values) = splice @$group, 0, 2;
       my $content = join '', map { _option(\%values, $_) } @$values;
-      $groups .= _tag('optgroup', label => $label, sub {$content});
+      $groups .= _tag('optgroup', label => $label, @$group, sub {$content});
     }
 
     # "option" tag
@@ -283,13 +297,13 @@ L<Mojolicious::Plugin::TagHelpers> implements the following helpers.
 =head2 check_box
 
   %= check_box employed => 1
-  %= check_box employed => 1, id => 'foo'
+  %= check_box employed => 1, disabled => 'disabled'
 
 Generate checkbox input element. Previous input values will automatically get
 picked up and shown as default.
 
   <input name="employed" type="checkbox" value="1" />
-  <input id="foo" name="employed" type="checkbox" value="1" />
+  <input disabled="disabled" name="employed" type="checkbox" value="1" />
 
 =head2 color_field
 
@@ -303,6 +317,15 @@ picked up and shown as default.
   <input name="background" type="color" />
   <input name="background" type="color" value="#ffffff" />
   <input id="foo" name="background" type="color" value="#ffffff" />
+
+=head2 csrf_field
+
+  %= csrf_field
+
+Generate hidden input element with
+L<Mojolicious::Plugin::DefaultHelpers/"csrf_token">.
+
+  <input name="csrf_token" type="hidden" value="fa6a08..." />
 
 =head2 date_field
 
@@ -363,8 +386,8 @@ Generate file input element.
     %= text_field 'first_name'
     %= submit_button
   % end
-  %= form_for '/login' => (method => 'POST') => begin
-    %= text_field 'first_name'
+  %= form_for '/login' => (enctype => 'multipart/form-data') => begin
+    %= text_field 'first_name', disabled => 'disabled'
     %= submit_button
   % end
   %= form_for 'http://example.com/login' => (method => 'POST') => begin
@@ -372,8 +395,9 @@ Generate file input element.
     %= submit_button
   % end
 
-Generate portable form tag for route, path or URL. For routes that allow POST
-but not GET, a C<method> attribute will be automatically added.
+Generate portable form tag with L<Mojolicious::Controller/"url_for">. For
+routes that allow POST but not GET, a C<method> attribute will be
+automatically added.
 
   <form action="/path/to/login">
     <input name="first_name" />
@@ -383,8 +407,8 @@ but not GET, a C<method> attribute will be automatically added.
     <input name="first_name" />
     <input value="Ok" type="submit" />
   </form>
-  <form action="/path/to/login" method="POST">
-    <input name="first_name" />
+  <form action="/path/to/login" enctype="multipart/form-data">
+    <input disabled="disabled" name="first_name" />
     <input value="Ok" type="submit" />
   </form>
   <form action="http://example.com/login" method="POST">
@@ -474,8 +498,8 @@ Generate label.
   <%= link_to 'http://mojolicio.us' => begin %>Mojolicious<% end %>
   <%= link_to url_for->query(foo => 'bar')->to_abs => begin %>Retry<% end %>
 
-Generate portable link to route, path or URL, defaults to using the
-capitalized link target as content.
+Generate portable link with L<Mojolicious::Controller/"url_for">, defaults to
+using the capitalized link target as content.
 
   <a href="/path/to/index">Home</a>
   <a class="menu" href="/path/to/index.txt">Home</a>
@@ -563,36 +587,43 @@ picked up and shown as default.
 
 =head2 select_field
 
-  %= select_field language => [qw(de en)]
-  %= select_field language => [qw(de en)], id => 'lang'
-  %= select_field country => [[Germany => 'de'], 'en']
-  %= select_field country => [{Europe => [[Germany => 'de'], 'en']}]
-  %= select_field country => [[Germany => 'de', class => 'europe'], 'en']
+  %= select_field country => [qw(de en)]
+  %= select_field country => [[Germany => 'de'], 'en'], id => 'eu'
+  %= select_field country => [[Germany => 'de', disabled => 'disabled'], 'en']
+  %= select_field country => [c(EU => [[Germany => 'de'], 'en'], id => 'eu')]
+  %= select_field country => [c(EU => [qw(de en)]), c(Asia => [qw(cn jp)])]
 
-Generate select, option and optgroup elements. Previous input values will
+Generate select and option elements from array references and optgroup
+elements from L<Mojo::Collection> objects. Previous input values will
 automatically get picked up and shown as default.
 
-  <select name="language">
-    <option value="de">de</option>
-    <option value="en">en</option>
-  </select>
-  <select id="lang" name="language">
-    <option value="de">de</option>
-    <option value="en">en</option>
-  </select>
   <select name="country">
+    <option value="de">de</option>
+    <option value="en">en</option>
+  </select>
+  <select id="eu" name="country">
     <option value="de">Germany</option>
     <option value="en">en</option>
   </select>
-  <select id="lang" name="language">
-    <optgroup label="Europe">
+  <select name="country">
+    <option disabled="disabled" value="de">Germany</option>
+    <option value="en">en</option>
+  </select>
+  <select name="country">
+    <optgroup id="eu" label="EU">
       <option value="de">Germany</option>
       <option value="en">en</option>
     </optgroup>
   </select>
   <select name="country">
-    <option class="europe" value="de">Germany</option>
-    <option value="en">en</option>
+    <optgroup label="EU">
+      <option value="de">de</option>
+      <option value="en">en</option>
+    </optgroup>
+    <optgroup label="Asia">
+      <option value="cn">cn</option>
+      <option value="jp">jp</option>
+    </optgroup>
   </select>
 
 =head2 stylesheet
@@ -638,7 +669,7 @@ Alias for L</"tag">.
   % end
   <%= tag div => (id => 'foo') => begin %>some & content<% end %>
 
-HTML tag generator.
+HTML/XML tag generator.
 
   <div />
   <div id="foo" />
