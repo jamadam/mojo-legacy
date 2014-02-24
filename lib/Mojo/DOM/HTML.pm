@@ -8,20 +8,20 @@ has 'xml';
 has tree => sub { ['root'] };
 
 my $ATTR_RE = qr/
-  ([^<>=\s]+)      # Key
+  ([^<>=\s\/]+|\/)   # Key
   (?:
     \s*=\s*
     (?:
-      "([^"]*?)"   # Quotation marks
+      "([^"]*?)"     # Quotation marks
     |
-      '([^']*?)'   # Apostrophes
+      '([^']*?)'     # Apostrophes
     |
-      ([^>\s]*)    # Unquoted
+      ([^>\s\/]*)    # Unquoted
     )
   )?
   \s*
 /x;
-my $END_RE   = qr!^\s*/\s*(.+)\s*!;
+my $END_RE   = qr!^\s*/\s*(.+)!;
 my $TOKEN_RE = qr/
   ([^<]+)?                                          # Text
   (?:
@@ -49,12 +49,6 @@ my $TOKEN_RE = qr/
   )??
 /xis;
 
-# HTML elements that break paragraphs
-my @PARAGRAPH = (
-  qw(address article aside blockquote dir div dl fieldset footer form h1 h2),
-  qw(h3 h4 h5 h6 header hr main menu nav ol p pre section table ul)
-);
-
 # HTML elements with optional end tags
 my %END = (
   body => ['head'],
@@ -63,14 +57,19 @@ my %END = (
   rp   => [qw(rt rp)],
   rt   => [qw(rt rp)]
 );
-$END{$_} = [$_]  for qw(optgroup option);
-$END{$_} = ['p'] for @PARAGRAPH;
+$END{$_} = [$_] for qw(optgroup option);
+
+# HTML elements that break paragraphs
+map { $END{$_} = ['p'] } (
+  qw(address article aside blockquote dir div dl fieldset footer form h1 h2),
+  qw(h3 h4 h5 h6 header hr main menu nav ol p pre section table ul)
+);
 
 # HTML table elements with optional end tags
 my %TABLE = map { $_ => 1 } qw(colgroup tbody td tfoot th thead tr);
 
 # HTML elements without end tags
-my %VOID = map { $_ => 1 } (
+my %EMPTY = map { $_ => 1 } (
   qw(area base br col embed hr img input keygen link menuitem meta param),
   qw(source track wbr)
 );
@@ -89,6 +88,7 @@ my %PHRASING = map { $_ => 1 } @OBSOLETE, @PHRASING;
 sub parse {
   my ($self, $html) = @_;
 
+  my $xml = $self->xml;
   my $current = my $tree = ['root'];
   while ($html =~ m/\G$TOKEN_RE/gcs) {
     my ($text, $pi, $comment, $cdata, $doctype, $tag, $runaway)
@@ -96,13 +96,12 @@ sub parse {
 
     # Text (and runaway "<")
     $text .= '<' if defined $runaway;
-    push @$current, ['text', html_unescape $text] if defined $text;
+    _node($current, 'text', html_unescape $text) if defined $text;
 
     # Tag
     if (defined $tag) {
 
       # End
-      my $xml = $self->xml;
       if ($tag =~ $END_RE) { _end($xml ? $1 : lc($1), $xml, \$current) }
 
       # Start
@@ -124,29 +123,29 @@ sub parse {
 
         # Element without end tag
         _end($start, $xml, \$current)
-          if (!$xml && $VOID{$start}) || $attr =~ m!/\s*$!;
+          if (!$xml && $EMPTY{$start}) || $attr =~ m!/\s*$!;
 
-        # Relaxed "script" or "style"
-        next unless $start eq 'script' || $start eq 'style';
+        # Relaxed "script" or "style" HTML elements
+        next if $xml || ($start ne 'script' && $start ne 'style');
         next unless $html =~ m!\G(.*?)<\s*/\s*$start\s*>!gcsi;
-        push @$current, ['raw', $1];
-        _end($start, $xml, \$current);
+        _node($current, 'raw', $1);
+        _end($start, 0, \$current);
       }
     }
 
     # DOCTYPE
-    elsif (defined $doctype) { push @$current, ['doctype', $doctype] }
+    elsif (defined $doctype) { _node($current, 'doctype', $doctype) }
 
     # Comment
-    elsif (defined $comment) { push @$current, ['comment', $comment] }
+    elsif (defined $comment) { _node($current, 'comment', $comment) }
 
     # CDATA
-    elsif (defined $cdata) { push @$current, ['cdata', $cdata] }
+    elsif (defined $cdata) { _node($current, 'cdata', $cdata) }
 
     # Processing instruction (try to detect XML)
     elsif (defined $pi) {
-      $self->xml(1) if !exists $self->{xml} && $pi =~ /xml/i;
-      push @$current, ['pi', $pi];
+      $self->xml($xml = 1) if !exists $self->{xml} && $pi =~ /xml/i;
+      _node($current, 'pi', $pi);
     }
   }
 
@@ -156,12 +155,12 @@ sub parse {
 sub render { _render($_[0]->tree, $_[0]->xml) }
 
 sub _close {
-  my ($xml, $current, $allowed, $scope) = @_;
+  my ($current, $allowed, $scope) = @_;
 
   # Close allowed parent elements in scope
   my $parent = $$current;
-  while ($parent->[0] ne 'root' && $parent->[1] ne $scope) {
-    _end($parent->[1], $xml, $current) if $allowed->{$parent->[1]};
+  while ($parent->[0] ne 'root' && !$scope->{$parent->[1]}) {
+    _end($parent->[1], 0, $current) if $allowed->{$parent->[1]};
     $parent = $parent->[3];
   }
 }
@@ -170,36 +169,26 @@ sub _end {
   my ($end, $xml, $current) = @_;
 
   # Search stack for start tag
-  my $found = 0;
-  my $next  = $$current;
-  while ($next->[0] ne 'root') {
+  my $next = $$current;
+  do {
+
+    # Ignore useless end tag
+    return if $next->[0] eq 'root';
 
     # Right tag
-    ++$found and last if $next->[1] eq $end;
+    return $$current = $next->[3] if $next->[1] eq $end;
 
     # Phrasing content can only cross phrasing content
     return if !$xml && $PHRASING{$end} && !$PHRASING{$next->[1]};
 
-    $next = $next->[3];
-  }
+  } while $next = $next->[3];
+}
 
-  # Ignore useless end tag
-  return unless $found;
-
-  # Walk backwards
-  $next = $$current;
-  while (($$current = $next) && $$current->[0] ne 'root') {
-    $next = $$current->[3];
-
-    # Match
-    if ($end eq $$current->[1]) { return $$current = $$current->[3] }
-
-    # Table
-    elsif ($end eq 'table') { _close($xml, $current, \%TABLE, $end) }
-
-    # Missing end tag
-    _end($$current->[1], $xml, $current);
-  }
+sub _node {
+  my ($current, $type, $content) = @_;
+  my $new = [$type, $content, $current];
+  weaken $new->[2];
+  push @$current, $new;
 }
 
 sub _render {
@@ -225,43 +214,41 @@ sub _render {
   return '<?' . $tree->[1] . '?>' if $type eq 'pi';
 
   # Start tag
-  my $start   = 1;
-  my $content = '';
+  my $result = '';
   if ($type eq 'tag') {
-    $start = 4;
 
     # Open tag
     my $tag = $tree->[1];
-    $content .= "<$tag";
+    $result .= "<$tag";
 
     # Attributes
     my @attrs;
     for my $key (sort keys %{$tree->[2]}) {
-      my $value = $tree->[2]{$key};
 
       # No value
-      push @attrs, $key and next unless defined $value;
+      push @attrs, $key and next unless defined(my $value = $tree->[2]{$key});
 
       # Key and value
       push @attrs, qq{$key="} . xml_escape($value) . '"';
     }
-    $content .= join ' ', '', @attrs if @attrs;
+    $result .= join ' ', '', @attrs if @attrs;
 
     # Element without end tag
-    return $xml || $VOID{$tag} ? "$content />" : "$content></$tag>"
+    return $xml ? "$result />" : $EMPTY{$tag} ? "$result>" : "$result></$tag>"
       unless $tree->[4];
 
     # Close tag
-    $content .= '>';
+    $result .= '>';
   }
 
   # Render whole tree
-  $content .= _render($tree->[$_], $xml) for $start .. $#$tree;
+  $result .= _render($tree->[$_], $xml)
+    for ($type eq 'root' ? 1 : 4) .. $#$tree;
 
   # End tag
-  $content .= '</' . $tree->[1] . '>' if $type eq 'tag';
+  $result .= '</' . $tree->[1] . '>' if $type eq 'tag';
 
-  return $content;
+  return $result;
 }
 
 sub _start {
@@ -272,19 +259,19 @@ sub _start {
     if (my $end = $END{$start}) { _end($_, 0, $current) for @$end }
 
     # "li"
-    elsif ($start eq 'li') { _close(0, $current, {li => 1}, 'ul') }
+    elsif ($start eq 'li') { _close($current, {li => 1}, {ul => 1, ol => 1}) }
 
     # "colgroup", "thead", "tbody" and "tfoot"
-    elsif (grep { $_ eq $start } qw(colgroup thead tbody tfoot)) {
-      _close(0, $current, \%TABLE, 'table');
+    elsif ($start eq 'colgroup' || $start =~ /^t(?:head|body|foot)$/) {
+      _close($current, \%TABLE, {table => 1});
     }
 
     # "tr"
-    elsif ($start eq 'tr') { _close(0, $current, {tr => 1}, 'table') }
+    elsif ($start eq 'tr') { _close($current, {tr => 1}, {table => 1}) }
 
     # "th" and "td"
     elsif ($start eq 'th' || $start eq 'td') {
-      _close(0, $current, {$_ => 1}, 'table') for qw(th td);
+      _close($current, {$_ => 1}, {table => 1}) for qw(th td);
     }
   }
 
@@ -314,7 +301,9 @@ Mojo::DOM::HTML - HTML/XML engine
 
 =head1 DESCRIPTION
 
-L<Mojo::DOM::HTML> is the HTML/XML engine used by L<Mojo::DOM>.
+L<Mojo::DOM::HTML> is the HTML/XML engine used by L<Mojo::DOM> and based on
+the L<HTML Living Standard|http://www.whatwg.org/html> as well as the
+L<Extensible Markup Language (XML) 1.0|http://www.w3.org/TR/xml/>.
 
 =head1 ATTRIBUTES
 
@@ -343,15 +332,15 @@ following new ones.
 
 =head2 parse
 
-  $html = $html->parse('<foo bar="baz">test</foo>');
+  $html = $html->parse('<foo bar="baz">I ♥ Mojolicious!</foo>');
 
 Parse HTML/XML fragment.
 
 =head2 render
 
-  my $xml = $html->render;
+  my $str = $html->render;
 
-Render DOM to XML.
+Render DOM to HTML/XML.
 
 =head1 SEE ALSO
 

@@ -61,6 +61,9 @@ get '/alternatives/:char' => [char => [qw(☃ ♥)]] => sub {
   $self->render(text => $self->url_for);
 };
 
+get '/optional/:middle/placeholder' =>
+  {middle => 'none', inline => '<%= $middle %>-<%= url_for =%>'};
+
 get '/alterformat' => [format => ['json']] => {format => 'json'} => sub {
   my $self = shift;
   $self->render(text => $self->stash('format'));
@@ -519,6 +522,16 @@ $t->get_ok('/alternatives')->status_is(404)
 # Invalid alternative
 $t->get_ok('/alternatives/test')->status_is(404)
   ->header_is(Server => 'Mojolicious (Perl)')->content_is("Oops!\n");
+
+# Optional placeholder in the middle
+$t->get_ok('/optional/test/placeholder')->status_is(200)
+  ->header_is(Server => 'Mojolicious (Perl)')
+  ->content_is('test-/optional/test/placeholder');
+
+# Optional placeholder in the middle without value
+$t->get_ok('/optional/placeholder')->status_is(200)
+  ->header_is(Server => 'Mojolicious (Perl)')
+  ->content_is('none-/optional/none/placeholder');
 
 # No format
 $t->get_ok('/alterformat')->status_is(200)

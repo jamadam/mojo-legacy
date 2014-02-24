@@ -4,37 +4,14 @@ use Mojo::Base 'Mojolicious::Command';
 use Getopt::Long qw(GetOptionsFromArray :config no_auto_abbrev no_ignore_case);
 use Mojo::DOM;
 use Mojo::IOLoop;
-use Mojo::JSON;
+use Mojo::JSON qw(encode_json j);
 use Mojo::JSON::Pointer;
 use Mojo::UserAgent;
 use Mojo::Util qw(decode encode);
 use Scalar::Util 'weaken';
 
-has description => "Perform HTTP request.\n";
-has usage       => <<EOF;
-usage: $0 get [OPTIONS] URL [SELECTOR|JSON-POINTER] [COMMANDS]
-
-  mojo get /
-  mojo get mojolicio.us
-  mojo get -v -r google.com
-  mojo get -M POST -c 'trololo' mojolicio.us
-  mojo get -H 'X-Bender: Bite my shiny metal ass!' mojolicio.us
-  mojo get mojolicio.us 'head > title' text
-  mojo get mojolicio.us .footer all
-  mojo get mojolicio.us a attr href
-  mojo get mojolicio.us '*' attr id
-  mojo get mojolicio.us 'h1, h2, h3' 3 text
-  mojo get https://api.metacpan.org/v0/author/SRI /name
-
-These options are available:
-  -C, --charset <charset>     Charset of HTML/XML content, defaults to auto
-                              detection.
-  -c, --content <content>     Content to send with request.
-  -H, --header <name:value>   Additional HTTP header.
-  -M, --method <method>       HTTP method to use, defaults to "GET".
-  -r, --redirect              Follow up to 10 redirects.
-  -v, --verbose               Print request and response headers to STDERR.
-EOF
+has description => 'Perform HTTP request.';
+has usage => sub { shift->extract_usage };
 
 sub run {
   my ($self, @args) = @_;
@@ -102,11 +79,10 @@ sub run {
 }
 
 sub _json {
-  my $json = Mojo::JSON->new;
-  return unless my $data = $json->decode(shift);
-  return unless defined($data = Mojo::JSON::Pointer->new->get($data, shift));
+  return unless my $data = j(shift);
+  return unless defined($data = Mojo::JSON::Pointer->new($data)->get(shift));
   return _say($data) unless ref $data eq 'HASH' || ref $data eq 'ARRAY';
-  say $json->encode($data);
+  say encode_json($data);
 }
 
 sub _say { length && say encode('UTF-8', $_) for @_ }
@@ -152,17 +128,39 @@ Mojolicious::Command::get - Get command
 
 =head1 SYNOPSIS
 
-  use Mojolicious::Command::get;
+  Usage: APPLICATION get [OPTIONS] URL [SELECTOR|JSON-POINTER] [COMMANDS]
 
-  my $get = Mojolicious::Command::get->new;
-  $get->run(@ARGV);
+    ./myapp.pl get /
+    mojo get mojolicio.us
+    mojo get -v -r google.com
+    mojo get -v -H 'Host: mojolicious.org' -H 'DNT: 1' mojolicio.us
+    mojo get -M POST -c 'trololo' mojolicio.us
+    mojo get mojolicio.us 'head > title' text
+    mojo get mojolicio.us .footer all
+    mojo get mojolicio.us a attr href
+    mojo get mojolicio.us '*' attr id
+    mojo get mojolicio.us 'h1, h2, h3' 3 text
+    mojo get https://api.metacpan.org/v0/author/SRI /name
+
+  Options:
+    -C, --charset <charset>     Charset of HTML/XML content, defaults to auto
+                                detection.
+    -c, --content <content>     Content to send with request.
+    -H, --header <name:value>   Additional HTTP header.
+    -M, --method <method>       HTTP method to use, defaults to "GET".
+    -r, --redirect              Follow up to 10 redirects.
+    -v, --verbose               Print request and response headers to STDERR.
 
 =head1 DESCRIPTION
 
-L<Mojolicious::Command::get> is a command interface to L<Mojo::UserAgent>.
+L<Mojolicious::Command::get> is a command line interface for
+L<Mojo::UserAgent>.
 
 This is a core command, that means it is always enabled and its code a good
 example for learning to build new commands, you're welcome to fork it.
+
+See L<Mojolicious::Commands/"COMMANDS"> for a list of commands that are
+available by default.
 
 =head1 ATTRIBUTES
 

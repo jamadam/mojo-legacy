@@ -23,6 +23,17 @@ $end2->();
 is_deeply [$delay->wait], [], 'no return values';
 is_deeply \@results, [1, 1], 'right results';
 
+# Data
+is $delay->data('foo'), undef, 'no value';
+is_deeply $delay->data(foo => 'bar')->data, {foo => 'bar'}, 'right value';
+is $delay->data('foo'), 'bar', 'right value';
+delete $delay->data->{foo};
+is $delay->data('foo'), undef, 'no value';
+$delay->data(foo => 'bar', baz => 'yada');
+is $delay->data({test => 23})->data->{test}, 23, 'right value';
+is_deeply $delay->data, {foo => 'bar', baz => 'yada', test => 23},
+  'right value';
+
 # Arguments
 $delay = Mojo::IOLoop::Delay->new;
 my $result;
@@ -85,7 +96,7 @@ $delay->steps(
   sub { Mojo::IOLoop->timer(0 => shift->begin) },
   sub {
     $result = 'fail';
-    shift->begin->();
+    shift->pass;
   },
   sub { $result = 'success' },
   sub { $result = 'fail' }
@@ -99,7 +110,7 @@ is $result,   'success', 'right result';
 $delay   = Mojo::IOLoop::Delay->new;
 $delay->on(finish => sub { shift; push @results, [@_] });
 $delay->steps(
-  sub { shift->begin(0)->(23) },
+  sub { shift->pass(23) },
   sub { shift; push @results, [@_] },
   sub { push @results, 'fail' }
 );
@@ -152,7 +163,7 @@ $delay = Mojo::IOLoop->delay(
     $end2->(4);
     $end3->(5, 6);
     $end->(1, 2, 3);
-    $first->begin(0)->(23);
+    $first->pass(23);
   },
   sub {
     my ($first, @numbers) = @_;
@@ -162,6 +173,31 @@ $delay = Mojo::IOLoop->delay(
 is_deeply [$delay->wait], [2, 3, 2, 1, 4, 5, 6, 23], 'right return values';
 is $finished, 1, 'finish event has been emitted once';
 is_deeply $result, [1, 2, 3, 2, 3, 2, 1, 4, 5, 6, 23], 'right results';
+
+# Dynamic step
+my $double = sub {
+  my ($delay, $num) = @_;
+  my $end = $delay->begin(0);
+  Mojo::IOLoop->timer(0 => sub { $end->($num * 2) });
+};
+$result = undef;
+$delay = Mojo::IOLoop::Delay->new->data(num => 9)->steps(
+  sub {
+    my $delay = shift;
+    my $end   = $delay->begin(0);
+    Mojo::IOLoop->timer(0 => sub { $end->($delay->data('num')) });
+    unshift @{$delay->remaining}, $double;
+  },
+  sub {
+    my ($delay, $num) = @_;
+    $result = $num;
+  }
+);
+is scalar @{$delay->remaining}, 2, 'two steps remaining';
+is_deeply [$delay->wait], [18], 'right return values';
+is scalar @{$delay->remaining}, 0, 'no steps remaining';
+is $delay->data('num'), 9, 'right value';
+is $result, 18, 'right result';
 
 # Exception in first step
 my $failed;

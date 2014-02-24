@@ -35,7 +35,7 @@ my $TOKEN_RE        = qr/
 
 sub match {
   my $tree = shift->tree;
-  return undef if $tree->[0] eq 'root';
+  return undef if $tree->[0] ne 'tag';
   return _match(_compile(shift), $tree, $tree);
 }
 
@@ -108,15 +108,11 @@ sub _compile {
     push @$part, [combinator => ' ']
       if $part->[-1] && $part->[-1][0] ne 'combinator';
 
-    # Selector
+    # Tag
     push @$part, ['element'];
     my $selector = $part->[-1];
-
-    # Element
-    my $tag = '*';
+    my $tag      = '*';
     $element =~ s/^((?:\\\.|\\\#|[^.#])+)// and $tag = _unescape($1);
-
-    # Tag
     push @$selector, ['tag', $tag];
 
     # Class or ID
@@ -206,28 +202,15 @@ sub _pc {
 
   # ":nth-*"
   elsif ($class =~ /^nth-/) {
-
-    # Numbers
-    $args = _equation($args) unless ref $args;
-
-    # Siblings
-    my $parent = $current->[3];
-    my @siblings;
     my $type = $class =~ /of-type$/ ? $current->[1] : undef;
-    for my $i (($parent->[0] eq 'root' ? 1 : 4) .. $#$parent) {
-      my $sibling = $parent->[$i];
-      next unless $sibling->[0] eq 'tag';
-      next if defined $type && $type ne $sibling->[1];
-      push @siblings, $sibling;
-    }
+    my @siblings = @{_siblings($current, $type)};
 
-    # Reverse
+    # ":nth-last-*"
     @siblings = reverse @siblings if $class =~ /^nth-last/;
 
-    # Find
+    $args = _equation($args) unless ref $args;
     for my $i (0 .. $#siblings) {
-      my $result = $args->[0] * $i + $args->[1];
-      next if $result < 1;
+      next if (my $result = $args->[0] * $i + $args->[1]) < 1;
       last unless my $sibling = $siblings[$result - 1];
       return 1 if $sibling eq $current;
     }
@@ -235,17 +218,8 @@ sub _pc {
 
   # ":only-*"
   elsif ($class =~ /^only-(?:child|(of-type))$/) {
-    my $type = $1 ? $current->[1] : undef;
-
-    # Siblings
-    my $parent = $current->[3];
-    for my $i (($parent->[0] eq 'root' ? 1 : 4) .. $#$parent) {
-      my $sibling = $parent->[$i];
-      next if $sibling->[0] ne 'tag' || $sibling eq $current;
-      return undef unless defined $type && $sibling->[1] ne $type;
-    }
-
-    # No siblings
+    $_ ne $current and return undef
+      for @{_siblings($current, $1 ? $current->[1] : undef)};
     return 1;
   }
 
@@ -324,20 +298,29 @@ sub _selector {
 sub _sibling {
   my ($selectors, $current, $tree, $immediate) = @_;
 
-  my $parent = $current->[3];
   my $found;
-  for my $n (@$parent[($parent->[0] eq 'root' ? 1 : 4) .. $#$parent]) {
-    return $found if $n eq $current;
-    next unless $n->[0] eq 'tag';
+  for my $sibling (@{_siblings($current)}) {
+    return $found if $sibling eq $current;
 
     # "+" (immediately preceding sibling)
-    if ($immediate) { $found = _combinator($selectors, $n, $tree) }
+    if ($immediate) { $found = _combinator($selectors, $sibling, $tree) }
 
     # "~" (preceding sibling)
-    else { return 1 if _combinator($selectors, $n, $tree) }
+    else { return 1 if _combinator($selectors, $sibling, $tree) }
   }
 
   return undef;
+}
+
+sub _siblings {
+  my ($current, $type) = @_;
+
+  my $parent = $current->[3];
+  my @siblings = grep { $_->[0] eq 'tag' }
+    @$parent[($parent->[0] eq 'root' ? 1 : 4) .. $#$parent];
+  @siblings = grep { $type eq $_->[1] } @siblings if defined $type;
+
+  return \@siblings;
 }
 
 sub _unescape {
@@ -373,7 +356,8 @@ Mojo::DOM::CSS - CSS selector engine
 
 =head1 DESCRIPTION
 
-L<Mojo::DOM::CSS> is the CSS selector engine used by L<Mojo::DOM>.
+L<Mojo::DOM::CSS> is the CSS selector engine used by L<Mojo::DOM> and based on
+L<Selectors Level 3|http://www.w3.org/TR/css3-selectors/>.
 
 =head1 SELECTORS
 

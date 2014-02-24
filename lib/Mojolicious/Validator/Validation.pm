@@ -225,11 +225,11 @@ Access validated parameters, similar to L<Mojolicious::Controller/"param">.
 Change validation L</"topic"> and make sure a value is present and not an
 empty string.
 
-=head1 CHECKS
+=head1 AUTOLOAD
 
-In addition to the methods above, you can also call validation checks provided
-by L<Mojolicious::Validator> on L<Mojolicious::Validator::Validation> objects,
-similar to L</"check">.
+In addition to the L</"ATTRIBUTES"> and L</"METHODS"> above, you can also call
+validation checks provided by L<Mojolicious::Validator> on
+L<Mojolicious::Validator::Validation> objects, similar to L</"check">.
 
   $validation->required('foo')->size(2, 5)->like(qr/^[A-Z]/);
   $validation->optional('bar')->equal_to('foo');

@@ -99,7 +99,7 @@ information across several HTTP requests.
 
   GET /protected HTTP/1.1
   Host: mojolicio.us
-  Cookie: $Version=1; sessionid=987654321
+  Cookie: sessionid=987654321
 
   HTTP/1.1 200 OK
   Set-Cookie: sessionid=987654321
@@ -109,7 +109,6 @@ information across several HTTP requests.
 Traditionally all session data was stored on the server-side and only session
 ids were exchanged between browser and web server in the form of cookies.
 
-  HTTP/1.1 200 OK
   Set-Cookie: session=hmac-sha1(base64(json($session)))
 
 In L<Mojolicious> however we are taking this concept one step further by
@@ -423,7 +422,9 @@ like this.
       my $self = shift;
 
       # Redirect to main page with a 302 response if user is not logged in
-      return $self->session('user') || !$self->redirect_to('index');
+      return 1 if $self->session('user');
+      $self->redirect_to('index');
+      return undef;
     };
 
     # A protected page auto rendering "protected.html.ep"
@@ -532,7 +533,9 @@ actual action code needs to be changed.
 
     my $logged_in = $r->under(sub {
       my $self = shift;
-      return $self->session('user') || !$self->redirect_to('index');
+      return 1 if $self->session('user');
+      $self->redirect_to('index');
+      return undef;
     });
     $logged_in->get('/protected');
 
@@ -593,7 +596,9 @@ Once again the actual action code does not change at all.
 
   sub logged_in {
     my $self = shift;
-    return $self->session('user') || !$self->redirect_to('index');
+    return 1 if $self->session('user');
+    $self->redirect_to('index');
+    return undef;
   }
 
   sub logout {

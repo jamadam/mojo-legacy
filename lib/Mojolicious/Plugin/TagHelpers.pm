@@ -45,7 +45,7 @@ sub register {
 
 sub _csrf_field {
   my $self = shift;
-  return $self->hidden_field(csrf_token => $self->csrf_token, @_);
+  return _hidden_field($self, csrf_token => $self->csrf_token, @_);
 }
 
 sub _form_for {
@@ -68,8 +68,7 @@ sub _form_for {
 
 sub _hidden_field {
   my $self = shift;
-  my %attrs = (name => shift, value => shift, @_, type => 'hidden');
-  return _tag('input', %attrs);
+  return _tag('input', name => shift, value => shift, @_, type => 'hidden');
 }
 
 sub _input {
@@ -167,9 +166,9 @@ sub _select_field {
 
     # "optgroup" tag
     if (blessed $group && $group->isa('Mojo::Collection')) {
-      my ($label, $values) = splice @$group, 0, 2;
+      my ($label, $values, %attrs) = @$group;
       my $content = join '', map { _option(\%values, $_) } @$values;
-      $groups .= _tag('optgroup', label => $label, @$group, sub {$content});
+      $groups .= _tag('optgroup', label => $label, %attrs, sub {$content});
     }
 
     # "option" tag
@@ -213,6 +212,13 @@ sub _tag {
 
   # Attributes
   my %attrs = @_;
+  if ($attrs{data} && ref $attrs{data} eq 'HASH') {
+    while (my ($key, $value) = each %{$attrs{data}}) {
+      $key =~ tr/_/-/;
+      $attrs{lc("data-$key")} = $value;
+    }
+    delete $attrs{data};
+  }
   $tag .= qq{ $_="} . xml_escape(defined $attrs{$_} ? $attrs{$_} : '') . '"' for sort keys %attrs;
 
   # Empty element
@@ -289,6 +295,9 @@ C<tag_with_error> helper, to make styling with CSS easier.
 
 This is a core plugin, that means it is always enabled and its code a good
 example for learning how to build new plugins, you're welcome to fork it.
+
+See L<Mojolicious::Plugins/"PLUGINS"> for a list of plugins that are available
+by default.
 
 =head1 HELPERS
 
@@ -652,33 +661,35 @@ Generate submit input element.
 
 =head2 t
 
-  %=t div => 'some & content'
+  %=t div => 'test & 123'
 
 Alias for L</"tag">.
 
-  <div>some &amp; content</div>
+  <div>test &amp; 123</div>
 
 =head2 tag
 
   %= tag 'div'
   %= tag 'div', id => 'foo'
-  %= tag div => 'some & content'
-  %= tag div => (id => 'foo') => 'some & content'
+  %= tag div => 'test & 123'
+  %= tag div => (id => 'foo') => 'test & 123'
+  %= tag div => (data => {my_id => 1, Name => 'test'}) => 'test & 123'
   %= tag div => begin
-    some & content
+    test & 123
   % end
-  <%= tag div => (id => 'foo') => begin %>some & content<% end %>
+  <%= tag div => (id => 'foo') => begin %>test & 123<% end %>
 
 HTML/XML tag generator.
 
   <div />
   <div id="foo" />
-  <div>some &amp; content</div>
-  <div id="foo">some &amp; content</div>
+  <div>test &amp; 123</div>
+  <div id="foo">test &amp; 123</div>
+  <div data-my-id="1" data-name="test">test &amp; 123</div>
   <div>
-    some & content
+    test & 123
   </div>
-  <div id="foo">some & content</div>
+  <div id="foo">test & 123</div>
 
 Very useful for reuse in more specific tag helpers.
 

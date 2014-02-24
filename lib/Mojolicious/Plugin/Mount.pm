@@ -41,6 +41,8 @@ Mojolicious::Plugin::Mount - Application mount plugin
   # Adjust the generated route
   my $example = plugin Mount => {'/example' => '/home/sri/example.pl'};
   $example->to(message => 'It works great!');
+  my $app = $example->pattern->defaults->{app};
+  $app->config(foo => 'bar');
 
   # Mount application with host
   plugin Mount => {'example.com' => '/home/sri/myapp.pl'};
@@ -58,6 +60,9 @@ L<Mojolicious> applications.
 
 The code of this plugin is a good example for learning to build new plugins,
 you're welcome to fork it.
+
+See L<Mojolicious::Plugins/"PLUGINS"> for a list of plugins that are available
+by default.
 
 =head1 METHODS
 

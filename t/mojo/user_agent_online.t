@@ -10,7 +10,7 @@ use Mojo::IOLoop::Server;
 
 plan skip_all => 'set TEST_ONLINE to enable this test (developer only!)'
   unless $ENV{TEST_ONLINE};
-plan skip_all => 'IO::Socket::IP 0.16 required for this test!'
+plan skip_all => 'IO::Socket::IP 0.20 required for this test!'
   unless Mojo::IOLoop::Server::IPV6;
 plan skip_all => 'IO::Socket::SSL 1.75 required for this test!'
   unless Mojo::IOLoop::Server::TLS;
@@ -131,7 +131,7 @@ is_deeply \@kept_alive, [1, 1, 1], 'connections kept alive';
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
 
-# Custom non keep-alive request
+# Custom non-keep-alive request
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('http://metacpan.org');
@@ -231,7 +231,11 @@ is $tx->req->headers->content_length, 13, 'right content length';
 is $tx->req->body,   'q=mojolicious', 'right content';
 like $tx->res->body, qr/Mojolicious/, 'right content';
 is $tx->res->code,   200,             'right status';
-ok $tx->kept_alive, 'connection was kept alive';
+ok $tx->kept_alive,    'connection was kept alive';
+ok $tx->local_address, 'has local address';
+ok $tx->local_port > 0, 'has local port';
+ok $tx->remote_address, 'has local address';
+ok $tx->remote_port > 0, 'has local port';
 
 # Simple request with redirect
 $ua->max_redirects(3);
@@ -247,24 +251,6 @@ is $tx->redirects->[-1]->req->method, 'GET', 'right method';
 is $tx->redirects->[-1]->req->url, 'http://www.wikipedia.org/wiki/Perl',
   'right url';
 is $tx->redirects->[-1]->res->code, 301, 'right status';
-
-# Custom chunked request
-$tx = Mojo::Transaction::HTTP->new;
-$tx->req->method('GET');
-$tx->req->url->parse('http://www.google.com');
-$tx->req->headers->transfer_encoding('chunked');
-$tx->req->content->write_chunk(
-  'hello world!' => sub {
-    shift->write_chunk('hello world2!' => sub { shift->write_chunk('') });
-  }
-);
-$ua->start($tx);
-is_deeply [$tx->error],      ['Bad Request', 400], 'right error';
-is_deeply [$tx->res->error], ['Bad Request', 400], 'right error';
-ok $tx->local_address, 'has local address';
-ok $tx->local_port > 0, 'has local port';
-ok $tx->remote_address, 'has local address';
-ok $tx->remote_port > 0, 'has local port';
 
 # Connect timeout (non-routable address)
 $tx = $ua->connect_timeout(0.5)->get('192.0.2.1');

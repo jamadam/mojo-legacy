@@ -41,11 +41,26 @@ post '/no_snowman';
 
 my $t = Test::Mojo->new;
 
+# Reuse values
+my $values = [app->c(EU => [qw(de en)])];
+is app->select_field(country => $values),
+    '<select name="country"><optgroup label="EU">'
+  . '<option value="de">de</option>'
+  . '<option value="en">en</option>'
+  . '</optgroup></select>', 'right result';
+is app->select_field(country => $values),
+    '<select name="country"><optgroup label="EU">'
+  . '<option value="de">de</option>'
+  . '<option value="en">en</option>'
+  . '</optgroup></select>', 'right result';
+
 # Basic tags
 $t->options_ok('/tags')->status_is(200)->content_is(<<EOF);
 <foo />
 <foo bar="baz" />
 <foo one="t&lt;wo" three="four">Hello</foo>
+<div data-my-test-id="1" data-name="test">some content</div>
+<div data="bar">some content</div>
 EOF
 $t->patch_ok('/more_tags')->status_is(200)->content_is(<<EOF);
 <bar>b&lt;a&gt;z</bar>
@@ -56,7 +71,7 @@ EOF
 
 # Shortcut
 $t->get_ok('/small_tags')->status_is(200)->content_is(<<EOF);
-<div>some &amp; content</div>
+<div>test &amp; 123</div>
 <div>
   <p id="0">just</p>
   <p>0</p>
@@ -253,6 +268,8 @@ $t->get_ok('/form/lala?a=2&b=0&c=2&d=3&escaped=1%22+%222')->status_is(200)
 </form>
 <form action="/form/24" method="post">
   <input name="foo" type="text" />
+  <input data-id="1" data-name="test" name="foo" type="text" value="1" />
+  <input data="ok" name="foo" type="text" value="1" />
   <input name="foo" type="checkbox" value="1" />
   <input checked="checked" name="a" type="checkbox" value="2" />
   <input name="b" type="radio" value="1" />
@@ -283,6 +300,8 @@ $t->get_ok('/form/lala?c=b&d=3&e=4&f=<5')->status_is(200)->content_is(<<EOF);
 </form>
 <form action="/form/24" method="post">
   <input name="foo" type="text" />
+  <input data-id="1" data-name="test" name="foo" type="text" value="1" />
+  <input data="ok" name="foo" type="text" value="1" />
   <input name="foo" type="checkbox" value="1" />
   <input name="a" type="checkbox" value="2" />
   <input name="b" type="radio" value="1" />
@@ -468,6 +487,8 @@ __DATA__
 <%= tag 'foo' %>
 <%= tag 'foo', bar => 'baz' %>
 <%= tag 'foo', one => 't<wo', three => 'four' => begin %>Hello<% end %>
+<%= tag 'div', data => {my_test_ID => 1, naMe => 'test'} => 'some content' %>
+<%= tag 'div', data => 'bar' => 'some content' %>
 
 @@ more_tags.html.ep
 %= tag bar => 'b<a>z'
@@ -476,7 +497,7 @@ __DATA__
 %= tag 'bar', class => 'test', ''
 
 @@ small_tags.html.ep
-%=t div => 'some & content'
+%=t div => 'test & 123'
 %=t div => begin
   %=t p => (id => 0) => 'just'
   %=t p => 0
@@ -569,6 +590,8 @@ __DATA__
 <% end %>
 %= form_for 'form', {test => 24}, method => 'post' => begin
   %= text_field 'foo'
+  %= text_field foo => 1, data => {id => 1, name => 'test'}
+  %= text_field foo => 1, data => 'ok'
   %= check_box foo => 1
   %= check_box a => 2
   %= radio_button b => '1'
