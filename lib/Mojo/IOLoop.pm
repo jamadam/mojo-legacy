@@ -22,9 +22,7 @@ has multi_accept    => 50;
 has reactor         => sub {
   my $class = Mojo::Reactor::Poll->detect;
   warn "-- Reactor initialized ($class)\n" if DEBUG;
-  my $reactor = $class->new;
-  $reactor->on(error => sub { warn "@{[blessed $_[0]]}: $_[1]" });
-  return $reactor;
+  return $class->new->catch(sub { warn "@{[blessed $_[0]]}: $_[1]" });
 };
 
 # Ignore PIPE signal
@@ -86,8 +84,6 @@ sub delay {
   weaken $delay->ioloop(_instance(shift))->{ioloop};
   return @_ ? $delay->steps(@_) : $delay;
 }
-
-sub generate_port { Mojo::IOLoop::Server->generate_port }
 
 sub is_running { _instance(shift)->reactor->is_running }
 sub next_tick  { _instance(shift)->reactor->next_tick(@_) }
@@ -160,7 +156,7 @@ sub _accepting {
   return unless $i < $max;
 
   # Acquire accept mutex
-  if (my $cb = $self->lock) { return unless $self->$cb(!$i) }
+  if (my $cb = $self->lock) { return unless $cb->(!$i) }
   $self->_remove(delete $self->{accept});
 
   # Check if multi-accept is desirable
@@ -188,7 +184,7 @@ sub _not_accepting {
   # Release accept mutex
   return unless delete $self->{accepting};
   return unless my $cb = $self->unlock;
-  $self->$cb;
+  $cb->();
 
   $_->stop for values %{$self->{acceptors} || {}};
 }
@@ -348,7 +344,7 @@ processes. The callback should return true or false. Note that exceptions in
 this callback are not captured.
 
   $loop->lock(sub {
-    my ($loop, $blocking) = @_;
+    my $blocking = shift;
 
     # Got the accept mutex, start accepting new connections
     return 1;
@@ -446,9 +442,9 @@ L<Mojo::IOLoop::Client/"connect">.
   my $delay = $loop->delay(sub {...}, sub {...});
 
 Build L<Mojo::IOLoop::Delay> object to manage callbacks and control the flow
-of events, which can help you avoid deep nested closures that often result
-from continuation-passing style. Callbacks will be passed along to
-L<Mojo::IOLoop::Delay/"steps">.
+of events for this event loop, which can help you avoid deep nested closures
+that often result from continuation-passing style. Callbacks will be passed
+along to L<Mojo::IOLoop::Delay/"steps">.
 
   # Synchronize multiple events
   my $delay = Mojo::IOLoop->delay(sub { say 'BOOM!' });
@@ -459,10 +455,10 @@ L<Mojo::IOLoop::Delay/"steps">.
       $end->();
     });
   }
-  $delay->wait unless Mojo::IOLoop->is_running;
+  $delay->wait;
 
   # Sequentialize multiple events
-  my $delay = Mojo::IOLoop->delay(
+  Mojo::IOLoop->delay(
 
     # First step (simple timer)
     sub {
@@ -481,15 +477,22 @@ L<Mojo::IOLoop::Delay/"steps">.
 
     # Third step (the end)
     sub { say 'And done after 5 seconds total.' }
-  );
-  $delay->wait unless Mojo::IOLoop->is_running;
+  )->wait;
 
-=head2 generate_port
-
-  my $port = Mojo::IOLoop->generate_port;
-  my $port = $loop->generate_port;
-
-Find a free TCP port, this is a utility function primarily used for tests.
+  # Handle exceptions in all steps
+  Mojo::IOLoop->delay(
+    sub {
+      my $delay = shift;
+      die 'Intentional error!';
+    },
+    sub {
+      my ($delay, @args) = @_;
+      say 'Never actually reached.';
+    }
+  )->catch(sub {
+    my ($delay, $err) = @_;
+    say "Something went wrong: $err";
+  })->wait;
 
 =head2 is_running
 

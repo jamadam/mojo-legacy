@@ -2,7 +2,7 @@ package Mojo::Message::Request;
 use Mojo::Base 'Mojo::Message';
 
 use Mojo::Cookie::Request;
-use Mojo::Util qw(b64_encode b64_decode deprecated);
+use Mojo::Util qw(b64_encode b64_decode);
 use Mojo::URL;
 
 has env => sub { {} };
@@ -61,7 +61,8 @@ sub extract_start_line {
   return undef unless $$bufref =~ s/^\s*(.*?)\x0d?\x0a//;
 
   # We have a (hopefully) full request line
-  $self->error('Bad request start line', 400) and return undef
+  $self->error({message => 'Bad request start line', advice => 400})
+    and return undef
     unless $1 =~ $START_LINE_RE;
   my $url = $self->method($1)->version($3)->url;
   return !!($1 eq 'CONNECT' ? $url->authority($2) : $url->parse($2));
@@ -170,15 +171,9 @@ sub parse {
   $self->proxy(Mojo::URL->new->userinfo($proxy_auth)) if $proxy_auth;
 
   # "X-Forwarded-Proto"
-  return $self unless $self->reverse_proxy;
   $base->scheme('https')
-    if (defined $headers->header('X-Forwarded-Proto') ? $headers->header('X-Forwarded-Proto'): '') eq 'https';
-
-  # DEPRECATED in Top Hat!
-  $base->scheme('https')
-    and deprecated
-    'X-Forwarded-HTTPS is DEPRECATED in favor of X-Forwarded-Proto'
-    if $headers->header('X-Forwarded-HTTPS');
+    if $self->reverse_proxy
+    && (defined $headers->header('X-Forwarded-Proto') ? $headers->header('X-Forwarded-Proto') : '') eq 'https';
 
   return $self;
 }

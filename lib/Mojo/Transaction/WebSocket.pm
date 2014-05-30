@@ -256,11 +256,6 @@ sub server_handshake {
     and $res_headers->sec_websocket_protocol($1);
   $res_headers->sec_websocket_accept(
     _challenge($req_headers->sec_websocket_key));
-
-  # "permessage-deflate" extension
-  $self->compressed(1)
-    and $res_headers->sec_websocket_extensions('permessage-deflate')
-    if (defined $req_headers->sec_websocket_extensions ? $req_headers->sec_websocket_extensions : '') =~ /permessage-deflate/;
 }
 
 sub server_read {
@@ -283,6 +278,16 @@ sub server_write {
   }
 
   return do { my $tmp = delete $self->{write}; defined $tmp ? $tmp : '' };
+}
+
+sub with_compression {
+  my $self = shift;
+
+  # "permessage-deflate" extension
+  $self->compressed(1)
+    and $self->res->headers->sec_websocket_extensions('permessage-deflate')
+    if (defined $self->req->headers->sec_websocket_extensions ? $self->req->headers->sec_websocket_extensions : '')
+    =~ /permessage-deflate/;
 }
 
 sub _challenge { b64_encode(sha1_bytes(($_[0] || '') . GUID), '') }
@@ -698,6 +703,12 @@ Read data server-side, used to implement web servers.
   my $bytes = $ws->server_write;
 
 Write data server-side, used to implement web servers.
+
+=head2 with_compression
+
+  $ws->with_compression;
+
+Negotiate C<permessage-deflate> extension for this WebSocket connection.
 
 =head1 DEBUGGING
 

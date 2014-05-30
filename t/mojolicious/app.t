@@ -113,6 +113,7 @@ ok $t->app->routes->is_hidden('render_later'),     'is hidden';
 ok $t->app->routes->is_hidden('render_maybe'),     'is hidden';
 ok $t->app->routes->is_hidden('render_not_found'), 'is hidden';
 ok $t->app->routes->is_hidden('render_static'),    'is hidden';
+ok $t->app->routes->is_hidden('render_to_string'), 'is hidden';
 ok $t->app->routes->is_hidden('rendered'),         'is hidden';
 ok $t->app->routes->is_hidden('req'),              'is hidden';
 ok $t->app->routes->is_hidden('res'),              'is hidden';

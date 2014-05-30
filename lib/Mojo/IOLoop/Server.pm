@@ -98,7 +98,7 @@ sub listen {
     SSL_honor_cipher_order => 1,
     SSL_key_file           => $args->{tls_key} || $KEY,
     SSL_startHandshake     => 0,
-    SSL_verify_mode => defined $args->{tls_verify} ? $args->{tls_verify} : $args->{tls_ca} ? 0x03 : 0x00
+    SSL_verify_mode => defined $args->{tls_verify} ? $args->{tls_verify} : ($args->{tls_ca} ? 0x03 : 0x00)
   };
   $tls->{SSL_ca_file} = $args->{tls_ca}
     if $args->{tls_ca} && -T $args->{tls_ca};
@@ -127,7 +127,7 @@ sub _accept {
     # Start TLS handshake
     $self->emit_safe(accept => $handle) and next unless my $tls = $self->{tls};
     $self->_handshake($self->{handles}{$handle} = $handle)
-      if $handle = IO::Socket::SSL->start_SSL($handle, %$tls);
+      if $handle = IO::Socket::SSL->start_SSL($handle, %$tls, SSL_server => 1);
   }
 }
 
@@ -225,7 +225,7 @@ implements the following new ones.
 
   my $port = $server->generate_port;
 
-Find a free TCP port, this is a utility function primarily used for tests.
+Find a free TCP port, primarily used for tests.
 
 =head2 handle
 

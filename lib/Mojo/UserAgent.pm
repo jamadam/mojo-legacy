@@ -79,9 +79,9 @@ sub _cleanup {
   $self->_handle($_, 1) for keys %{$self->{connections} || {}};
 
   # Clean up keep-alive connections
-  $loop->remove($_->[1]) for @{delete $self->{queue}{0} || []};
+  $loop->remove($_->[1]) for @{delete $self->{queue} || []};
   $loop = Mojo::IOLoop->singleton;
-  $loop->remove($_->[1]) for @{delete $self->{queue}{1} || []};
+  $loop->remove($_->[1]) for @{delete $self->{nb_queue} || []};
 
   return $self;
 }
@@ -130,7 +130,7 @@ sub _connect_proxy {
 
       # CONNECT failed (connection needs to be kept alive)
       unless ($tx->keep_alive && $tx->res->is_status_class(200)) {
-        $old->req->error('Proxy connection failed');
+        $old->req->error({message => 'Proxy connection failed'});
         return $self->$cb($old);
       }
 
@@ -207,8 +207,8 @@ sub _dequeue {
 
   my $found;
   my $loop = $self->_loop($nb);
-  my $old  = $self->{queue}{$nb} || [];
-  my $new  = $self->{queue}{$nb} = [];
+  my $old  = $self->{$nb ? 'nb_queue' : 'queue'} || [];
+  my $new  = $self->{$nb ? 'nb_queue' : 'queue'} = [];
   for my $queued (@$old) {
     push @$new, $queued and next if $found || !grep { $_ eq $name } @$queued;
 
@@ -224,7 +224,7 @@ sub _enqueue {
   my ($self, $nb, $name, $id) = @_;
 
   # Enforce connection limit
-  my $queue = $self->{queue}{$nb} ||= [];
+  my $queue = $self->{$nb ? 'nb_queue' : 'queue'} ||= [];
   my $max = $self->max_connections;
   $self->_remove(shift(@$queue)->[1]) while @$queue > $max;
   push @$queue, [$name, $id] if $max;
@@ -232,7 +232,10 @@ sub _enqueue {
 
 sub _error {
   my ($self, $id, $err, $timeout) = @_;
-  if (my $tx = $self->{connections}{$id}{tx}) { $tx->res->error($err) }
+
+  if (my $tx = $self->{connections}{$id}{tx}) {
+    $tx->res->error({message => $err});
+  }
   elsif (!$timeout) { return $self->emit(error => $err) }
   $self->_handle($id, 1);
 }
@@ -388,8 +391,9 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   my $tx = $ua->post('https://metacpan.org/search' => form => {q => 'mojo'});
   if (my $res = $tx->success) { say $res->body }
   else {
-    my ($err, $code) = $tx->error;
-    say $code ? "$code response: $err" : "Connection error: $err";
+    my $err = $tx->error;
+    die "$err->{code} response: $err->{message}" if $err->{code};
+    die "Connection error: $err->{message}";
   }
 
   # Quick JSON API request with Basic authentication
@@ -414,21 +418,10 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   my $tx = $ua->cert('tls.crt')->key('tls.key')
     ->post('https://example.com' => json => {top => 'secret'});
 
-  # Blocking concurrent requests (does not work inside a running event loop)
-  my $delay = Mojo::IOLoop->delay;
-  for my $url ('mojolicio.us', 'cpan.org') {
-    my $end = $delay->begin(0);
-    $ua->get($url => sub {
-      my ($ua, $tx) = @_;
-      $end->($tx->res->dom->at('title')->text);
-    });
-  }
-  my @titles = $delay->wait;
-
-  # Non-blocking concurrent requests (does work inside a running event loop)
+  # Non-blocking concurrent requests
   my $delay = Mojo::IOLoop->delay(sub {
     my ($delay, @titles) = @_;
-    ...
+    say for @titles;
   });
   for my $url ('mojolicio.us', 'cpan.org') {
     my $end = $delay->begin(0);
@@ -437,7 +430,7 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
       $end->($tx->res->dom->at('title')->text);
     });
   }
-  $delay->wait unless Mojo::IOLoop->is_running;
+  $delay->wait;
 
   # Non-blocking WebSocket connection sending and receiving JSON messages
   $ua->websocket('ws://example.com/echo.json' => sub {
@@ -686,7 +679,7 @@ L<Mojo::UserAgent::Transactor/"tx">.
   $tx->res->on(progress => sub {
     my $res = shift;
     return unless my $server = $res->headers->server;
-    $res->error('Oh noes, it is IIS!') if $server =~ /IIS/;
+    $res->error({message => 'Oh noes, it is IIS!'}) if $server =~ /IIS/;
   });
   $tx = $ua->start($tx);
 
@@ -877,7 +870,8 @@ L<Mojo::Transaction::HTTP> object.
   Mojo::IOLoop->start unless Mojo::IOLoop->is_running;
 
 You can activate C<permessage-deflate> compression by setting the
-C<Sec-WebSocket-Extensions> header.
+C<Sec-WebSocket-Extensions> header, this can result in much better
+performance, but also increases memory usage by up to 300KB per connection.
 
   my $headers = {'Sec-WebSocket-Extensions' => 'permessage-deflate'};
   $ua->websocket('ws://example.com/foo' => $headers => sub {...});
