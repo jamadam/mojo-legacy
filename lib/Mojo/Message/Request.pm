@@ -70,25 +70,21 @@ sub fix_headers {
   my $self = shift;
   $self->{fix} ? return $self : $self->SUPER::fix_headers(@_);
 
-  # Basic authentication
+  # Host
   my $url     = $self->url;
   my $headers = $self->headers;
-  my $auth    = $url->userinfo;
-  $headers->authorization('Basic ' . b64_encode($auth, ''))
-    if $auth && !$headers->authorization;
+  $headers->host($url->host_port) unless $headers->host;
 
-  # Basic proxy authentication
-  if (my $proxy = $self->proxy) {
-    my $proxy_auth = $proxy->userinfo;
-    $headers->proxy_authorization('Basic ' . b64_encode($proxy_auth, ''))
-      if $proxy_auth && !$headers->proxy_authorization;
+  # Basic authentication
+  if ((my $info = $url->userinfo) && !$headers->authorization) {
+    $headers->authorization('Basic ' . b64_encode($info, ''));
   }
 
-  # Host
-  my $host = $url->ihost;
-  my $port = $url->port;
-  $headers->host($port ? "$host:$port" : $host) unless $headers->host;
-
+  # Basic proxy authentication
+  return $self unless my $proxy = $self->proxy;
+  return $self unless my $info  = $proxy->userinfo;
+  $headers->proxy_authorization('Basic ' . b64_encode($info, ''))
+    unless $headers->proxy_authorization;
   return $self;
 }
 
@@ -98,25 +94,21 @@ sub get_start_line_chunk {
   unless (defined $self->{start_buffer}) {
 
     # Path
-    my $url   = $self->url;
-    my $path  = $url->path->to_string;
-    my $query = $url->query->to_string;
-    $path .= "?$query" if $query;
+    my $url  = $self->url;
+    my $path = $url->path_query;
     $path = "/$path" unless $path =~ m!^/!;
 
     # CONNECT
     my $method = uc $self->method;
     if ($method eq 'CONNECT') {
       my $port = $url->port || ($url->protocol eq 'https' ? '443' : '80');
-      $path = $url->host . ":$port";
+      $path = $url->ihost . ":$port";
     }
 
     # Proxy
     elsif ($self->proxy) {
-      my $clone = $url = $url->clone->userinfo(undef);
-      my $upgrade = lc(defined $self->headers->upgrade ? $self->headers->upgrade : '');
-      $path = $clone
-        unless $upgrade eq 'websocket' || $url->protocol eq 'https';
+      $path = $url->clone->userinfo(undef)
+        unless $self->is_handshake || $url->protocol eq 'https';
     }
 
     $self->{start_buffer} = "$method $path HTTP/@{[$self->version]}\x0d\x0a";
@@ -125,6 +117,8 @@ sub get_start_line_chunk {
   $self->emit(progress => 'start_line', $offset);
   return substr $self->{start_buffer}, $offset, 131072;
 }
+
+sub is_handshake { lc(defined $_[0]->headers->upgrade ? $_[0]->headers->upgrade : '') eq 'websocket' }
 
 sub is_secure {
   my $url = shift->url;
@@ -204,7 +198,7 @@ sub _parse_env {
   my $base    = $url->base;
   while (my ($name, $value) = each %$env) {
     next unless $name =~ s/^HTTP_//i;
-    $name =~ s/_/-/g;
+    $name =~ y/_/-/;
     $headers->header($name => $value);
 
     # Host/Port
@@ -369,6 +363,12 @@ Make sure request has all required headers.
 
 Get a chunk of request line data starting from a specific position.
 
+=head2 is_handshake
+
+  my $bool = $req->is_handshake;
+
+Check C<Upgrade> header for C<websocket> value.
+
 =head2 is_secure
 
   my $bool = $req->is_secure;
@@ -387,19 +387,19 @@ Check C<X-Requested-With> header for C<XMLHttpRequest> value.
   my $foo   = $req->param('foo');
   my @foo   = $req->param('foo');
 
-Access GET and POST parameters. Note that this method caches all data, so it
-should not be called before the entire request body has been received. Parts
-of the request body need to be loaded into memory to parse POST parameters, so
-you have to make sure it is not excessively large.
+Access C<GET> and C<POST> parameters. Note that this method caches all data,
+so it should not be called before the entire request body has been received.
+Parts of the request body need to be loaded into memory to parse C<POST>
+parameters, so you have to make sure it is not excessively large.
 
 =head2 params
 
   my $params = $req->params;
 
-All GET and POST parameters, usually a L<Mojo::Parameters> object. Note that
-this method caches all data, so it should not be called before the entire
+All C<GET> and C<POST> parameters, usually a L<Mojo::Parameters> object. Note
+that this method caches all data, so it should not be called before the entire
 request body has been received. Parts of the request body need to be loaded
-into memory to parse POST parameters, so you have to make sure it is not
+into memory to parse C<POST> parameters, so you have to make sure it is not
 excessively large.
 
   # Get parameter value
@@ -428,7 +428,7 @@ Proxy URL for request.
 
   my $params = $req->query_params;
 
-All GET parameters, usually a L<Mojo::Parameters> object.
+All C<GET> parameters, usually a L<Mojo::Parameters> object.
 
   # Turn GET parameters to hash and extract value
   say $req->query_params->to_hash->{foo};

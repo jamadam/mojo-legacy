@@ -4,8 +4,7 @@ use overload bool => sub {1}, '""' => sub { shift->to_string }, fallback => 1;
 
 use Mojo::Parameters;
 use Mojo::Path;
-use Mojo::Util
-  qw(deprecated punycode_decode punycode_encode url_escape url_unescape);
+use Mojo::Util qw(punycode_decode punycode_encode url_escape url_unescape);
 
 has base => sub { Mojo::URL->new };
 has [qw(fragment host port scheme userinfo)];
@@ -29,14 +28,16 @@ sub authority {
   }
 
   # Build authority
-  return undef unless defined(my $authority = $self->ihost);
-  if (my $userinfo = $self->userinfo) {
-    $userinfo = url_escape $userinfo, '^A-Za-z0-9\-._~!$&\'()*+,;=:';
-    $authority = $userinfo . '@' . $authority;
-  }
-  if (my $port = $self->port) { $authority .= ":$port" }
+  return undef unless defined(my $authority = $self->host_port);
+  return $authority unless my $info = $self->userinfo;
+  return url_escape($info, '^A-Za-z0-9\-._~!$&\'()*+,;=:') . '@' . $authority;
+}
 
-  return $authority;
+sub host_port {
+  my $self = shift;
+  return undef unless defined(my $host = $self->ihost);
+  return $host unless my $port = $self->port;
+  return "$host:$port";
 }
 
 sub clone {
@@ -94,7 +95,13 @@ sub path {
   return $self;
 }
 
-sub protocol { lc(do { my $tmp = shift->scheme; defined $tmp ? $tmp : ''} ) }
+sub path_query {
+  my $self  = shift;
+  my $query = $self->query->to_string;
+  return $self->path->to_string . (length $query ? "?$query" : '');
+}
+
+sub protocol { lc(defined $_[0]->scheme ? $_[0]->scheme : '') }
 
 sub query {
   my $self = shift;
@@ -158,35 +165,6 @@ sub to_abs {
   return $abs;
 }
 
-# DEPRECATED in Top Hat!
-sub to_rel {
-  deprecated 'Mojo::URL::to_rel is DEPRECATED';
-  my $self = shift;
-
-  my $rel = $self->clone;
-  return $rel unless $rel->is_abs;
-
-  # Scheme and authority
-  my $base = shift || $rel->base;
-  $rel->base($base)->scheme(undef);
-  $rel->userinfo(undef)->host(undef)->port(undef) if $base->authority;
-
-  # Path
-  my @parts      = @{$rel->path->parts};
-  my $base_path  = $base->path;
-  my @base_parts = @{$base_path->parts};
-  pop @base_parts unless $base_path->trailing_slash;
-  while (@parts && @base_parts && $parts[0] eq $base_parts[0]) {
-    shift @$_ for \@parts, \@base_parts;
-  }
-  my $path = $rel->path(Mojo::Path->new)->path;
-  $path->leading_slash(1) if $rel->authority;
-  $path->parts([('..') x @base_parts, @parts]);
-  $path->trailing_slash(1) if $self->path->trailing_slash;
-
-  return $rel;
-}
-
 sub to_string {
   my $self = shift;
 
@@ -198,12 +176,9 @@ sub to_string {
   my $authority = $self->authority;
   $url .= "//$authority" if defined $authority;
 
-  # Path
-  my $path = $self->path->to_string;
-  $url .= !$authority || $path eq '' || $path =~ m!^/! ? $path : "/$path";
-
-  # Query
-  if (length(my $query = $self->query->to_string)) { $url .= "?$query" }
+  # Path and query
+  my $path = $self->path_query;
+  $url .= !$authority || $path eq '' || $path =~ m!^[/?]! ? $path : "/$path";
 
   # Fragment
   return $url unless defined(my $fragment = $self->fragment);
@@ -292,8 +267,8 @@ Scheme part of this URL.
 
 =head2 userinfo
 
-  my $userinfo = $url->userinfo;
-  $url         = $url->userinfo('root:pass%3Bw0rd');
+  my $info = $url->userinfo;
+  $url     = $url->userinfo('root:pass%3Bw0rd');
 
 Userinfo part of this URL.
 
@@ -314,6 +289,15 @@ Authority part of this URL.
   my $url2 = $url->clone;
 
 Clone this URL.
+
+=head2 host_port
+
+  my $host_port = $url->host_port;
+
+Normalized version of L</"host"> and L</"port">.
+
+  # "xn--da5b0n.net:8080"
+  Mojo::URL->new('http://☃.net:8080/test')->host_port;
 
 =head2 ihost
 
@@ -371,6 +355,12 @@ defaults to a L<Mojo::Path> object.
 
   # "http://example.com/perldoc/Mojo/DOM/HTML"
   Mojo::URL->new('http://example.com/perldoc/Mojo/')->path('DOM/HTML');
+
+=head2 path_query
+
+  my $path_query = $url->path_query;
+
+Normalized version of L</"path"> and L</"query">.
 
 =head2 protocol
 

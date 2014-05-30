@@ -16,7 +16,7 @@ helper my_cache => sub { my $app = $_[0]->app; $cache{$app} = defined $cache{$ap
 # Delay dispatching
 hook around_dispatch => sub {
   my ($next, $c) = @_;
-  Mojo::IOLoop->timer(0 => sub { $next->() });
+  Mojo::IOLoop->next_tick(sub { $next->() });
 };
 
 get '/' => sub {

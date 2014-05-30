@@ -47,8 +47,8 @@ sub import {
 }
 
 sub attr {
-  my ($class, $attrs, $default) = @_;
-  return unless ($class = ref $class || $class) && $attrs;
+  my ($self, $attrs, $default) = @_;
+  return unless (my $class = ref $self || $self) && $attrs;
 
   Carp::croak 'Default has to be a code reference or constant value'
     if ref $default && ref $default ne 'CODE';
@@ -227,7 +227,7 @@ Backported from perl-5.10.1
 
 =head1 DEBUGGING
 
-You can set the MOJO_BASE_DEBUG environment variable to get some advanced
+You can set the C<MOJO_BASE_DEBUG> environment variable to get some advanced
 diagnostics information printed to C<STDERR>.
 
   MOJO_BASE_DEBUG=1

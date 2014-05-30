@@ -21,7 +21,7 @@ has tx => sub { Mojo::Transaction::HTTP->new };
 # Reserved stash values
 my %RESERVED = map { $_ => 1 } (
   qw(action app cb controller data extends format handler json layout),
-  qw(namespace partial path status template text)
+  qw(namespace partial path status template text variant)
 );
 
 sub AUTOLOAD {
@@ -70,14 +70,11 @@ sub finish {
   $tx->finish(@_) and return $self if $tx->is_websocket;
 
   # Chunked stream
-  if ($tx->res->content->is_chunked) {
-    $self->write_chunk(@_) if @_;
-    return $self->write_chunk('');
-  }
+  return @_ ? $self->write_chunk(@_)->write_chunk('') : $self->write_chunk('')
+    if $tx->res->content->is_chunked;
 
   # Normal stream
-  $self->write(@_) if @_;
-  return $self->write('');
+  return @_ ? $self->write(@_)->write('') : $self->write('');
 }
 
 sub flash {
@@ -99,7 +96,7 @@ sub on {
   my ($self, $name, $cb) = @_;
   my $tx = $self->tx;
   $self->rendered(101) if $tx->is_websocket;
-  return $tx->on($name => sub { shift and $self->$cb(@_) });
+  return $tx->on($name => sub { shift; $self->$cb(@_) });
 }
 
 sub param {
@@ -251,7 +248,7 @@ sub send {
   my $tx = $self->tx;
   Carp::croak 'No WebSocket connection to send message to'
     unless $tx->is_websocket;
-  $tx->send($msg => sub { shift and $self->$cb(@_) if $cb });
+  $tx->send($msg, $cb ? sub { shift; $self->$cb(@_) } : ());
   return $self->rendered(101);
 }
 
@@ -366,8 +363,7 @@ sub validation {
 sub write {
   my ($self, $chunk, $cb) = @_;
   ($cb, $chunk) = ($chunk, undef) if ref $chunk eq 'CODE';
-  my $content = $self->res->content;
-  $content->write($chunk => sub { shift and $self->$cb(@_) if $cb });
+  $self->res->content->write($chunk, $cb ? sub { shift; $self->$cb(@_) } : ());
   return $self->rendered;
 }
 
@@ -375,7 +371,7 @@ sub write_chunk {
   my ($self, $chunk, $cb) = @_;
   ($cb, $chunk) = ($chunk, undef) if ref $chunk eq 'CODE';
   my $content = $self->res->content;
-  $content->write_chunk($chunk => sub { shift and $self->$cb(@_) if $cb });
+  $content->write_chunk($chunk, $cb ? sub { shift; $self->$cb(@_) } : ());
   return $self->rendered;
 }
 
@@ -592,10 +588,10 @@ status.
   $c              = $c->param(foo => qw(ba;r ba;z));
 
 Access route placeholder values that are not reserved stash values, file
-uploads and GET/POST parameters, in that order. Note that this method is
+uploads and C<GET>/C<POST> parameters, in that order. Note that this method is
 context sensitive in some cases and therefore needs to be used with care,
 there can always be multiple values, which might have unexpected consequences.
-Parts of the request body need to be loaded into memory to parse POST
+Parts of the request body need to be loaded into memory to parse C<POST>
 parameters, so you have to make sure it is not excessively large.
 
   # List context is ambiguous and should be avoided
@@ -658,8 +654,8 @@ the L</"stash">.
   $c->render(text => 'I ♥ Mojolicious!');
 
   # Render binary data
-  use Mojo::JSON 'j';
-  $c->render(data => j({test => 'I ♥ Mojolicious!'}));
+  use Mojo::JSON 'encode_json';
+  $c->render(data => encode_json({test => 'I ♥ Mojolicious!'}));
 
   # Render JSON
   $c->render(json => {test => 'I ♥ Mojolicious!'});
@@ -752,17 +748,17 @@ Get L<Mojo::Message::Request> object from L<Mojo::Transaction/"req">.
   my $req = $c->tx->req;
 
   # Extract request information
-  my $url      = $c->req->url->to_abs;
-  my $userinfo = $c->req->url->to_abs->userinfo;
-  my $host     = $c->req->url->to_abs->host;
-  my $agent    = $c->req->headers->user_agent;
-  my $bytes    = $c->req->body;
-  my $str      = $c->req->text;
-  my $hash     = $c->req->params->to_hash;
-  my $hash     = $c->req->json;
-  my $foo      = $c->req->json('/23/foo');
-  my $dom      = $c->req->dom;
-  my $bar      = $c->req->dom('div.bar')->first->text;
+  my $url   = $c->req->url->to_abs;
+  my $info  = $c->req->url->to_abs->userinfo;
+  my $host  = $c->req->url->to_abs->host;
+  my $agent = $c->req->headers->user_agent;
+  my $bytes = $c->req->body;
+  my $str   = $c->req->text;
+  my $hash  = $c->req->params->to_hash;
+  my $value = $c->req->json;
+  my $foo   = $c->req->json('/23/foo');
+  my $dom   = $c->req->dom;
+  my $bar   = $c->req->dom('div.bar')->first->text;
 
 =head2 res
 
@@ -785,7 +781,7 @@ Get L<Mojo::Message::Response> object from L<Mojo::Transaction/"res">.
   );
 
 Automatically select best possible representation for resource from C<Accept>
-request header, C<format> stash value or C<format> GET/POST parameter,
+request header, C<format> stash value or C<format> C<GET>/C<POST> parameter,
 defaults to rendering an empty C<204> response. Since browsers often don't
 really know what they actually want, unspecific C<Accept> request headers with
 more than one MIME type will be ignored, unless the C<X-Requested-With> header
@@ -798,7 +794,7 @@ is set to the value C<XMLHttpRequest>.
   );
 
 For more advanced negotiation logic you can also use the helper
-L<Mojolicious::Plugin::DefaultHelper/"accepts">.
+L<Mojolicious::Plugin::DefaultHelpers/"accepts">.
 
 =head2 send
 
@@ -821,8 +817,8 @@ status.
   $c->send({json => {test => 'I ♥ Mojolicious!'}});
 
   # Send JSON object as "Binary" message
-  use Mojo::JSON 'j';
-  $c->send({binary => j({test => 'I ♥ Mojolicious!'})});
+  use Mojo::JSON 'encode_json';
+  $c->send({binary => encode_json({test => 'I ♥ Mojolicious!'})});
 
   # Send "Ping" frame
   $c->send([1, 0, 0, 0, 9, 'Hello World!']);
@@ -847,8 +843,8 @@ timeout, which usually defaults to C<15> seconds.
   $c          = $c->session(foo => 'bar');
 
 Persistent data storage for the next few requests, all session data gets
-serialized with L<Mojo::JSON> and stored C<Base64> encoded in C<HMAC-SHA1>
-signed cookies. Note that cookies usually have a 4096 byte limit, depending on
+serialized with L<Mojo::JSON> and stored Base64 encoded in HMAC-SHA1 signed
+cookies. Note that cookies usually have a C<4096> byte limit, depending on
 browser.
 
   # Manipulate session
@@ -873,7 +869,7 @@ browser.
   $c         = $c->signed_cookie(foo => 'bar', {path => '/'});
 
 Access signed request cookie values and create new signed response cookies.
-Cookies failing C<HMAC-SHA1> signature verification will be automatically
+Cookies failing HMAC-SHA1 signature verification will be automatically
 discarded.
 
 =head2 stash
@@ -888,8 +884,8 @@ wide default values can be set with L<Mojolicious/"defaults">. Some stash
 values have a special meaning and are reserved, the full list is currently
 C<action>, C<app>, C<cb>, C<controller>, C<data>, C<extends>, C<format>,
 C<handler>, C<json>, C<layout>, C<namespace>, C<partial>, C<path>, C<status>,
-C<template> and C<text>. Note that all stash values with a C<mojo.*> prefix
-are reserved for internal use.
+C<template>, C<text> and C<variant>. Note that all stash values with a
+C<mojo.*> prefix are reserved for internal use.
 
   # Remove value
   my $foo = delete $c->stash->{foo};
@@ -928,9 +924,9 @@ to inherit query parameters from the current request.
   my $validation = $c->validation;
 
 Get L<Mojolicious::Validator::Validation> object for current request to
-validate GET/POST parameters. Parts of the request body need to be loaded into
-memory to parse POST parameters, so you have to make sure it is not
-excessively large.
+validate C<GET>/C<POST> parameters. Parts of the request body need to be
+loaded into memory to parse C<POST> parameters, so you have to make sure it is
+not excessively large.
 
   my $validation = $c->validation;
   $validation->required('title')->size(3, 50);

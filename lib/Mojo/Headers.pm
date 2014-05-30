@@ -18,7 +18,7 @@ my %NORMALCASE = map { lc($_) => $_ } (
 );
 for my $header (values %NORMALCASE) {
   my $name = lc $header;
-  $name =~ s/-/_/g;
+  $name =~ y/-/_/;
   monkey_patch __PACKAGE__, $name, sub { scalar shift->header($header => @_) };
 }
 
@@ -183,7 +183,7 @@ L<Mojo::Headers> implements the following attributes.
   $headers = $headers->max_line_size(1024);
 
 Maximum header line size in bytes, defaults to the value of the
-MOJO_MAX_LINE_SIZE environment variable or C<10240>.
+C<MOJO_MAX_LINE_SIZE> environment variable or C<10240>.
 
 =head1 METHODS
 

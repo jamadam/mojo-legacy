@@ -214,7 +214,7 @@ sub _tag {
   my %attrs = @_;
   if ($attrs{data} && ref $attrs{data} eq 'HASH') {
     while (my ($key, $value) = each %{$attrs{data}}) {
-      $key =~ tr/_/-/;
+      $key =~ y/_/-/;
       $attrs{lc("data-$key")} = $value;
     }
     delete $attrs{data};
@@ -405,7 +405,7 @@ Generate file input element.
   % end
 
 Generate portable form tag with L<Mojolicious::Controller/"url_for">. For
-routes that allow POST but not GET, a C<method> attribute will be
+routes that allow C<POST> but not C<GET>, a C<method> attribute will be
 automatically added.
 
   <form action="/path/to/login">
@@ -772,7 +772,7 @@ picked up and shown as default.
   %= url_field address => 'http://mojolicio.us'
   %= url_field address => 'http://mojolicio.us', id => 'foo'
 
-Generate url input element. Previous input values will automatically get
+Generate URL input element. Previous input values will automatically get
 picked up and shown as default.
 
   <input name="address" type="url" />

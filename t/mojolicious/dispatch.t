@@ -9,14 +9,11 @@ use Mojo::Base 'Mojolicious::Controller';
 
 has 'render_called';
 
-sub render { shift->render_called(1) }
-
-sub reset_state {
-  my $self = shift;
-  $self->render_called(0);
-  my $stash = $self->stash;
-  delete @$stash{keys %$stash};
+sub new {
+  shift->SUPER::new(@_)->tap(sub { $_->app->log->level('fatal') });
 }
+
+sub render { shift->render_called(1) }
 
 package main;
 use Mojo::Base -strict;
@@ -79,9 +76,32 @@ is $c->param(foo => undef)->param('foo'), undef, 'no value';
 is $c->param(foo => Mojo::Upload->new(name => 'bar'))->param('foo')->name,
   'bar', 'right value';
 
+# Reserved stash values are hidden
+$c = Mojolicious::Controller->new;
+is $c->param(action => 'test')->param('action'), undef, 'value is reserved';
+is $c->param(app    => 'test')->param('app'),    undef, 'value is reserved';
+is $c->param(cb     => 'test')->param('cb'),     undef, 'value is reserved';
+is $c->param(controller => 'test')->param('controller'), undef,
+  'value is reserved';
+is $c->param(data    => 'test')->param('data'),    undef, 'value is reserved';
+is $c->param(extends => 'test')->param('extends'), undef, 'value is reserved';
+is $c->param(format  => 'test')->param('format'),  undef, 'value is reserved';
+is $c->param(handler => 'test')->param('handler'), undef, 'value is reserved';
+is $c->param(json    => 'test')->param('json'),    undef, 'value is reserved';
+is $c->param(layout  => 'test')->param('layout'),  undef, 'value is reserved';
+is $c->param(namespace => 'test')->param('namespace'), undef,
+  'value is reserved';
+is $c->param(partial => 'test')->param('partial'), undef, 'value is reserved';
+is $c->param(path    => 'test')->param('path'),    undef, 'value is reserved';
+is $c->param(status  => 'test')->param('status'),  undef, 'value is reserved';
+is $c->param(template => 'test')->param('template'), undef,
+  'value is reserved';
+is $c->param(text    => 'test')->param('text'),    undef, 'value is reserved';
+is $c->param(variant => 'test')->param('variant'), undef, 'value is reserved';
+is_deeply [$c->param], [], 'values are hidden';
+
 # Controller with application and routes
 $c = Test::Controller->new;
-$c->app->log->level('fatal');
 my $d = $c->app->routes;
 ok $d, 'initialized';
 $d->namespaces(['Test']);
@@ -89,7 +109,7 @@ $d->route('/')->over([])->to(controller => 'foo', action => 'home');
 $d->route('/foo/(capture)')->to(controller => 'foo', action => 'bar');
 
 # Cache
-$c->reset_state;
+$c = Test::Controller->new;
 my $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('/');
@@ -97,10 +117,23 @@ $c->tx($tx);
 ok $d->dispatch($c), 'dispatched';
 is $c->stash->{controller}, 'foo',  'right value';
 is $c->stash->{action},     'home', 'right value';
+is $c->match->stack->[0]{controller}, 'foo',  'right value';
+is $c->match->stack->[0]{action},     'home', 'right value';
 ok $c->render_called, 'rendered';
 my $cache = $d->cache->get('GET:/:0');
 ok $cache, 'route has been cached';
-$c->reset_state;
+$c  = Test::Controller->new;
+$tx = Mojo::Transaction::HTTP->new;
+$tx->req->method('GET');
+$tx->req->url->parse('/');
+$c->tx($tx);
+$d->match($c);
+is $c->stash->{controller}, undef, 'no value';
+is $c->stash->{action},     undef, 'no value';
+is $c->match->stack->[0]{controller}, 'foo',  'right value';
+is $c->match->stack->[0]{action},     'home', 'right value';
+ok !$c->render_called, 'not rendered';
+$c  = Test::Controller->new;
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('/');
@@ -108,11 +141,13 @@ $c->tx($tx);
 ok $d->dispatch($c), 'dispatched';
 is $c->stash->{controller}, 'foo',  'right value';
 is $c->stash->{action},     'home', 'right value';
+is $c->match->stack->[0]{controller}, 'foo',  'right value';
+is $c->match->stack->[0]{action},     'home', 'right value';
 ok $c->render_called, 'rendered';
 is_deeply $d->cache->get('GET:/:0'), $cache, 'cached route has been reused';
 
 # 404 clean stash
-$c->reset_state;
+$c  = Test::Controller->new;
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('/not_found');
@@ -122,7 +157,7 @@ is_deeply $c->stash, {}, 'empty stash';
 ok !$c->render_called, 'nothing rendered';
 
 # No escaping
-$c->reset_state;
+$c  = Test::Controller->new;
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('POST');
 $tx->req->url->parse('/foo/hello');
@@ -133,7 +168,6 @@ is $c->stash->{controller}, 'foo',   'right value';
 is $c->stash->{action},     'bar',   'right value';
 is $c->stash->{capture},    'hello', 'right value';
 is $c->stash->{test},       23,      'right value';
-isa_ok $c->stash->{'mojo.captures'}, 'HASH', 'right captures';
 is $c->param('controller'), undef,   'no value';
 is $c->param('action'),     undef,   'no value';
 is $c->param('capture'),    'hello', 'right value';
@@ -171,7 +205,7 @@ is_deeply [$c->param], [qw(action bar capture foo)], 'right names';
 ok $c->render_called, 'rendered';
 
 # Escaping
-$c->reset_state;
+$c  = Test::Controller->new;
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('/foo/hello%20there');
@@ -180,14 +214,13 @@ ok $d->dispatch($c), 'dispatched';
 is $c->stash->{controller}, 'foo',         'right value';
 is $c->stash->{action},     'bar',         'right value';
 is $c->stash->{capture},    'hello there', 'right value';
-isa_ok $c->stash->{'mojo.captures'}, 'HASH', 'right captures';
 is $c->param('controller'), undef,         'no value';
 is $c->param('action'),     undef,         'no value';
 is $c->param('capture'),    'hello there', 'right value';
 ok $c->render_called, 'rendered';
 
 # Escaping UTF-8
-$c->reset_state;
+$c  = Test::Controller->new;
 $tx = Mojo::Transaction::HTTP->new;
 $tx->req->method('GET');
 $tx->req->url->parse('/foo/%D0%BF%D1%80%D0%B8%D0%B2%D0%B5%D1%82');
@@ -196,10 +229,13 @@ ok $d->dispatch($c), 'dispatched';
 is $c->stash->{controller}, 'foo',          'right value';
 is $c->stash->{action},     'bar',          'right value';
 is $c->stash->{capture},    'привет', 'right value';
-isa_ok $c->stash->{'mojo.captures'}, 'HASH', 'right captures';
 is $c->param('controller'), undef,          'no value';
 is $c->param('action'),     undef,          'no value';
 is $c->param('capture'),    'привет', 'right value';
 ok $c->render_called, 'rendered';
+
+# Not a WebSocket transaction
+eval { $c->send('test') };
+like $@, qr/^No WebSocket connection to send message to/, 'right error';
 
 done_testing();

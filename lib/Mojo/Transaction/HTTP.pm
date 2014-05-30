@@ -60,7 +60,7 @@ sub server_read {
   # Generate response
   return unless $req->is_finished && !$self->{handled}++;
   $self->emit(upgrade => Mojo::Transaction::WebSocket->new(handshake => $self))
-    if lc(defined $req->headers->upgrade ? $req->headers->upgrade : '') eq 'websocket';
+    if $req->is_handshake;
   $self->emit('request');
 }
 
@@ -84,7 +84,7 @@ sub _body {
 
   # Finished
   $self->{state} = $finish ? 'finished' : 'read'
-    if $self->{write} <= 0 || (defined $buffer && !length $buffer);
+    if $self->{write} <= 0 || defined $buffer && !length $buffer;
 
   return defined $buffer ? $buffer : '';
 }

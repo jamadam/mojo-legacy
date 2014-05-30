@@ -51,6 +51,7 @@ sub new {
     my ($self, $handle) = @_;
     $handle ||= \*STDOUT;
     print $handle $$self. "\n";
+    return $self;
   }
 }
 
@@ -221,8 +222,8 @@ Quote bytestream with L<Mojo::Util/"quote">.
 
 =head2 say
 
-  $stream->say;
-  $stream->say(*STDERR);
+  $stream = $stream->say;
+  $stream = $stream->say(*STDERR);
 
 Print bytestream to handle and append a newline, defaults to C<STDOUT>.
 

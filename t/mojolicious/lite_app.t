@@ -21,6 +21,13 @@ is $@, qq{Plugin "does_not_exist" missing, maybe you need to install it?\n},
 # Default
 app->defaults(default => 23);
 
+# Secret
+my $log = '';
+my $cb = app->log->on(message => sub { $log .= pop });
+is app->secrets->[0], app->moniker, 'secret defaults to moniker';
+like $log, qr/Your secret passphrase needs to be changed!!!/, 'right message';
+app->log->unsubscribe(message => $cb);
+
 # Test helpers
 helper test_helper  => sub { shift->param(@_) };
 helper test_helper2 => sub { shift->app->controller_class };
@@ -317,7 +324,10 @@ post '/malformed_utf8' => sub {
 };
 
 get '/json' => sub {
-  shift->render(json => {foo => [1, -2, 3, 'b☃r']}, layout => 'layout');
+  my $self = shift;
+  return $self->render(json => $self->req->json)
+    if (do {my $tmp = $self->req->headers->content_type; defined $tmp ? $tmp : ''}) eq 'application/json';
+  $self->render(json => {foo => [1, -2, 3, 'b☃r']}, layout => 'layout');
 };
 
 get '/autostash' => sub { shift->render(handler => 'ep', foo => 'bar') };
@@ -370,8 +380,8 @@ get '/redirect_no_render' => sub {
 
 get '/redirect_callback' => sub {
   my $self = shift;
-  Mojo::IOLoop->timer(
-    0 => sub {
+  Mojo::IOLoop->next_tick(
+    sub {
       $self->res->code(301);
       $self->res->body('Whatever!');
       $self->redirect_to('http://127.0.0.1/foo');
@@ -445,13 +455,16 @@ my $t = Test::Mojo->new;
 
 # Application is already available
 is $t->app->test_helper2, 'Mojolicious::Controller', 'right class';
-is $t->app, app->commands->app, 'applications are equal';
 is $t->app->moniker, 'lite_app', 'right moniker';
-my $log = '';
-my $cb = $t->app->log->on(message => sub { $log .= pop });
-is $t->app->secrets->[0], $t->app->moniker, 'secret defaults to moniker';
-like $log, qr/Your secret passphrase needs to be changed!!!/, 'right message';
-$t->app->log->unsubscribe(message => $cb);
+is $t->app->stash->{default}, 23, 'right value';
+is $t->app, app->build_controller->app->commands->app,
+  'applications are equal';
+is $t->app->build_controller->req->url, '', 'no URL';
+is $t->app->build_controller->stash->{default}, 23, 'right value';
+is $t->app->build_controller($t->app->ua->build_tx(GET => '/foo'))->req->url,
+  '/foo', 'right URL';
+is $t->app->build_controller->render('index', handler => 'epl', partial => 1),
+  'Just works!', 'right result';
 
 # Unicode snowman
 $t->get_ok('/☃')->status_is(200)
@@ -889,8 +902,14 @@ $t->post_ok('/malformed_utf8' =>
 # JSON
 $t->get_ok('/json')->status_is(200)->header_is(Server => 'Mojolicious (Perl)')
   ->content_type_is('application/json')->json_is({foo => [1, -2, 3, 'b☃r']})
-  ->json_is('/foo' => [1, -2, 3, 'b☃r'])->json_is('/foo/3', 'b☃r')
-  ->json_has('/foo')->json_hasnt('/bar');
+  ->json_is('/foo' => [1, -2, 3, 'b☃r'])
+  ->json_is('/foo/3', 'b☃r', 'right value')->json_has('/foo')
+  ->json_hasnt('/bar');
+
+# JSON ("null")
+$t->get_ok('/json' => json => undef)->status_is(200)
+  ->header_is(Server => 'Mojolicious (Perl)')
+  ->content_type_is('application/json')->json_is(undef)->content_is('null');
 
 # Stash values in template
 $t->get_ok('/autostash?bar=23')->status_is(200)
