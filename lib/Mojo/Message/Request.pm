@@ -2,19 +2,20 @@ package Mojo::Message::Request;
 use Mojo::Base 'Mojo::Message';
 
 use Mojo::Cookie::Request;
-use Mojo::Util qw(b64_encode b64_decode);
+use Mojo::Util qw(b64_encode b64_decode deprecated);
 use Mojo::URL;
 
 has env => sub { {} };
 has method => 'GET';
 has url => sub { Mojo::URL->new };
+has 'reverse_proxy';
 
 my $START_LINE_RE = qr/
   ^
   ([a-zA-Z]+)                                            # Method
   \s+
   ([0-9a-zA-Z!#\$\%&'()*+,\-.\/:;=?\@[\\\]^_`\{|\}~]+)   # URL
-  (?:\s+HTTP\/(\d\.\d))?                                 # Version
+  \s+HTTP\/(\d\.\d)                                      # Version
   $
 /x;
 
@@ -168,9 +169,16 @@ sub parse {
   my $proxy_auth = _parse_basic_auth($headers->proxy_authorization);
   $self->proxy(Mojo::URL->new->userinfo($proxy_auth)) if $proxy_auth;
 
-  # "X-Forwarded-HTTPS"
+  # "X-Forwarded-Proto"
+  return $self unless $self->reverse_proxy;
   $base->scheme('https')
-    if $ENV{MOJO_REVERSE_PROXY} && $headers->header('X-Forwarded-HTTPS');
+    if (defined $headers->header('X-Forwarded-Proto') ? $headers->header('X-Forwarded-Proto'): '') eq 'https';
+
+  # DEPRECATED in Top Hat!
+  $base->scheme('https')
+    and deprecated
+    'X-Forwarded-HTTPS is DEPRECATED in favor of X-Forwarded-Proto'
+    if $headers->header('X-Forwarded-HTTPS');
 
   return $self;
 }
@@ -196,7 +204,8 @@ sub _parse_env {
   my $headers = $self->headers;
   my $url     = $self->url;
   my $base    = $url->base;
-  while (my ($name, $value) = each %$env) {
+  for my $name (keys %$env) {
+    my $value = $env->{$name};
     next unless $name =~ s/^HTTP_//i;
     $name =~ y/_/-/;
     $headers->header($name => $value);
@@ -326,6 +335,13 @@ HTTP request URL, defaults to a L<Mojo::URL> object.
   say $req->url->to_abs->host;
   say $req->url->to_abs->path;
 
+=head2 reverse_proxy
+
+  my $bool = $req->reverse_proxy;
+  $req     = $req->reverse_proxy($bool);
+
+Request has been performed through a reverse proxy.
+
 =head1 METHODS
 
 L<Mojo::Message::Request> inherits all methods from L<Mojo::Message> and
@@ -383,14 +399,16 @@ Check C<X-Requested-With> header for C<XMLHttpRequest> value.
 
 =head2 param
 
-  my @names = $req->param;
-  my $foo   = $req->param('foo');
-  my @foo   = $req->param('foo');
+  my @names       = $req->param;
+  my $foo         = $req->param('foo');
+  my @foo         = $req->param('foo');
+  my ($foo, $bar) = $req->param(['foo', 'bar']);
 
 Access C<GET> and C<POST> parameters. Note that this method caches all data,
 so it should not be called before the entire request body has been received.
 Parts of the request body need to be loaded into memory to parse C<POST>
-parameters, so you have to make sure it is not excessively large.
+parameters, so you have to make sure it is not excessively large, there's a
+10MB limit by default.
 
 =head2 params
 
@@ -400,7 +418,7 @@ All C<GET> and C<POST> parameters, usually a L<Mojo::Parameters> object. Note
 that this method caches all data, so it should not be called before the entire
 request body has been received. Parts of the request body need to be loaded
 into memory to parse C<POST> parameters, so you have to make sure it is not
-excessively large.
+excessively large, there's a 10MB limit by default.
 
   # Get parameter value
   say $req->params->param('foo');

@@ -4,7 +4,7 @@ use Mojo::Base 'Mojo';
 # "Fry: Shut up and take my money!"
 use Carp 'croak';
 use Mojo::Exception;
-use Mojo::Util qw(decamelize deprecated);
+use Mojo::Util 'decamelize';
 use Mojolicious::Commands;
 use Mojolicious::Controller;
 use Mojolicious::Plugins;
@@ -43,7 +43,7 @@ has types     => sub { Mojolicious::Types->new };
 has validator => sub { Mojolicious::Validator->new };
 
 our $CODENAME = 'Top Hat';
-our $VERSION  = '4.90';
+our $VERSION  = '4.99';
 
 sub AUTOLOAD {
   my $self = shift;
@@ -57,8 +57,6 @@ sub AUTOLOAD {
     unless my $helper = $self->renderer->helpers->{$method};
   return $self->build_controller->$helper(@_);
 }
-
-sub DESTROY { }
 
 sub build_controller {
   my ($self, $tx) = @_;
@@ -187,16 +185,6 @@ sub new {
 sub plugin {
   my $self = shift;
   $self->plugins->register_plugin(shift, $self, @_);
-}
-
-# DEPRECATED in Top Hat!
-sub secret {
-  deprecated
-    'Mojolicious::secret is DEPRECATED in favor of Mojolicious::secrets';
-  my $self = shift;
-  return $self->secrets->[0] unless @_;
-  $self->secrets->[0] = shift;
-  return $self;
 }
 
 sub start { shift->commands->run(@_ ? @_ : @ARGV) }
@@ -789,6 +777,8 @@ Ask Bjoern Hansen
 
 Audrey Tang
 
+Ben Tyler
+
 Ben van Staveren
 
 Benjamin Erhart
@@ -846,6 +836,8 @@ Graham Barr
 Henry Tang
 
 Hideki Yamamura
+
+Hiroki Toyokawa
 
 Ian Goodacre
 
@@ -998,6 +990,7 @@ the terms of the Artistic License version 2.0.
 
 =head1 SEE ALSO
 
-L<Mojolicious::Guides>, L<http://mojolicio.us>.
+L<https://github.com/kraih/mojo>, L<Mojolicious::Guides>,
+L<http://mojolicio.us>.
 
 =cut

@@ -48,7 +48,8 @@ sub from_hash {
   delete $self->{headers} if keys %{$hash} == 0;
 
   # Merge
-  while (my ($header, $value) = each %$hash) {
+  for my $header (keys %$hash) {
+    my $value = $hash->{$header};
     $self->add($header => ref $value eq 'ARRAY' ? @$value : $value);
   }
 
@@ -98,7 +99,7 @@ sub parse {
     }
 
     # New header
-    if ($line =~ /^(\S+)\s*:\s*(.*)$/) { push @$headers, $1, [$2] }
+    if ($line =~ /^(\S[^:]+)\s*:\s*(.*)$/) { push @$headers, $1, [$2] }
 
     # Multiline
     elsif (@$headers && $line =~ s/^\s+//) { push @{$headers->[-1]}, $line }

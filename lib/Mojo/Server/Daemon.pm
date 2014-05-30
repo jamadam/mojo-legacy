@@ -3,18 +3,18 @@ use Mojo::Base 'Mojo::Server';
 
 use Mojo::IOLoop;
 use Mojo::URL;
-use POSIX;
 use Scalar::Util 'weaken';
 
 use constant DEBUG => $ENV{MOJO_DAEMON_DEBUG} || 0;
 
 has acceptors => sub { [] };
-has [qw(backlog group silent user)];
+has [qw(backlog silent)];
 has inactivity_timeout => sub { defined $ENV{MOJO_INACTIVITY_TIMEOUT} ? $ENV{MOJO_INACTIVITY_TIMEOUT} : 15 };
 has ioloop => sub { Mojo::IOLoop->singleton };
 has listen => sub { [split ',', $ENV{MOJO_LISTEN} || 'http://*:3000'] };
-has max_clients  => 1000;
-has max_requests => 25;
+has max_clients   => 1000;
+has max_requests  => 25;
+has reverse_proxy => sub { $ENV{MOJO_REVERSE_PROXY} };
 
 sub DESTROY {
   my $self = shift;
@@ -27,27 +27,6 @@ sub run {
   my $self = shift;
   local $SIG{INT} = local $SIG{TERM} = sub { $self->ioloop->stop };
   $self->start->setuidgid->ioloop->start;
-}
-
-sub setuidgid {
-  my $self = shift;
-
-  # Group
-  if (my $group = $self->group) {
-    return $self->_log(error => qq{Group "$group" does not exist.})
-      unless defined(my $gid = getgrnam $group);
-    return $self->_log(error => qq{Can't switch to group "$group": $!})
-      unless POSIX::setgid($gid);
-  }
-
-  # User
-  return $self unless my $user = $self->user;
-  return $self->_log(error => qq{User "$user" does not exist.})
-    unless defined(my $uid = getpwnam $user);
-  return $self->_log(error => qq{Can't switch to user "$user": $!})
-    unless POSIX::setuid($uid);
-
-  return $self;
 }
 
 sub start {
@@ -89,6 +68,7 @@ sub _build_tx {
   my $handle = $self->ioloop->stream($id)->handle;
   $tx->local_address($handle->sockhost)->local_port($handle->sockport);
   $tx->remote_address($handle->peerhost)->remote_port($handle->peerport);
+  $tx->req->reverse_proxy(1) if $self->reverse_proxy;
   $tx->req->url->base->scheme('https') if $c->{tls};
 
   # Handle upgrades and requests
@@ -135,7 +115,7 @@ sub _finish {
   if (my $ws = $c->{tx} = delete $c->{ws}) {
 
     # Successful upgrade
-    if ($ws->res->code eq '101') {
+    if ($ws->res->code == 101) {
       weaken $self;
       $ws->on(resume => sub { $self->_write($id) });
     }
@@ -165,9 +145,9 @@ sub _listen {
   my $options = {
     address => $url->host,
     backlog => $self->backlog,
-    port    => $url->port,
     reuse   => scalar $query->param('reuse'),
   };
+  if (my $port = $url->port) { $options->{port} = $port }
   $options->{"tls_$_"} = scalar $query->param($_) for qw(ca cert ciphers key);
   my $verify = $query->param('verify');
   $options->{tls_verify} = hex $verify if defined $verify;
@@ -184,22 +164,20 @@ sub _listen {
       $stream->timeout($self->inactivity_timeout);
 
       $stream->on(close => sub { $self->_close($id) });
-      $stream->on(
-        error => sub { $self && $self->_log(error => pop)->_close($id) });
+      $stream->on(error =>
+          sub { $self && $self->app->log->error(pop) && $self->_close($id) });
       $stream->on(read => sub { $self->_read($id => pop) });
       $stream->on(timeout =>
-          sub { $self->_log(debug => 'Inactivity timeout.') if $c->{tx} });
+          sub { $self->app->log->debug('Inactivity timeout.') if $c->{tx} });
     }
   );
 
   return if $self->silent;
-  $self->_log(info => qq{Listening at "$url".});
+  $self->app->log->info(qq{Listening at "$url".});
   $query->params([]);
   $url->host('127.0.0.1') if $url->host eq '*';
   say "Server available at $url.";
 }
-
-sub _log { $_[0]->app->log->log(@_[1, 2]) and return $_[0] }
 
 sub _read {
   my ($self, $id, $chunk) = @_;
@@ -324,13 +302,6 @@ Active acceptors.
 
 Listen backlog size, defaults to C<SOMAXCONN>.
 
-=head2 group
-
-  my $group = $daemon->group;
-  $daemon   = $daemon->group('users');
-
-Group for server process.
-
 =head2 inactivity_timeout
 
   my $timeout = $daemon->inactivity_timeout;
@@ -402,8 +373,7 @@ Path to the TLS cert file, defaults to a built-in test certificate.
 
   ciphers=AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH
 
-Cipher specification string, defaults to
-C<ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH>.
+Cipher specification string.
 
 =item key
 
@@ -440,19 +410,20 @@ Maximum number of concurrent client connections, defaults to C<1000>.
 
 Maximum number of keep-alive requests per connection, defaults to C<25>.
 
+=head2 reverse_proxy
+
+  my $bool = $daemon->reverse_proxy;
+  $daemon  = $daemon->reverse_proxy($bool);
+
+This server operates behind a reverse proxy, defaults to the value of the
+C<MOJO_REVERSE_PROXY> environment variable.
+
 =head2 silent
 
   my $bool = $daemon->silent;
   $daemon  = $daemon->silent($bool);
 
 Disable console messages.
-
-=head2 user
-
-  my $user = $daemon->user;
-  $daemon  = $daemon->user('web');
-
-User for the server process.
 
 =head1 METHODS
 
@@ -464,12 +435,6 @@ implements the following new ones.
   $daemon->run;
 
 Run server.
-
-=head2 setuidgid
-
-  $daemon = $daemon->setuidgid;
-
-Set user and group for process.
 
 =head2 start
 

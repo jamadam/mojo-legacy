@@ -8,7 +8,7 @@
     %= javascript '/mojo/jquery/jquery.js'
     %= javascript '/mojo/prettify/run_prettify.js'
     %= stylesheet '/mojo/prettify/prettify-mojo-dark.css'
-    %= stylesheet begin
+    <style>
       a img { border: 0 }
       body {
         background: url(<%= url_for '/mojo/pinstripe-light.png' %>);
@@ -70,17 +70,17 @@
       }
       .value { padding-left: 1em }
       .wide { width: 100% }
-      #footer {
-        padding-top: 1em;
-        text-align: center;
-      }
-      #nothing { padding-top: 60px }
-      #showcase > pre {
+      #error {
         font: 1.5em 'Helvetica Neue', Helvetica, sans-serif;
         font-weight: 300;
         margin: 0;
         text-shadow: #333 0 1px 0;
       }
+      #footer {
+        padding-top: 1em;
+        text-align: center;
+      }
+      #nothing { padding-top: 60px }
       #showcase table { margin-top: 1em }
       #showcase td {
         padding-top: 0;
@@ -111,11 +111,11 @@
         max-width: 1000px;
         margin: 0 auto;
       }
-    % end
+    </style>
   </head>
   <body>
     %= include inline => app->renderer->_bundled('mojobar')
-    %= javascript begin
+    <script>
       function mojoDrawer (handle, drawer) {
         $(handle).click(function() {
           $(drawer).slideToggle('slow');
@@ -129,7 +129,7 @@
         mojoDrawer('#trace', '#frames');
         mojoDrawer('#more', '#infos');
       });
-    % end
+    </script>
     <div id="wrapperlicious">
       % my $kv = begin
         % my ($key, $value) = @_;
@@ -150,7 +150,7 @@
           % end
         % end
         <div id="showcase" class="box code spaced">
-          <pre><%= $exception->message %></pre>
+          <pre id="error"><%= $exception->message %></pre>
           <div id="context" class="more">
             <table>
               % for my $line (@{$exception->lines_before}) {
@@ -177,7 +177,7 @@
               </table>
             </div>
             <div class="tap">tap for more</div>
-            %= javascript begin
+            <script>
               var current = '#context';
               $('#showcase').click(function() {
                 $(current).slideToggle('slow', function() {
@@ -191,7 +191,7 @@
                 });
               });
               $('#insight').toggle();
-            % end
+            </script>
           % }
         </div>
         <div id="trace" class="box spaced">

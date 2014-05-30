@@ -92,7 +92,8 @@ Every placeholder has a name, even if it's just an empty string.
 =head2 Generic placeholders
 
 Generic placeholders are the simplest form of placeholders, they use a colon
-prefix and match all characters except C</> and C<.>.
+prefix and match all characters except C</> and C<.>, similar to the regular
+expression C<([^/.]+)>.
 
   /hello              -> /:name/hello -> undef
   /sebastian/23/hello -> /:name/hello -> undef
@@ -119,7 +120,8 @@ parentheses.
 =head2 Relaxed placeholders
 
 Relaxed placeholders are just like generic placeholders, but use a hash prefix
-and match all characters except C</>.
+and match all characters except C</>, similar to the regular expression
+C<([^/]+)>.
 
   /hello              -> /#name/hello -> undef
   /sebastian/23/hello -> /#name/hello -> undef
@@ -131,7 +133,8 @@ and match all characters except C</>.
 =head2 Wildcard placeholders
 
 Wildcard placeholders are just like the two placeholders above, but use an
-asterisk prefix and match absolutely everything, including C</> and C<.>.
+asterisk prefix and match absolutely everything, including C</> and C<.>,
+similar to the regular expression C<(.+)>.
 
   /hello              -> /*name/hello -> undef
   /sebastian/23/hello -> /*name/hello -> {name => 'sebastian/23'}
@@ -188,9 +191,10 @@ class, but the router can be accessed from everywhere (even at runtime).
 
 =head2 Routing destination
 
-After you start a new route with the method L<Mojolicious::Routes/"route">,
-you can also give it a destination in the form of a hash using the chained
-method L<Mojolicious::Routes::Route/"to">.
+After you start a new route with the method
+L<Mojolicious::Routes::Route/"route">, you can also give it a destination in
+the form of a hash using the chained method
+L<Mojolicious::Routes::Route/"to">.
 
   # /welcome -> {controller => 'foo', action => 'welcome'}
   $r->route('/welcome')->to(controller => 'foo', action => 'welcome');
@@ -294,7 +298,7 @@ C<controller#action>.
   # /bye -> {controller => 'foo', action => 'bye', mymessage => 'Bye'}
   $r->route('/bye')->to('foo#bye', mymessage => 'Bye');
 
-During camelization C<-> gets replaced with C<::>, this allows multi level
+During camelization C<-> gets replaced with C<::>, this allows multi-level
 C<controller> hierarchies.
 
   # / -> {controller => 'foo-bar', action => 'hi'} -> MyApp::Foo::Bar->hi
@@ -350,7 +354,8 @@ already exist.
     ->to(controller => 'foo', action => 'bar', mymessage => 'hi');
 
 One more interesting effect, a placeholder automatically becomes optional if
-there is already a stash value of the same name present.
+there is already a stash value of the same name present, this works similar to
+the regular expression C<([^/.]+)?>.
 
   # / -> {controller => 'foo', action => 'bar', mymessage => 'hi'}
   $r->route('/:mymessage')
@@ -386,7 +391,8 @@ L<Mojolicious::Controller>.
 =head2 More restrictive placeholders
 
 A very easy way to make placeholders more restrictive are alternatives, you
-just make a list of possible values.
+just make a list of possible values, which then work similar to the regular
+expression C<(bender|leela)>.
 
   # /bender -> {controller => 'foo', action => 'bar', name => 'bender'}
   # /leela  -> {controller => 'foo', action => 'bar', name => 'leela'}
@@ -394,10 +400,10 @@ just make a list of possible values.
   $r->route('/:name', name => [qw(bender leela)])
     ->to(controller => 'foo', action => 'bar');
 
-You can also adjust the regular expressions behind placeholders to better suit
-your needs. Just make sure not to use C<^> and C<$> or capturing groups
-C<(...)>, because placeholders become part of a larger regular expression
-internally, C<(?:...)> is fine though.
+You can also adjust the regular expressions behind placeholders directly, just
+make sure not to use C<^> and C<$> or capturing groups C<(...)>, because
+placeholders become part of a larger regular expression internally, C<(?:...)>
+is fine though.
 
   # /23   -> {controller => 'foo', action => 'bar', number => 23}
   # /test -> undef
@@ -609,8 +615,8 @@ operations to finish before reaching the next dispatch cycle.
 
 From the tutorial you should already know L<Mojolicious::Lite> routes, which
 are in fact just a small convenience layer around everything described above
-and accessible through methods like L<Mojolicious::Routes::Route/"get"> as
-part of the normal router.
+and accessible through methods like L<Mojolicious::Routes::Route/"get"> and
+L<Mojolicious::Routes::Route/"any"> as part of the normal router.
 
   # POST /foo -> {controller => 'foo', action => 'abc'}
   $r->post('/foo')->to(controller => 'foo', action => 'abc');

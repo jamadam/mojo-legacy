@@ -2,12 +2,10 @@ package Mojo::IOLoop::Stream;
 use Mojo::Base 'Mojo::EventEmitter';
 
 use Errno qw(EAGAIN ECONNRESET EINTR EPIPE EWOULDBLOCK);
+use Mojo::IOLoop;
 use Scalar::Util 'weaken';
 
-has reactor => sub {
-  require Mojo::IOLoop;
-  Mojo::IOLoop->singleton->reactor;
-};
+has reactor => sub { Mojo::IOLoop->singleton->reactor };
 
 sub DESTROY { shift->close }
 
@@ -243,7 +241,7 @@ L<Mojo::IOLoop::Stream> implements the following attributes.
   my $reactor = $stream->reactor;
   $stream     = $stream->reactor(Mojo::Reactor::Poll->new);
 
-Low level event reactor, defaults to the C<reactor> attribute value of the
+Low-level event reactor, defaults to the C<reactor> attribute value of the
 global L<Mojo::IOLoop> singleton.
 
 =head1 METHODS

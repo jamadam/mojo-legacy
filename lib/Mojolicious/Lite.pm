@@ -254,6 +254,11 @@ in debugging your application.
 
   app->start;
 
+You can even use CSS selectors with L<Mojolicious::Command::get> to extract
+only the information you're actually interested in.
+
+  $ ./myapp.pl get /dies '#error'
+
 =head2 Route names
 
 All routes can have a name associated with them, this allows automatic
@@ -725,7 +730,8 @@ Both have a higher precedence than routes.
 =head2 External templates
 
 External templates will be searched by the renderer in a C<templates>
-directory if it exists.
+directory if it exists and have a higher precedence than those in the C<DATA>
+section.
 
   use Mojolicious::Lite;
 
@@ -917,7 +923,7 @@ and return them with L<Mojolicious::Controller/"send">.
   <html>
     <head>
       <title>Echo</title>
-      %= javascript begin
+      <script>
         var ws = new WebSocket('<%= url_for('echo')->to_abs %>');
         ws.onmessage = function (event) {
           document.body.innerHTML += JSON.parse(event.data).msg;
@@ -925,7 +931,7 @@ and return them with L<Mojolicious::Controller/"send">.
         ws.onopen = function (event) {
           ws.send(JSON.stringify({msg: 'I ♥ Mojolicious!'}));
         };
-      % end
+      </script>
     </head>
   </html>
 
@@ -1001,7 +1007,7 @@ automatically exported.
 
 =head2 any
 
-  my $route = any '/:foo' => sub {...};
+  my $route = any '/:foo' => [foo => qr/\w+/] => sub {...};
   my $route = any [qw(GET POST)] => '/:foo' => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"any">, matching any of the
@@ -1016,14 +1022,14 @@ The L<Mojolicious::Lite> application.
 
 =head2 del
 
-  my $route = del '/:foo' => sub {...};
+  my $route = del '/:foo' => [foo => qr/\w+/] => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"delete">, matching only
 C<DELETE> requests. See also the tutorial above for more argument variations.
 
 =head2 get
 
-  my $route = get '/:foo' => sub {...};
+  my $route = get '/:foo' => [foo => qr/\w+/] => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"get">, matching only C<GET>
 requests. See also the tutorial above for more argument variations.
@@ -1048,7 +1054,7 @@ Share code with L<Mojolicious/"hook">.
 
 =head2 options
 
-  my $route = options '/:foo' => sub {...};
+  my $route = options '/:foo' => [foo => qr/\w+/] => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"options">, matching only
 C<OPTIONS> requests. See also the tutorial above for more argument
@@ -1056,7 +1062,7 @@ variations.
 
 =head2 patch
 
-  my $route = patch '/:foo' => sub {...};
+  my $route = patch '/:foo' => [foo => qr/\w+/] => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"patch">, matching only
 C<PATCH> requests. See also the tutorial above for more argument variations.
@@ -1069,14 +1075,14 @@ Load a plugin with L<Mojolicious/"plugin">.
 
 =head2 post
 
-  my $route = post '/:foo' => sub {...};
+  my $route = post '/:foo' => [foo => qr/\w+/] => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"post">, matching only
 C<POST> requests. See also the tutorial above for more argument variations.
 
 =head2 put
 
-  my $route = put '/:foo' => sub {...};
+  my $route = put '/:foo' => [foo => qr/\w+/] => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"put">, matching only C<PUT>
 requests. See also the tutorial above for more argument variations.
@@ -1092,7 +1098,7 @@ more argument variations.
 
 =head2 websocket
 
-  my $route = websocket '/:foo' => sub {...};
+  my $route = websocket '/:foo' => [foo => qr/\w+/] => sub {...};
 
 Generate route with L<Mojolicious::Routes::Route/"websocket">, matching only
 WebSocket handshakes. See also the tutorial above for more argument
