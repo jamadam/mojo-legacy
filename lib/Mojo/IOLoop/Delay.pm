@@ -3,11 +3,11 @@ use Mojo::Base 'Mojo::EventEmitter';
 
 use Mojo;
 use Mojo::IOLoop;
-use Hash::FieldHash 'fieldhash';
+BEGIN {eval {require Hash::Util::FieldHash; import Hash::Util::FieldHash qw(fieldhash)} || eval {require Hash::FieldHash; import Hash::FieldHash qw(fieldhash)}}
 
 has ioloop => sub { Mojo::IOLoop->singleton };
 
-fieldhash my %REMAINING;
+my %REMAINING; eval {fieldhash(%REMAINING)};
 
 sub begin {
   my ($self, $offset, $len) = @_;

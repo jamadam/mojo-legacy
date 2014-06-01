@@ -8,15 +8,20 @@ Notes;
 Some tests may fail. You better test first and make sure the 
 failing tests are not critical for you.
 
-Since v4.99, mojo-legacy comes to depend on following modules.
-To use this, install Hash::FieldHash and its dependent modules.
+Since mojo v4.95 it depends on Hash::Util::FieldHash which released for
+Perl core since perl-5.9.4. If you use older version of Perl, install
+following modules as a substitute.
 
 $ cpanm parent
 $ cpanm MRO::Compat
 $ cpanm Hash::FieldHash
 
+I recommend the installation though mojo-legacy works without the modules.
+*::FieldHash looks to me like a cure of memory leaks so
+if you're aiming at non-persistent environment like CGI, it may not a must.
+
 To test it, you should upgrade Test::More to latest version.
-Please do the following command. Please do the following command.
+Please do the following command.
 
 $ cpanm Test::More
 
