@@ -7,7 +7,7 @@ perl:
 env:
   - "HARNESS_OPTIONS=j9 TEST_POD=1 TEST_EV=1"
 install:
-  - "cpanm -n Test::Pod Test::Pod::Coverage EV"
+  - "cpanm -n EV"
   - "cpanm -n --installdeps ."
 notifications:
   email: sugama@jamadam.com
