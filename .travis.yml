@@ -5,7 +5,7 @@ perl:
   - "5.10"
   - "5.8"
 env:
-  - "HARNESS_OPTIONS=j9 TEST_POD=1 TEST_EV=1"
+  - "HARNESS_OPTIONS=j9 TEST_EV=1"
 install:
   - "cpanm -n EV"
   - "cpanm -n --installdeps ."
