@@ -17,6 +17,8 @@ WriteMakefile(
     'Digest::SHA'             => '0',
     'Socket'                  => '1.81',
     'Test::More'              => '0.98',
+    !(eval 'use Hash::Util::FieldHash; 1')
+                                      ? ('Hash::Util::FieldHash' => '0') : (),
   },
   META_MERGE   => {
     requires  => {perl => '5.008007'},
