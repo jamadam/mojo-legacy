@@ -6,7 +6,7 @@ use Mojo::Date;
 
 has [qw(code message)];
 
-# Umarked codes are from RFC 2616
+# Umarked codes are from RFC 7231
 my %MESSAGES = (
   100 => 'Continue',
   101 => 'Switching Protocols',
@@ -28,7 +28,7 @@ my %MESSAGES = (
   304 => 'Not Modified',
   305 => 'Use Proxy',
   307 => 'Temporary Redirect',
-  308 => 'Permanent Redirect',                 # Draft
+  308 => 'Permanent Redirect',                 # RFC 7238
   400 => 'Bad Request',
   401 => 'Unauthorized',
   402 => 'Payment Required',
@@ -97,8 +97,12 @@ sub extract_start_line {
   return undef unless $$bufref =~ s/^(.*?)\x0d?\x0a//;
   $self->error({message => 'Bad response start line'}) and return undef
     unless $1 =~ m!^\s*HTTP/(\d\.\d)\s+(\d\d\d)\s*(.+)?$!;
-  $self->content->skip_body(1) if $self->code($2)->is_empty;
-  return !!$self->version($1)->message($3)->content->auto_relax(1);
+
+  my $content = $self->content;
+  $content->skip_body(1) if $self->code($2)->is_empty;
+  $content->auto_relax(1) unless defined $content->auto_relax;
+  $content->expect_close(1) if $1 eq '1.0';
+  return !!$self->version($1)->message($3);
 }
 
 sub fix_headers {
@@ -169,7 +173,8 @@ Mojo::Message::Response - HTTP response
 =head1 DESCRIPTION
 
 L<Mojo::Message::Response> is a container for HTTP responses based on
-L<RFC 2616|http://tools.ietf.org/html/rfc2616>.
+L<RFC 7230|http://tools.ietf.org/html/rfc7230> and
+L<RFC 7231|http://tools.ietf.org/html/rfc7231>.
 
 =head1 EVENTS
 

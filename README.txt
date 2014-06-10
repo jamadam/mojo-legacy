@@ -3,17 +3,18 @@ The API is expected to be compatible with Mojolicious v5.01.
 
 The code is experimental and might not work in all cases.
 
-Notes;
+Since mojo-legacy v5.03 some tests are skipped unless the environment variable
+TEST_ORIGINAL_CASES set to true as following.
 
-Some tests may fail. You better test first and make sure the 
-failing tests are not critical for you.
+$ export TEST_ORIGINAL_CASES=1
+
+You better check which tests are failing on this backport project
+and make sure the use cases are not critical for you.
 
 Since mojo v4.95 it depends on Hash::Util::FieldHash which released for
 Perl core since perl-5.9.4. If you use older version of Perl, install
-following modules as a substitute.
+Hash::FieldHash as a substitute.
 
-$ cpanm parent
-$ cpanm MRO::Compat
 $ cpanm Hash::FieldHash
 
 I recommend the installation though mojo-legacy works without the modules.

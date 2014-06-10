@@ -58,9 +58,10 @@ sub proxy_connect {
   my $url = $req->url;
   return undef unless $req->is_handshake || $url->protocol eq 'https';
 
-  # CONNECT request
+  # CONNECT request (expect a bad response)
   my $new = $self->tx(CONNECT => $url->clone->userinfo(undef));
   $new->req->proxy($proxy);
+  $new->res->content->auto_relax(0);
 
   return $new;
 }
@@ -73,7 +74,7 @@ sub redirect {
   my $code = defined $res->code ? $res->code : 0;
   return undef unless grep { $_ == $code } 301, 302, 303, 307, 308;
 
-  # Fix broken location without authority and/or scheme
+  # Fix location without authority and/or scheme
   return unless my $location = $res->headers->location;
   $location = Mojo::URL->new($location);
   $location = $location->base($old->req->url)->to_abs unless $location->is_abs;

@@ -510,13 +510,17 @@ Append HTML/XML fragment to this node.
 
   $dom = $dom->append_content('<p>I ♥ Mojolicious!</p>');
 
-Append new content to this node's content.
+Append HTML/XML fragment or raw content (depending on node type) to this
+node's content.
 
   # "<div><h1>AB</h1></div>"
   $dom->parse('<div><h1>A</h1></div>')->at('h1')->append_content('B')->root;
 
   # "<!-- A B --><br>"
   $dom->parse('<!-- A --><br>')->contents->first->append_content('B ')->root;
+
+  # "<p>A<i>B</i></p>"
+  $dom->parse('<p>A</p>')->at('p')->append_content('<i>B</i>')->root;
 
 =head2 at
 
@@ -558,7 +562,8 @@ All selectors from L<Mojo::DOM::CSS/"SELECTORS"> are supported.
   my $str = $dom->content;
   $dom    = $dom->content('<p>I ♥ Mojolicious!</p>');
 
-Return this node's content or replace it with new content.
+Return this node's content or replace it with HTML/XML fragment or raw content
+(depending on node type).
 
   # "<b>test</b>"
   $dom->parse('<div><b>test</b></div>')->div->content;
@@ -574,6 +579,9 @@ Return this node's content or replace it with new content.
 
   # "<!-- B --><br>"
   $dom->parse('<!-- A --><br>')->contents->first->content(' B ')->root;
+
+  # "<p><i>B</i></p>"
+  $dom->parse('<p>A</p>')->at('p')->content('<i>B</i>')->root;
 
 =head2 contents
 
@@ -691,13 +699,17 @@ Prepend HTML/XML fragment to this node.
 
   $dom = $dom->prepend_content('<p>I ♥ Mojolicious!</p>');
 
-Prepend new content to this node's content.
+Prepend HTML/XML fragment or raw content (depending on node type) to this
+node's content.
 
   # "<div><h2>AB</h2></div>"
   $dom->parse('<div><h2>B</h2></div>')->at('h2')->prepend_content('A')->root;
 
   # "<!-- A B --><br>"
   $dom->parse('<!-- B --><br>')->contents->first->prepend_content(' A')->root;
+
+  # "<p><i>B</i>A</p>"
+  $dom->parse('<p>A</p>')->at('p')->prepend_content('<i>B</i>')->root;
 
 =head2 previous
 

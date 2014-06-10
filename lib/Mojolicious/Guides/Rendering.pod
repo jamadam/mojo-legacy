@@ -481,7 +481,7 @@ L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
 =head2 Layouts
 
 Most of the time when using C<ep> templates you will want to wrap your
-generated content in a HTML skeleton, thanks to layouts that's absolutely
+generated content in an HTML skeleton, thanks to layouts that's absolutely
 trivial.
 
   @@ foo/bar.html.ep
@@ -938,8 +938,8 @@ Assets such as templates and static files can be easily bundled with your
 plugins, even if you plan to release them to CPAN.
 
   $ mojo generate plugin AlertAssets
-  $ mkdir AlertAssets/lib/Mojolicious/Plugin/AlertAssets
-  $ cd AlertAssets/lib/Mojolicious/Plugin/AlertAssets
+  $ mkdir Mojolicious-Plugin-AlertAssets/lib/Mojolicious/Plugin/AlertAssets
+  $ cd Mojolicious-Plugin-AlertAssets/lib/Mojolicious/Plugin/AlertAssets
   $ mkdir public
   $ echo 'alert("Hello World!");' > public/alertassets.js
   $ mkdir templates
