@@ -38,6 +38,13 @@ use Mojolicious;
   );
 }
 
+# Reverse proxy
+{
+  ok !Mojo::Server::Daemon->new->reverse_proxy, 'no reverse proxy';
+  local $ENV{MOJO_REVERSE_PROXY} = 25;
+  ok !!Mojo::Server::Daemon->new->reverse_proxy, 'reverse proxy';
+}
+
 # Optional home detection
 my @path = qw(th is mojo dir wil l never-ever exist);
 my $app = Mojo->new(home => Mojo::Home->new(catdir @path));
@@ -221,7 +228,9 @@ $daemon = Mojo::Server::Daemon->new(
   silent => 1
 );
 is scalar @{$daemon->acceptors}, 0, 'no active acceptors';
+$daemon->ioloop->max_connections(500);
 $daemon->start;
+is $daemon->ioloop->max_connections, 500, 'right number';
 is scalar @{$daemon->acceptors}, 1, 'one active acceptor';
 is $daemon->app->moniker, 'mojolicious', 'right moniker';
 $port = Mojo::IOLoop->acceptor($daemon->acceptors->[0])->handle->sockport;
@@ -235,7 +244,8 @@ $tx = $ua->inactivity_timeout(0.5)
   ->get("http://127.0.0.1:$port/throttle2" => {Connection => 'close'});
 ok !$tx->success, 'not successful';
 is $tx->error->{message}, 'Inactivity timeout', 'right error';
-$daemon->start;
+$daemon->max_clients(600)->start;
+is $daemon->ioloop->max_connections, 600, 'right number';
 $tx = $ua->inactivity_timeout(10)
   ->get("http://127.0.0.1:$port/throttle3" => {Connection => 'close'});
 ok $tx->success, 'successful';

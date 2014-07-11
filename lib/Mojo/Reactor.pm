@@ -33,6 +33,7 @@ sub next_tick { shift->timer(0 => @_) and return undef }
 sub one_tick  { croak 'Method "one_tick" not implemented by subclass' }
 sub recurring { croak 'Method "recurring" not implemented by subclass' }
 sub remove    { croak 'Method "remove" not implemented by subclass' }
+sub reset     { croak 'Method "reset" not implemented by subclass' }
 sub start     { croak 'Method "start" not implemented by subclass' }
 sub stop      { croak 'Method "stop" not implemented by subclass' }
 sub timer     { croak 'Method "timer" not implemented by subclass' }
@@ -59,6 +60,7 @@ Mojo::Reactor - Low-level event reactor base class
   sub one_tick   {...}
   sub recurring  {...}
   sub remove     {...}
+  sub reset      {...}
   sub start      {...}
   sub stop       {...}
   sub timer      {...}
@@ -169,6 +171,12 @@ amount of time in seconds. Meant to be overloaded in a subclass.
   my $bool = $reactor->remove($id);
 
 Remove handle or timer. Meant to be overloaded in a subclass.
+
+=head2 reset
+
+  $reactor->reset;
+
+Remove all handles and timers. Meant to be overloaded in a subclass.
 
 =head2 start
 

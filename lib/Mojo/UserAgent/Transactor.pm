@@ -11,7 +11,7 @@ use Mojo::Parameters;
 use Mojo::Transaction::HTTP;
 use Mojo::Transaction::WebSocket;
 use Mojo::URL;
-use Mojo::Util 'encode';
+use Mojo::Util qw(encode url_escape);
 
 has generators => sub { {form => \&_form, json => \&_json} };
 has name => 'Mojolicious (Perl)';
@@ -61,7 +61,7 @@ sub proxy_connect {
   # CONNECT request (expect a bad response)
   my $new = $self->tx(CONNECT => $url->clone->userinfo(undef));
   $new->req->proxy($proxy);
-  $new->res->content->auto_relax(0);
+  $new->res->content->auto_relax(0)->headers->connection('keep-alive');
 
   return $new;
 }
@@ -208,7 +208,7 @@ sub _multipart {
         if (my $file = delete $value->{file}) {
           $file = Mojo::Asset::File->new(path => $file) unless ref $file;
           $part->asset($file);
-          $value->{filename} ||= basename $file->path
+          $value->{filename} = defined $value->{filename} ? $value->{filename} : basename $file->path
             if $file->isa('Mojo::Asset::File');
         }
 
@@ -218,7 +218,7 @@ sub _multipart {
         }
 
         # Filename and headers
-        $filename = delete $value->{filename} || $name;
+        $filename = url_escape do {my $tmp = delete $value->{filename}; defined $tmp ? $tmp : $name}, '"';
         $filename = encode $charset, $filename if $charset;
         $headers->from_hash($value);
       }
@@ -230,9 +230,10 @@ sub _multipart {
       }
 
       # Content-Disposition
+      $name = url_escape $name, '"';
       $name = encode $charset, $name if $charset;
       my $disposition = qq{form-data; name="$name"};
-      $disposition .= qq{; filename="$filename"} if $filename;
+      $disposition .= qq{; filename="$filename"} if defined $filename;
       $headers->content_disposition($disposition);
     }
   }

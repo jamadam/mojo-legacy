@@ -43,7 +43,7 @@ has types     => sub { Mojolicious::Types->new };
 has validator => sub { Mojolicious::Validator->new };
 
 our $CODENAME = 'Tiger Face';
-our $VERSION  = '5.05';
+our $VERSION  = '5.12';
 
 sub AUTOLOAD {
   my $self = shift;
@@ -581,9 +581,13 @@ and the application object, as well as a function in C<ep> templates.
   # Helper
   $app->helper(cache => sub { state $cache = {} });
 
-  # Controller/Application
-  $self->cache->{foo} = 'bar';
-  my $result = $self->cache->{foo};
+  # Application
+  $app->cache->{foo} = 'bar';
+  my $result = $app->cache->{foo};
+
+  # Controller
+  $c->cache->{foo} = 'bar';
+  my $result = $c->cache->{foo};
 
   # Template
   % cache->{foo} = 'bar';

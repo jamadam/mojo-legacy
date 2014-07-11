@@ -140,7 +140,7 @@ sub redirect_to {
 
   # Don't override 3xx status
   my $res = $self->res;
-  $res->headers->location($self->url_for(@_)->to_abs);
+  $res->headers->location($self->url_for(@_));
   return $self->rendered($res->is_status_class(300) ? () : 302);
 }
 
@@ -607,13 +607,13 @@ parameters, so you have to make sure it is not excessively large, there's a
 
   # List context is ambiguous and should be avoided, you can get multiple
   # values returned for a query string like "?foo=bar&foo=baz&foo=yada"
-  my $hash = {foo => $self->param('foo')};
+  my $hash = {foo => $c->param('foo')};
 
   # Better enforce scalar context
-  my $hash = {foo => scalar $self->param('foo')};
+  my $hash = {foo => scalar $c->param('foo')};
 
   # The multi-name form can also be used to enforce scalar context
-  my $hash = {foo => $self->param(['foo'])};
+  my $hash = {foo => $c->param(['foo'])};
 
 For more control you can also access request information directly.
 
@@ -658,7 +658,7 @@ Render content using L<Mojolicious::Renderer/"render"> and emit hooks
 L<Mojolicious/"before_render"> as well as L<Mojolicious/"after_render">. If no
 template is provided a default one based on controller and action or route
 name will be generated with L<Mojolicious::Renderer/"template_for">, all
-additional values get merged into the L</"stash">.
+additional pairs get merged into the L</"stash">.
 
   # Render characters
   $c->render(text => 'I ♥ Mojolicious!');
@@ -712,7 +712,7 @@ Try to render content, but do not call L</"render_not_found"> if no response
 could be generated, takes the same arguments as L</"render">.
 
   # Render template "index_local" only if it exists
-  $self->render_maybe('index_local') or $self->render('index');
+  $c->render_maybe('index_local') or $c->render('index');
 
 =head2 render_not_found
 
@@ -736,9 +736,10 @@ method does not protect from traversing to parent directories.
 
   my $output = $c->render_to_string('foo/index', format => 'pdf');
 
-Try to render content and return it, all arguments get localized automatically
-and are only available during this render operation, takes the same arguments
-as L</"render">.
+Try to render content and return it wrapped in a L<Mojo::ByteStream> object or
+return C<undef>, all arguments get localized automatically and are only
+available during this render operation, takes the same arguments as
+L</"render">.
 
 =head2 rendered
 
@@ -749,12 +750,12 @@ Finalize response and emit hook L<Mojolicious/"after_dispatch">, defaults to
 using a C<200> response code.
 
   # Custom response
-  $self->res->headers->content_type('text/plain');
-  $self->res->body('Hello World!');
-  $self->rendered(200);
+  $c->res->headers->content_type('text/plain');
+  $c->res->body('Hello World!');
+  $c->rendered(200);
 
   # Accept WebSocket handshake without subscribing to an event
-  $self->rendered(101);
+  $c->rendered(101);
 
 =head2 req
 
@@ -848,10 +849,11 @@ status.
   });
 
 For mostly idle WebSockets you might also want to increase the inactivity
-timeout, which usually defaults to C<15> seconds.
+timeout with L<Mojolicious::Plugin::DefaultHelpers/"inactivity_timeout">,
+which usually defaults to C<15> seconds.
 
   # Increase inactivity timeout for connection to 300 seconds
-  Mojo::IOLoop->stream($c->tx->connection)->timeout(300);
+  $c->inactivity_timeout(300);
 
 =head2 session
 
@@ -862,8 +864,8 @@ timeout, which usually defaults to C<15> seconds.
 
 Persistent data storage for the next few requests, all session data gets
 serialized with L<Mojo::JSON> and stored Base64 encoded in HMAC-SHA1 signed
-cookies. Note that cookies usually have a C<4096> byte limit, depending on
-browser.
+cookies. Note that cookies usually have a C<4096> byte (4KB) limit, depending
+on browser.
 
   # Manipulate session
   $c->session->{foo} = 'bar';
@@ -978,10 +980,11 @@ invoked once all data has been written.
   });
 
 For Comet (long polling) you might also want to increase the inactivity
-timeout, which usually defaults to C<15> seconds.
+timeout with L<Mojolicious::Plugin::DefaultHelpers/"inactivity_timeout">,
+which usually defaults to C<15> seconds.
 
   # Increase inactivity timeout for connection to 300 seconds
-  Mojo::IOLoop->stream($c->tx->connection)->timeout(300);
+  $c->inactivity_timeout(300);
 
 =head2 write_chunk
 

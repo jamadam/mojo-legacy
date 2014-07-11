@@ -14,34 +14,34 @@ use Test::Mojo;
 app->secrets(['test1']);
 
 get '/multi' => sub {
-  my $self = shift;
-  $self->cookie(unsigned1 => 'one');
-  $self->cookie(unsigned1 => 'two', {path => '/multi'});
-  $self->cookie(unsigned2 => 'three');
-  $self->signed_cookie(signed1 => 'four');
-  $self->signed_cookie(signed1 => 'five', {path => '/multi'});
-  $self->signed_cookie(signed2 => 'six');
+  my $c = shift;
+  $c->cookie(unsigned1 => 'one');
+  $c->cookie(unsigned1 => 'two', {path => '/multi'});
+  $c->cookie(unsigned2 => 'three');
+  $c->signed_cookie(signed1 => 'four');
+  $c->signed_cookie(signed1 => 'five', {path => '/multi'});
+  $c->signed_cookie(signed2 => 'six');
 };
 
 get '/expiration' => sub {
-  my $self = shift;
-  if ($self->param('redirect')) {
-    $self->session(expiration => 0);
-    return $self->redirect_to('expiration');
+  my $c = shift;
+  if ($c->param('redirect')) {
+    $c->session(expiration => 0);
+    return $c->redirect_to('expiration');
   }
-  $self->render(text => $self->session('expiration'));
+  $c->render(text => $c->session('expiration'));
 };
 
 under('/missing' => sub {1})->route->to('does_not_exist#not_at_all');
 
 under '/suspended' => sub {
-  my $self = shift;
+  my $c = shift;
 
   Mojo::IOLoop->next_tick(
     sub {
-      return $self->render(text => 'stopped!') unless $self->param('ok');
-      $self->stash(suspended => 'suspended!');
-      $self->continue;
+      return $c->render(text => 'stopped!') unless $c->param('ok');
+      $c->stash(suspended => 'suspended!');
+      $c->continue;
     }
   );
 
@@ -51,33 +51,33 @@ under '/suspended' => sub {
 get '/' => {inline => '<%= $suspended %>\\'};
 
 under sub {
-  my $self = shift;
-  $self->render(text => 'Unauthorized!', status => 401) and return undef
-    unless $self->req->headers->header('X-Bender');
-  $self->res->headers->add('X-Under' => 23);
-  $self->res->headers->add('X-Under' => 24);
+  my $c = shift;
+  $c->render(text => 'Unauthorized!', status => 401) and return undef
+    unless $c->req->headers->header('X-Bender');
+  $c->res->headers->add('X-Under' => 23);
+  $c->res->headers->add('X-Under' => 24);
   1;
 };
 
 get '/with_under' => sub {
-  my $self = shift;
-  $self->render(text => 'Unders are cool!');
+  my $c = shift;
+  $c->render(text => 'Unders are cool!');
 };
 
 get '/with_under_too' => sub {
-  my $self = shift;
-  $self->render(text => 'Unders are cool too!');
+  my $c = shift;
+  $c->render(text => 'Unders are cool too!');
 };
 
 under sub {
-  my $self = shift;
+  my $c = shift;
 
   # Authenticated
-  my $name = $self->param('name') || '';
+  my $name = $c->param('name') || '';
   return 1 if $name eq 'Bender';
 
   # Not authenticated
-  $self->render('param_auth_denied');
+  $c->render('param_auth_denied');
   return undef;
 };
 
@@ -87,11 +87,11 @@ get '/param_auth/too' =>
   sub { shift->render(text => 'You could be Bender too!') };
 
 under sub {
-  my $self = shift;
-  $self->stash(_name => 'stash');
-  $self->cookie(foo => 'cookie', {expires => time + 60});
-  $self->signed_cookie(bar => 'signed_cookie', {expires => time + 120});
-  $self->cookie(bad => 'bad_cookie--12345678');
+  my $c = shift;
+  $c->stash(_name => 'stash');
+  $c->cookie(foo => 'cookie', {expires => time + 60});
+  $c->signed_cookie(bar => 'signed_cookie', {expires => time + 120});
+  $c->cookie(bad => 'bad_cookie--12345678');
   1;
 };
 
@@ -106,9 +106,9 @@ hook after_dispatch => sub {
 };
 
 get '/late/session' => sub {
-  my $self = shift;
-  my $late = $self->session('late') || 'not yet!';
-  $self->render(text => $late);
+  my $c = shift;
+  my $late = $c->session('late') || 'not yet!';
+  $c->render(text => $late);
 };
 
 # Counter
@@ -163,9 +163,9 @@ group {
 
   # Check "ok" parameter
   under sub {
-    my $self = shift;
-    return 1 if $self->req->param('ok');
-    $self->render(text => "You're not ok.");
+    my $c = shift;
+    return 1 if $c->req->param('ok');
+    $c->render(text => "You're not ok.");
     return !!0;
   };
 
@@ -471,16 +471,16 @@ __DATA__
 Oops!
 
 @@ multi.html.ep
-% my ($one, $three) = $self->cookie([qw(unsigned1 unsigned2)]);
+% my ($one, $three) = $c->cookie([qw(unsigned1 unsigned2)]);
 %= defined $one ? $one : ''
 %= defined $three ? $three : '';
-% my @unsigned1 = $self->cookie('unsigned1');
+% my @unsigned1 = $c->cookie('unsigned1');
 %= defined $unsigned1[0] ? $unsigned1[0] : ''
 %= defined $unsigned1[1] ? $unsigned1[1] : ''
-% my ($four, $six) = $self->signed_cookie([qw(signed1 signed2)]);
+% my ($four, $six) = $c->signed_cookie([qw(signed1 signed2)]);
 %= defined $four ? $four : ''
 %= defined $six ? $six : '';
-% my @signed1 = $self->signed_cookie('signed1');
+% my @signed1 = $c->signed_cookie('signed1');
 %= defined $signed1[0] ? $signed1[0] : ''
 %= defined $signed1[1] ? $signed1[1] : ''
 
@@ -491,16 +491,16 @@ Bender!
 Not Bender!
 
 @@ bridge2stash.html.ep
-% my $cookie = $self->req->cookie('mojolicious');
-<%= stash('_name') %> too!<%= $self->cookie('foo') %>!\
-<%= $self->signed_cookie('foo') %>!\
-<%= $self->signed_cookie('bar')%>!<%= $self->signed_cookie('bad')%>!\
-<%= $self->cookie('bad') %>!<%= session 'foo' %>!\
+% my $cookie = $c->req->cookie('mojolicious');
+<%= stash('_name') %> too!<%= $c->cookie('foo') %>!\
+<%= $c->signed_cookie('foo') %>!\
+<%= $c->signed_cookie('bar')%>!<%= $c->signed_cookie('bad')%>!\
+<%= $c->cookie('bad') %>!<%= session 'foo' %>!\
 <%= flash 'foo' %>!
-% $self->session(foo => 'session');
-% my $headers = $self->req->headers;
-% $self->flash(foo => 'flash') if $headers->header('X-Flash');
-% $self->session(expires => 1) if $headers->header('X-Flash2');
+% $c->session(foo => 'session');
+% my $headers = $c->req->headers;
+% $c->flash(foo => 'flash') if $headers->header('X-Flash');
+% $c->session(expires => 1) if $headers->header('X-Flash2');
 
 @@ withundercount.html.ep
 counter

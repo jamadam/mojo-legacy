@@ -28,7 +28,7 @@ sub add {
   # Make sure we have a normal case entry for name
   my $key = lc $name;
   $self->{normalcase}{$key} = defined $self->{normalcase}{$key} ? $self->{normalcase}{$key} : $name unless $NORMALCASE{$key};
-  push @{$self->{headers}{$key}}, map { ref $_ eq 'ARRAY' ? $_ : [$_] } @_;
+  push @{$self->{headers}{$key}}, @_;
 
   return $self;
 }
@@ -63,7 +63,7 @@ sub header {
   return $self->remove($name)->add($name, @_) if @_;
 
   return undef unless my $headers = $self->{headers}{lc $name};
-  return join ', ', map { join ' ', @$_ } @$headers;
+  return join ', ', @$headers;
 }
 
 sub is_finished { do {my $tmp = shift->{state}; defined $tmp ? $tmp : ''} eq 'finished' }
@@ -95,10 +95,10 @@ sub parse {
     }
 
     # New header
-    if ($line =~ /^(\S[^:]*)\s*:\s*(.*)$/) { push @$headers, $1, [$2] }
+    if ($line =~ /^(\S[^:]*)\s*:\s*(.*)$/) { push @$headers, $1, $2 }
 
     # Multiline
-    elsif (@$headers && $line =~ s/^\s+//) { push @{$headers->[-1]}, $line }
+    elsif (@$headers && $line =~ s/^\s+//) { $headers->[-1] .= " $line" }
 
     # Empty line
     else {
@@ -134,8 +134,7 @@ sub to_string {
   # Make sure multiline values are formatted correctly
   my @headers;
   for my $name (@{$self->names}) {
-    push @headers, "$name: " . join("\x0d\x0a ", @$_)
-      for @{$self->{headers}{lc $name}};
+    push @headers, "$name: $_" for @{$self->{headers}{lc $name}};
   }
 
   return join "\x0d\x0a", @headers;
@@ -182,7 +181,7 @@ L<Mojo::Headers> implements the following attributes.
   $headers = $headers->max_line_size(1024);
 
 Maximum header line size in bytes, defaults to the value of the
-C<MOJO_MAX_LINE_SIZE> environment variable or C<10240>.
+C<MOJO_MAX_LINE_SIZE> environment variable or C<10240> (10KB).
 
 =head1 METHODS
 
@@ -228,7 +227,6 @@ Shortcut for the C<Accept-Ranges> header.
 
   $headers = $headers->add(Foo => 'one value');
   $headers = $headers->add(Foo => 'first value', 'second value');
-  $headers = $headers->add(Foo => ['first line', 'second line']);
 
 Add one or more header values with one or more lines.
 
@@ -374,7 +372,6 @@ Parse headers from a hash reference, an empty hash removes all headers.
   my $value = $headers->header('Foo');
   $headers  = $headers->header(Foo => 'one value');
   $headers  = $headers->header(Foo => 'first value', 'second value');
-  $headers  = $headers->header(Foo => ['first line', 'second line']);
 
 Get or replace the current header values.
 
@@ -566,8 +563,8 @@ Shortcut for the C<TE> header.
   my $single = $headers->to_hash;
   my $multi  = $headers->to_hash(1);
 
-Turn headers into hash reference, nested array references to represent
-multiple headers with the same name are disabled by default.
+Turn headers into hash reference, array references to represent multiple
+headers with the same name are disabled by default.
 
   say $headers->to_hash->{DNT};
 

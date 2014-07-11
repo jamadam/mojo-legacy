@@ -274,17 +274,15 @@ sub _parse_formdata {
     }
 
     next unless my $disposition = $part->headers->content_disposition;
-    my ($filename) = $disposition =~ /[; ]filename\s*=\s*"?((?:\\"|[^"])*)"?/i;
+    my ($filename) = $disposition =~ /[; ]filename="((?:\\"|[^"])*)"/;
     next if $upload && !defined $filename || !$upload && defined $filename;
-    my ($name) = $disposition =~ /[; ]name\s*=\s*"?((?:\\"|[^";])+)"?/i;
+    my ($name) = $disposition =~ /[; ]name="((?:\\"|[^;"])*)"/;
+    $part = $part->asset->slurp unless $upload;
+
     if ($charset) {
       $name     = do {my $tmp = decode($charset, $name); defined $tmp ? $tmp : $name} if $name;
       $filename = do {my $tmp = decode($charset, $filename); defined $tmp ? $tmp : $filename} if $filename;
-    }
-
-    unless ($upload) {
-      $part = $part->asset->slurp;
-      $part = do {my $decoded = decode($charset, $part); defined $decoded ? $decoded : $part} if $charset;
+      $part     = do {my $tmp = decode($charset, $part); defined $tmp ? $tmp : $part} unless $upload;
     }
 
     push @formdata, [$name, $part, $filename];
@@ -384,7 +382,7 @@ Default charset used for form-data parsing, defaults to C<UTF-8>.
   $msg     = $msg->max_line_size(1024);
 
 Maximum start line size in bytes, defaults to the value of the
-C<MOJO_MAX_LINE_SIZE> environment variable or C<10240>.
+C<MOJO_MAX_LINE_SIZE> environment variable or C<10240> (10KB).
 
 =head2 max_message_size
 
@@ -392,8 +390,8 @@ C<MOJO_MAX_LINE_SIZE> environment variable or C<10240>.
   $msg     = $msg->max_message_size(1024);
 
 Maximum message size in bytes, defaults to the value of the
-C<MOJO_MAX_MESSAGE_SIZE> environment variable or C<10485760>. Setting the
-value to C<0> will allow messages of indefinite size. Note that increasing
+C<MOJO_MAX_MESSAGE_SIZE> environment variable or C<10485760> (10MB). Setting
+the value to C<0> will allow messages of indefinite size. Note that increasing
 this value can also drastically increase memory usage, should you for example
 attempt to parse an excessively large message body with the L</"body_params">,
 L</"dom"> or L</"json"> methods.
