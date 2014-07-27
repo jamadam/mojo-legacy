@@ -12,8 +12,7 @@ WriteMakefile(
   AUTHOR       => 'Sebastian Riedel <sri@cpan.org>',
   LICENSE      => 'artistic_2',
   PREREQ_PM    => {
-    'Pod::Simple::HTML'       => '0',
-    'Pod::Simple::Search'     => '0',
+    'Pod::Simple'             => '3.09',
     'Digest::SHA'             => '0',
     'Socket'                  => '1.81',
     'Test::More'              => '0.98',

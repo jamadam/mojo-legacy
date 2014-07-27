@@ -6,7 +6,7 @@ use Mojo::ByteStream 'b';
 use Mojo::DOM;
 use Mojo::URL;
 use Mojo::Util qw(slurp unindent url_escape);
-BEGIN {eval {require Pod::Simple::HTML; import Pod::Simple::HTML}}
+BEGIN {eval {require Pod::Simple::XHTML; import Pod::Simple::XHTML}}
 BEGIN {eval {require Pod::Simple::Search; import Pod::Simple::Search}}
 
 sub register {
@@ -42,12 +42,12 @@ sub _html {
   my $perldoc = $self->url_for('/perldoc/');
   for my $e ($dom->find('a[href]')->each) {
     my $attrs = $e->attr;
-    $attrs->{href} =~ s!%3A%3A!/!gi
-      if $attrs->{href} =~ s!^http://search\.cpan\.org/perldoc\?!$perldoc!;
+    $attrs->{href} =~ s!::!/!gi
+      if $attrs->{href} =~ s!^https://metacpan\.org/pod/!$perldoc!;
   }
 
   # Rewrite code blocks for syntax highlighting and correct indentation
-  for my $e ($dom->find('pre')->each) {
+  for my $e ($dom->find('pre > code')->each) {
     $e->content(my $str = unindent $e->content);
     next if $str =~ /^\s*(?:\$|Usage:)\s+/m || $str !~ /[\$\@\%]\w|-&gt;\w/m;
     my $attrs = $e->attr;
@@ -58,19 +58,16 @@ sub _html {
   # Rewrite headers
   my $toc = Mojo::URL->new->fragment('toc');
   my (%anchors, @parts);
+  my $pod = Pod::Simple::XHTML->new;
   for my $e ($dom->find('h1, h2, h3')->each) {
 
-    # Anchor and text
-    my $name = my $text = $e->all_text;
-    $name =~ s/\s+/_/g;
-    $name =~ s/[^\w\-]//g;
-    my $anchor = $name;
-    my $i      = 1;
-    $anchor = $name . $i++ while $anchors{$anchor}++;
+    # Unique anchor
+    my $anchor = $pod->idify($e->{id});
 
     # Rewrite
     push @parts, [] if $e->type eq 'h1' || !@parts;
     my $link = Mojo::URL->new->fragment($anchor);
+    my $text = $e->all_text;
     push @{$parts[-1]}, $text, $link;
     my $permalink = $self->link_to('#' => $link, class => 'permalink');
     $e->content($permalink . $self->link_to($text => $toc, id => $anchor));
@@ -104,15 +101,11 @@ sub _perldoc {
 sub _pod_to_html {
   return '' unless defined(my $pod = ref $_[0] eq 'CODE' ? shift->() : shift);
 
-  my $parser = Pod::Simple::HTML->new;
-  $parser->$_('') for qw(force_title html_header_before_title);
-  $parser->$_('') for qw(html_header_after_title html_footer);
+  my $parser = Pod::Simple::XHTML->new;
+  $parser->perldoc_url_prefix('https://metacpan.org/pod/');
+  $parser->$_('') for qw(html_header html_footer);
   $parser->output_string(\(my $output));
   return $@ unless eval { $parser->parse_string_document("$pod"); 1 };
-
-  # Filter
-  $output =~ s!<a name='___top' class='dummyTopAnchor'\s*?></a>\n!!g;
-  $output =~ s!<a class='u'.*?name=".*?"\s*>(.*?)</a>!$1!sg;
 
   return $output;
 }

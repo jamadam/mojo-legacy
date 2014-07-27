@@ -226,18 +226,22 @@ Python's WSGI and Ruby's Rack. L<Mojolicious> applications are ridiculously
 simple to deploy with L<Plack>.
 
   $ plackup ./script/myapp
-  HTTP::Server::PSGI: Accepting connections at http://0:5000/
 
 L<Plack> provides many server and protocol adapters for you to choose from,
 such as C<FCGI>, C<uWSGI> and C<mod_perl>.
 
   $ plackup ./script/myapp -s FCGI -l /tmp/myapp.sock
 
+The C<MOJO_REVERSE_PROXY> environment variable can be used to enable proxy
+support, this allows L<Mojolicious> to automatically pick up the
+C<X-Forwarded-For> and C<X-Forwarded-Proto> headers.
+
+  $ MOJO_REVERSE_PROXY=1 plackup ./script/myapp
+
 If an older server adapter is not be able to correctly detect the application
 home directory, you can simply use the C<MOJO_HOME> environment variable.
 
   $ MOJO_HOME=/home/sri/myapp plackup ./script/myapp
-  HTTP::Server::PSGI: Accepting connections at http://0:5000/
 
 There is no need for a C<.psgi> file, just point the server adapter at your
 application script, it will automatically act like one if it detects the
@@ -845,7 +849,8 @@ L<Mojo::Message/"json">.
 
 =head2 Basic authentication
 
-You can just add username and password to the URL.
+You can just add username and password to the URL, an C<Authorization> header
+will be automatically generated.
 
   use Mojo::UserAgent;
 
@@ -977,8 +982,8 @@ L<Mojo::UserAgent> makes it actually easy.
   $tx = $ua->start($tx);
 
 The event L<Mojo::Content/"read"> will be emitted for every chunk of data that
-is received, even C<chunked> encoding will be handled transparently if
-necessary.
+is received, even C<chunked> encoding and gzip compression will be handled
+transparently if necessary.
 
 =head2 Streaming request
 
@@ -1149,6 +1154,31 @@ choice.
 =head1 APPLICATIONS
 
 Fun L<Mojolicious> application hacks for all occasions.
+
+=head2 Basic authentication
+
+Basic authentication data will be automatically extracted from the
+C<Authorization> header.
+
+  use Mojolicious::Lite;
+
+  get '/' => sub {
+    my $c = shift;
+
+    # Check for username "Bender" and password "rocks"
+    return $c->render(text => 'Hello Bender!')
+      if $c->req->url->to_abs->userinfo eq 'Bender:rocks';
+
+    # Require authentication
+    $c->res->headers->www_authenticate('Basic');
+    $c->render(text => 'Authentication required!', status => 401);
+  };
+
+  app->start;
+
+This can be combined with TLS for a secure authentication mechanism.
+
+  $ ./myapp.pl daemon -l https://*:3000?cert=./server.crt&key=./server.key
 
 =head2 Adding a configuration file
 

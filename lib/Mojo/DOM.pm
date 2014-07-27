@@ -176,6 +176,24 @@ sub type {
   return $self;
 }
 
+sub val {
+  my $self = shift;
+
+  # "option"
+  my $type = $self->type;
+  return Mojo::Collection->new(defined $self->{value} ? $self->{value} : $self->text)
+    if $type eq 'option';
+
+  # "select"
+  return $self->find('option[selected]')->val->flatten if $type eq 'select';
+
+  # "textarea"
+  return Mojo::Collection->new($self->text) if $type eq 'textarea';
+
+  # "input" or "button"
+  return Mojo::Collection->new(defined $self->{value} ? $self->{value} : ());
+}
+
 sub wrap         { shift->_wrap(0, @_) }
 sub wrap_content { shift->_wrap(1, @_) }
 
@@ -198,8 +216,16 @@ sub _all {
 }
 
 sub _all_text {
-  my $tree = shift->tree;
-  return _text([_nodes($tree)], shift, _trim($tree, @_));
+  my ($self, $recurse, $trim) = @_;
+
+  # Detect "pre" tag
+  my $tree = $self->tree;
+  if (!defined $trim || $trim) {
+    $trim = 1;
+    $_->[1] eq 'pre' and $trim = 0 for $self->_ancestors, $tree;
+  }
+
+  return _text([_nodes($tree)], $recurse, $trim);
 }
 
 sub _ancestors {
@@ -306,7 +332,7 @@ sub _siblings {
 
 sub _start { $_[0][0] eq 'root' ? 1 : 4 }
 
-sub _tag { $_[0]->new->tree($_[1])->xml($_[2]) }
+sub _tag { shift->new->tree(shift)->xml(shift) }
 
 sub _text {
   my ($nodes, $recurse, $trim) = @_;
@@ -325,7 +351,8 @@ sub _text {
     # Nested tag
     my $content = '';
     if ($type eq 'tag' && $recurse) {
-      $content = _text([_nodes($n)], 1, _trim($n, $trim));
+      no warnings 'recursion';
+      $content = _text([_nodes($n)], 1, $n->[1] eq 'pre' ? 0 : $trim);
     }
 
     # Text
@@ -342,21 +369,6 @@ sub _text {
   }
 
   return $text;
-}
-
-sub _trim {
-  my ($n, $trim) = @_;
-
-  # Disabled
-  return 0 unless $n && ($trim = defined $trim ? $trim : 1);
-
-  # Detect "pre" tag
-  while ($n->[0] eq 'tag') {
-    return 0 if $n->[1] eq 'pre';
-    last unless $n = $n->[3];
-  }
-
-  return 1;
 }
 
 sub _wrap {
@@ -409,11 +421,11 @@ Mojo::DOM - Minimalistic HTML/XML DOM parser with CSS selectors
   say $dom->div->children('p')->first->{id};
 
   # Iterate
-  $dom->find('p[id]')->each(sub { say shift->{id} });
+  $dom->find('p[id]')->each(sub { say $_->{id} });
 
   # Loop
   for my $e ($dom->find('p[id]')->each) {
-    say $e->text;
+    say $e->{id}, ':', $e->text;
   }
 
   # Modify
@@ -535,10 +547,10 @@ from L<Mojo::DOM::CSS/"SELECTORS"> are supported.
 
 =head2 attr
 
-  my $attrs = $dom->attr;
-  my $foo   = $dom->attr('foo');
-  $dom      = $dom->attr({foo => 'bar'});
-  $dom      = $dom->attr(foo => 'bar');
+  my $hash = $dom->attr;
+  my $foo  = $dom->attr('foo');
+  $dom     = $dom->attr({foo => 'bar'});
+  $dom     = $dom->attr(foo => 'bar');
 
 This element's attributes.
 
@@ -829,6 +841,18 @@ This element's type.
 
   # List types of child elements
   say $dom->children->type;
+
+=head2 val
+
+  my $collection = $dom->val;
+
+Extract values from C<button>, C<input>, C<option>, C<select> and C<textarea>
+elements and return a L<Mojo::Collection> object containing these values. In
+the case of C<select>, find all C<option> elements it contains that have a
+C<selected> attribute and extract their values.
+
+  # "b"
+  $dom->parse('<form><input name="a" value="b"></form>')->at('input')->val;
 
 =head2 wrap
 

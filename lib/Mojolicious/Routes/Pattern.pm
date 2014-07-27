@@ -63,7 +63,8 @@ sub render {
 
   # Merge values with defaults
   my $format = ($values ||= {})->{format};
-  $values = {%{$self->defaults}, %$values};
+  my $defaults = $self->defaults;
+  $values = {%$defaults, %$values};
 
   # Placeholders can only be optional without a format
   my $optional = !$format;
@@ -77,15 +78,12 @@ sub render {
     if ($op eq 'slash') { $fragment = '/' unless $optional }
 
     # Text
-    elsif ($op eq 'text') {
-      $fragment = $value;
-      $optional = 0;
-    }
+    elsif ($op eq 'text') { ($fragment, $optional) = ($value, 0) }
 
-    # Placeholder, relaxed or wildcard
-    elsif ($op eq 'placeholder' || $op eq 'relaxed' || $op eq 'wildcard') {
+    # Placeholder
+    else {
       $fragment = defined $values->{$value} ? $values->{$value} : '';
-      my $default = $self->defaults->{$value};
+      my $default = $defaults->{$value};
       if (!defined $default || ($default ne $fragment)) { $optional = 0 }
       elsif ($optional) { $fragment = '' }
     }
@@ -113,17 +111,13 @@ sub _compile {
 
     # Slash
     if ($op eq 'slash') {
-      $regex    = ($optional ? "(?:/$block)?" : "/$block") . $regex;
-      $block    = '';
-      $optional = 1;
+      $regex = ($optional ? "(?:/$block)?" : "/$block") . $regex;
+      ($block, $optional) = ('', 1);
       next;
     }
 
     # Text
-    elsif ($op eq 'text') {
-      $fragment = quotemeta $value;
-      $optional = 0;
-    }
+    elsif ($op eq 'text') { ($fragment, $optional) = (quotemeta $value, 0) }
 
     # Placeholder
     elsif ($op eq 'placeholder' || $op eq 'relaxed' || $op eq 'wildcard') {
@@ -186,51 +180,42 @@ sub _tokenize {
   my $relaxed     = $self->relaxed_start;
   my $wildcard    = $self->wildcard_start;
 
-  my $state = 'text';
-  my (@tree, $quoted);
+  my (@tree, $inside, $quoted);
   for my $char (split '', $pattern) {
-    my $inside = !!grep { $_ eq $state } qw(placeholder relaxed wildcard);
 
     # Quote start
     if ($char eq $quote_start) {
       push @tree, ['placeholder', ''];
-      $state  = 'placeholder';
-      $quoted = 1;
+      ($inside, $quoted) = (1, 1);
     }
 
     # Placeholder start
     elsif ($char eq $placeholder) {
-      push @tree, ['placeholder', ''] if $state ne 'placeholder';
-      $state = 'placeholder';
+      push @tree, ['placeholder', ''] unless $inside++;
     }
 
     # Relaxed or wildcard start (upgrade when quoted)
     elsif ($char eq $relaxed || $char eq $wildcard) {
       push @tree, ['placeholder', ''] unless $quoted;
-      $tree[-1][0] = $state = $char eq $relaxed ? 'relaxed' : 'wildcard';
+      $tree[-1][0] = $char eq $relaxed ? 'relaxed' : 'wildcard';
+      $inside = 1;
     }
 
     # Quote end
-    elsif ($char eq $quote_end) {
-      $state  = 'text';
-      $quoted = 0;
-    }
+    elsif ($char eq $quote_end) { ($inside, $quoted) = (0, 0) }
 
     # Slash
     elsif ($char eq '/') {
       push @tree, ['slash'];
-      $state = 'text';
+      $inside = 0;
     }
 
     # Placeholder, relaxed or wildcard
-    elsif ($inside && $char =~ /\w/) { $tree[-1][-1] .= $char }
+    elsif ($inside) { $tree[-1][-1] .= $char }
 
     # Text
-    else {
-      push @tree, ['text', $char] and next unless $tree[-1][0] eq 'text';
-      $tree[-1][-1] .= $char;
-      $state = 'text';
-    }
+    elsif ($tree[-1][0] eq 'text') { $tree[-1][-1] .= $char }
+    else                           { push @tree, ['text', $char] }
   }
 
   return $self->pattern($pattern)->tree(\@tree);

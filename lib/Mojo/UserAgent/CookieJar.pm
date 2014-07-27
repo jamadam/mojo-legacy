@@ -25,7 +25,7 @@ sub add {
     next unless my $path = $cookie->path;
     next unless length(my $name = defined $cookie->name ? $cookie->name : '');
     my $jar = $self->{jar}{$domain} ||= [];
-    @$jar = (grep({_compare($_, $path, $name, $origin)} @$jar), $cookie);
+    @$jar = (grep({ _compare($_, $path, $name, $origin) } @$jar), $cookie);
   }
 
   return $self;
@@ -36,7 +36,7 @@ sub all {
   return map { @{$jar->{$_}} } sort keys %$jar;
 }
 
-sub empty { shift->{jar} = {} }
+sub empty { delete shift->{jar} }
 
 sub extract {
   my ($self, $tx) = @_;

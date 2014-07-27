@@ -42,10 +42,14 @@ sub one_tick {
     # I/O
     if (keys %{$self->{io}}) {
       $poll->poll($timeout);
-      ++$i and $self->_sandbox('Read', $self->{io}{fileno $_}{cb}, 0)
-        for $poll->handles(POLLIN | POLLPRI | POLLHUP | POLLERR);
-      ++$i and $self->_sandbox('Write', $self->{io}{fileno $_}{cb}, 1)
-        for $poll->handles(POLLOUT);
+      for my $handle ($poll->handles(POLLIN | POLLPRI | POLLHUP | POLLERR)) {
+        next unless my $io = $self->{io}{fileno $handle};
+        ++$i and $self->_sandbox('Read', $io->{cb}, 0);
+      }
+      for my $handle ($poll->handles(POLLOUT)) {
+        next unless my $io = $self->{io}{fileno $handle};
+        ++$i and $self->_sandbox('Write', $io->{cb}, 1);
+      }
     }
 
     # Wait for timeout if poll can't be used

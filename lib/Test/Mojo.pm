@@ -115,29 +115,30 @@ sub head_ok { shift->_build_ok(HEAD => @_) }
 
 sub header_is {
   my ($self, $name, $value, $desc) = @_;
-  $desc ||= "$name: " . ($value ? $value : '');
-  return $self->_test('is', scalar $self->tx->res->headers->header($name),
-    $value, $desc);
+  $desc ||= "$name: " . (defined $value ? $value : '');
+  return $self->_test('is', $self->tx->res->headers->header($name), $value,
+    $desc);
 }
 
 sub header_isnt {
   my ($self, $name, $value, $desc) = @_;
-  $desc ||= "not $name: " . ($value ? $value : '');
-  return $self->_test('isnt', scalar $self->tx->res->headers->header($name),
-    $value, $desc);
+  $desc ||= "not $name: " . (defined $value ? $value : '');
+  return $self->_test('isnt', $self->tx->res->headers->header($name), $value,
+    $desc);
 }
 
 sub header_like {
   my ($self, $name, $regex, $desc) = @_;
-  return $self->_test('like', scalar $self->tx->res->headers->header($name),
-    $regex, $desc || "$name is similar");
+  $desc ||= "$name is similar";
+  return $self->_test('like', $self->tx->res->headers->header($name), $regex,
+    $desc);
 }
 
 sub header_unlike {
   my ($self, $name, $regex, $desc) = @_;
-  return $self->_test('unlike',
-    do { my $tmp = scalar $self->tx->res->headers->header($name); defined $tmp ? $tmp : '' },
-    $regex, $desc || "$name is not similar");
+  $desc ||= "$name is not similar";
+  return $self->_test('unlike', $self->tx->res->headers->header($name),
+    $regex, $desc);
 }
 
 sub json_has {
@@ -161,6 +162,12 @@ sub json_is {
   return $self->_test('is_deeply', $self->tx->res->json($p), $data, $desc);
 }
 
+sub json_like {
+  my ($self, $p, $regex, $desc) = @_;
+  $desc ||= encode 'UTF-8', qq{similar match for JSON Pointer "$p"};
+  return $self->_test('like', $self->tx->res->json($p), $regex, $desc);
+}
+
 sub json_message_has {
   my ($self, $p, $desc) = @_;
   $desc ||= encode 'UTF-8', qq{has value for JSON Pointer "$p"};
@@ -178,6 +185,24 @@ sub json_message_is {
   my ($p, $data) = @_ > 1 ? (shift, shift) : ('', shift);
   my $desc = encode 'UTF-8', shift || qq{exact match for JSON Pointer "$p"};
   return $self->_test('is_deeply', $self->_json(get => $p), $data, $desc);
+}
+
+sub json_message_like {
+  my ($self, $p, $regex, $desc) = @_;
+  $desc ||= encode 'UTF-8', qq{similar match for JSON Pointer "$p"};
+  return $self->_test('like', $self->_json(get => $p), $regex, $desc);
+}
+
+sub json_message_unlike {
+  my ($self, $p, $regex, $desc) = @_;
+  $desc ||= encode 'UTF-8', qq{no similar match for JSON Pointer "$p"};
+  return $self->_test('unlike', $self->_json(get => $p), $regex, $desc);
+}
+
+sub json_unlike {
+  my ($self, $p, $regex, $desc) = @_;
+  $desc ||= encode 'UTF-8', qq{no similar match for JSON Pointer "$p"};
+  return $self->_test('unlike', $self->tx->res->json($p), $regex, $desc);
 }
 
 sub message_is {
@@ -382,7 +407,8 @@ Test::Mojo - Testing Mojo!
     ->status_is(200)
     ->header_is('Server' => 'Mojolicious (Perl)')
     ->header_isnt('X-Bender' => 'Bite my shiny metal ass!')
-    ->json_is('/results/4/title' => 'Perl rocks!');
+    ->json_is('/results/4/title' => 'Perl rocks!')
+    ->json_like('/results/7/title' => qr/Perl/);
 
   # WebSocket
   $t->websocket_ok('/echo')
@@ -676,6 +702,14 @@ Opposite of L</"json_has">.
 Check the value extracted from JSON response using the given JSON Pointer with
 L<Mojo::JSON::Pointer>, which defaults to the root value if it is omitted.
 
+=head2 json_like
+
+  $t = $t->json_like('/foo/1' => qr/^\d+$/);
+  $t = $t->json_like('/foo/1' => qr/^\d+$/, 'right value');
+
+Check the value extracted from JSON response using the given JSON Pointer with
+L<Mojo::JSON::Pointer> for similar match.
+
 =head2 json_message_has
 
   $t = $t->json_message_has('/foo');
@@ -700,6 +734,28 @@ Opposite of L</"json_message_has">.
 Check the value extracted from JSON WebSocket message using the given JSON
 Pointer with L<Mojo::JSON::Pointer>, which defaults to the root value if it is
 omitted.
+
+=head2 json_message_like
+
+  $t = $t->json_message_like('/foo/1' => qr/^\d+$/);
+  $t = $t->json_message_like('/foo/1' => qr/^\d+$/, 'right value');
+
+Check the value extracted from JSON WebSocket message using the given JSON
+Pointer with L<Mojo::JSON::Pointer> for similar match.
+
+=head2 json_message_unlike
+
+  $t = $t->json_message_unlike('/foo/1' => qr/^\d+$/);
+  $t = $t->json_message_unlike('/foo/1' => qr/^\d+$/, 'different value');
+
+Opposite of L</"json_message_like">.
+
+=head2 json_unlike
+
+  $t = $t->json_unlike('/foo/1' => qr/^\d+$/);
+  $t = $t->json_unlike('/foo/1' => qr/^\d+$/, 'different value');
+
+Opposite of L</"json_like">.
 
 =head2 message_is
 

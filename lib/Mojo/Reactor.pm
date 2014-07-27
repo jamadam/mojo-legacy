@@ -2,7 +2,7 @@ package Mojo::Reactor;
 use Mojo::Base 'Mojo::EventEmitter';
 
 use Carp 'croak';
-use IO::Poll qw(POLLERR POLLHUP POLLIN POLLPRI);
+use IO::Poll qw(POLLIN POLLPRI);
 use Mojo::Loader;
 
 sub again { croak 'Method "again" not implemented by subclass' }
@@ -14,16 +14,9 @@ sub detect {
 
 sub io { croak 'Method "io" not implemented by subclass' }
 
+# This may break at some point in the future, but is worth it for performance
 sub is_readable {
-  my ($self, $handle) = @_;
-
-  my $test = $self->{test} ||= IO::Poll->new;
-  $test->mask($handle, POLLIN | POLLPRI);
-  $test->poll(0);
-  my $result = $test->handles(POLLIN | POLLPRI | POLLERR | POLLHUP);
-  $test->remove($handle);
-
-  return !!$result;
+  !(IO::Poll::_poll(0, fileno(pop), my $dummy = POLLIN | POLLPRI) == 0);
 }
 
 sub is_running { croak 'Method "is_running" not implemented by subclass' }

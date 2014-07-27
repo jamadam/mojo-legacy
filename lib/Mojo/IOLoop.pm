@@ -491,7 +491,7 @@ will be passed along to L<Mojo::IOLoop::Delay/"steps">.
   Mojo::IOLoop->delay(
     sub {
       my $delay = shift;
-      die 'Intentional error!';
+      die 'Intentional error';
     },
     sub {
       my ($delay, @args) = @_;

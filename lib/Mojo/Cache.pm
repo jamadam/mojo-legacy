@@ -10,7 +10,7 @@ sub set {
 
   my $cache = $self->{cache} ||= {};
   my $queue = $self->{queue} ||= [];
-  delete $cache->{shift @$queue} if @$queue >= $self->max_keys;
+  delete $cache->{shift @$queue} while @$queue >= $self->max_keys;
   push @$queue, $key unless exists $cache->{$key};
   $cache->{$key} = $value;
 

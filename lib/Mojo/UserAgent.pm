@@ -3,9 +3,7 @@ use Mojo::Base 'Mojo::EventEmitter';
 
 # "Fry: Since when is the Internet about robbing people of their privacy?
 #  Bender: August 6, 1991."
-use Carp 'croak';
 use Mojo::IOLoop;
-use Mojo::URL;
 use Mojo::Util 'monkey_patch';
 use Mojo::UserAgent::CookieJar;
 use Mojo::UserAgent::Proxy;
@@ -32,7 +30,7 @@ has transactor => sub { Mojo::UserAgent::Transactor->new };
 
 # Common HTTP methods
 for my $name (qw(DELETE GET HEAD OPTIONS PATCH POST PUT)) {
-  monkey_patch __PACKAGE__, lc($name), sub {
+  monkey_patch __PACKAGE__, lc $name, sub {
     my $self = shift;
     my $cb = ref $_[-1] eq 'CODE' ? pop : undef;
     return $self->start($self->build_tx($name, @_), $cb);
@@ -76,11 +74,11 @@ sub _cleanup {
 
   # Clean up active connections (by closing them)
   delete $self->{pid};
-  $self->_handle($_, 1) for keys %{$self->{connections} || {}};
+  $self->_finish($_, 1) for keys %{$self->{connections} || {}};
 
   # Clean up keep-alive connections
   $loop->remove($_->[1]) for @{delete $self->{queue} || []};
-  $loop = Mojo::IOLoop->singleton;
+  $loop = $self->_loop(1);
   $loop->remove($_->[1]) for @{delete $self->{nb_queue} || []};
 
   return $self;
@@ -111,10 +109,10 @@ sub _connect {
       # Connection established
       $stream->on(
         timeout => sub { $self->_error($id, 'Inactivity timeout', 1) });
-      $stream->on(close => sub { $self->_handle($id, 1) });
+      $stream->on(close => sub { $self && $self->_finish($id, 1) });
       $stream->on(error => sub { $self && $self->_error($id, pop) });
       $stream->on(read => sub { $self->_read($id, pop) });
-      $cb->();
+      $self->$cb($id);
     }
   );
 }
@@ -145,9 +143,8 @@ sub _connect_proxy {
       my $handle = $loop->stream($id)->steal_handle;
       my $c      = delete $self->{connections}{$id};
       $loop->remove($id);
-      weaken $self;
       $id = $self->_connect($nb, $self->transactor->endpoint($old),
-        $handle, sub { $self->_start($nb, $old->connection($id), $cb) });
+        $handle, sub { shift->_start($nb, $old->connection($id), $cb) });
       $self->{connections}{$id} = $c;
     }
   );
@@ -194,9 +191,7 @@ sub _connection {
   # Connect
   warn "-- Connect ($proto:$host:$port)\n" if DEBUG;
   ($proto, $host, $port) = $self->transactor->peer($tx);
-  weaken $self;
-  $id = $self->_connect(
-    ($nb, $proto, $host, $port, $id) => sub { $self->_connected($id) });
+  $id = $self->_connect(($nb, $proto, $host, $port, $id) => \&_connected);
   $self->{connections}{$id} = {cb => $cb, nb => $nb, tx => $tx};
 
   return $id;
@@ -205,17 +200,17 @@ sub _connection {
 sub _dequeue {
   my ($self, $nb, $name, $test) = @_;
 
-  my $found;
   my $loop = $self->_loop($nb);
-  my $old  = $self->{$nb ? 'nb_queue' : 'queue'} || [];
-  my $new  = $self->{$nb ? 'nb_queue' : 'queue'} = [];
+  my $old = $self->{$nb ? 'nb_queue' : 'queue'} ||= [];
+  my ($found, @new);
   for my $queued (@$old) {
-    push @$new, $queued and next if $found || !grep { $_ eq $name } @$queued;
+    push @new, $queued and next if $found || !grep { $_ eq $name } @$queued;
 
     # Search for id/name and sort out corrupted connections if necessary
     next unless my $stream = $loop->stream($queued->[1]);
     $test && $stream->is_readable ? $stream->close : ($found = $queued->[1]);
   }
+  @$old = @new;
 
   return $found;
 }
@@ -226,8 +221,8 @@ sub _enqueue {
   # Enforce connection limit
   my $queue = $self->{$nb ? 'nb_queue' : 'queue'} ||= [];
   my $max = $self->max_connections;
-  $self->_remove(shift(@$queue)->[1]) while @$queue > $max;
-  push @$queue, [$name, $id] if $max;
+  $self->_remove(shift(@$queue)->[1]) while @$queue && @$queue >= $max;
+  $max ? push @$queue, [$name, $id] : $self->_loop($nb)->stream($id)->close;
 }
 
 sub _error {
@@ -237,43 +232,36 @@ sub _error {
     $tx->res->error({message => $err});
   }
   elsif (!$timeout) { return $self->emit(error => $err) }
-  $self->_handle($id, 1);
+  $self->_finish($id, 1);
 }
 
-sub _handle {
+sub _finish {
   my ($self, $id, $close) = @_;
 
   # Remove request timeout
-  my $c = $self->{connections}{$id};
+  return unless my $c    = $self->{connections}{$id};
   return unless my $loop = $self->_loop($c->{nb});
   $loop->remove($c->{timeout}) if $c->{timeout};
 
+  return $self->_remove($id, $close) unless my $old = $c->{tx};
+  $old->client_close($close);
+
   # Finish WebSocket
-  my $old = $c->{tx};
-  if ($old && $old->is_websocket) {
-    delete $self->{connections}{$id};
-    $self->_remove($id, $close);
-    $old->client_close;
-  }
+  return $self->_remove($id, 1) if $old->is_websocket;
+
+  if (my $jar = $self->cookie_jar) { $jar->extract($old) }
 
   # Upgrade connection to WebSocket
-  elsif ($old && (my $new = $self->_upgrade($id))) {
-    if (my $jar = $self->cookie_jar) { $jar->extract($old) }
-    $old->client_close;
-    $c->{cb}->($self, $new);
-    $new->client_read($old->res->content->leftovers);
+  if (my $new = $self->transactor->upgrade($old)) {
+    weaken $self;
+    $new->on(resume => sub { $self->_write($id) });
+    $c->{cb}->($self, $c->{tx} = $new);
+    return $new->client_read($old->res->content->leftovers);
   }
 
-  # Finish normal connection
-  else {
-    $self->_remove($id, $close);
-    return unless $old;
-    if (my $jar = $self->cookie_jar) { $jar->extract($old) }
-    $old->client_close($close);
-
-    # Handle redirects
-    $c->{cb}->($self, $new || $old) unless $self->_redirect($c, $old);
-  }
+  # Finish normal connection and handle redirects
+  $self->_remove($id, $close);
+  $c->{cb}->($self, $old) unless $self->_redirect($c, $old);
 }
 
 sub _loop { $_[1] ? Mojo::IOLoop->singleton : $_[0]->ioloop }
@@ -288,8 +276,15 @@ sub _read {
   # Process incoming data
   warn "-- Client <<< Server (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
   $tx->client_read($chunk);
-  if    ($tx->is_finished)     { $self->_handle($id) }
-  elsif ($c->{tx}->is_writing) { $self->_write($id) }
+  if    ($tx->is_finished) { $self->_finish($id) }
+  elsif ($tx->is_writing)  { $self->_write($id) }
+}
+
+sub _redirect {
+  my ($self, $c, $old) = @_;
+  return undef unless my $new = $self->transactor->redirect($old);
+  return undef unless @{$old->redirects} < $self->max_redirects;
+  return $self->_start($c->{nb}, $new, delete $c->{cb});
 }
 
 sub _remove {
@@ -299,21 +294,14 @@ sub _remove {
   my $c = delete $self->{connections}{$id} || {};
   my $tx = $c->{tx};
   if ($close || !$tx || !$tx->keep_alive || $tx->error) {
-    $self->_dequeue($_, $id) for (1, 0);
-    $self->_loop($_)->remove($id) for (1, 0);
+    $self->_dequeue($_, $id) for 1, 0;
+    $self->_loop($_)->remove($id) for 1, 0;
     return;
   }
 
   # Keep connection alive (CONNECT requests get upgraded)
   $self->_enqueue($c->{nb}, join(':', $self->transactor->endpoint($tx)), $id)
     unless uc $tx->req->method eq 'CONNECT';
-}
-
-sub _redirect {
-  my ($self, $c, $old) = @_;
-  return undef unless my $new = $self->transactor->redirect($old);
-  return undef unless @{$old->redirects} < $self->max_redirects;
-  return $self->_start($c->{nb}, $new, delete $c->{cb});
 }
 
 sub _start {
@@ -340,30 +328,18 @@ sub _start {
   return $id;
 }
 
-sub _upgrade {
-  my ($self, $id) = @_;
-
-  my $c = $self->{connections}{$id};
-  return undef unless my $new = $self->transactor->upgrade($c->{tx});
-  weaken $self;
-  $new->on(resume => sub { $self->_write($id) });
-
-  return $c->{tx} = $new;
-}
-
 sub _write {
   my ($self, $id) = @_;
 
   # Get and write chunk
   return unless my $c  = $self->{connections}{$id};
   return unless my $tx = $c->{tx};
-  return unless $tx->is_writing;
-  return if $c->{writing}++;
+  return if !$tx->is_writing || $c->{writing}++;
   my $chunk = $tx->client_write;
   delete $c->{writing};
   warn "-- Client >>> Server (@{[$tx->req->url->to_abs]})\n$chunk\n" if DEBUG;
   my $stream = $self->_loop($c->{nb})->stream($id)->write($chunk);
-  $self->_handle($id) if $tx->is_finished;
+  $self->_finish($id) if $tx->is_finished;
 
   # Continue writing
   return unless $tx->is_writing;
@@ -404,7 +380,7 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   say $ua->get('www.perl.org')->res->dom->html->head->title->text;
 
   # Scrape the latest headlines from a news site with CSS selectors
-  say $ua->get('perlnews.org')->res->dom('h2 > a')->text->shuffle;
+  say $ua->get('blogs.perl.org')->res->dom('h2 > a')->text->shuffle;
 
   # IPv6 PUT request with content
   my $tx
@@ -582,7 +558,8 @@ Local address to bind to.
   $ua     = $ua->max_connections(5);
 
 Maximum number of keep-alive connections that the user agent will retain
-before it starts closing the oldest ones, defaults to C<5>.
+before it starts closing the oldest ones, defaults to C<5>. Setting the value
+to C<0> will prevent any connections from being kept alive.
 
 =head2 max_redirects
 
