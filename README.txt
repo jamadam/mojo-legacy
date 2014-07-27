@@ -22,7 +22,7 @@ I recommend the installation though mojo-legacy works without the modules.
 if you're aiming at non-persistent environment like CGI, it may not a must.
 
 To use Mojolicious::Plugin::PODRenderer, you need Pod::Simple version 3.09 or
-higher which satisfied by default since perl-5.14. So if you use older perls,
+higher which satisfied by default since perl-5.12. So if you use older perls,
 just do the following command.
 
 $ cpanm Pod::Simple
