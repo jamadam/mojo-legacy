@@ -33,8 +33,10 @@ sub endpoint {
   my $port  = $url->port || ($proto eq 'https' ? 443 : 80);
 
   # Proxy for normal HTTP requests
+  my $socks;
+  if (my $proxy = $req->proxy) { $socks = $proxy->protocol eq 'socks' }
   return $self->_proxy($tx, $proto, $host, $port)
-    if $proto eq 'http' && !$req->is_handshake;
+    if $proto eq 'http' && !$req->is_handshake && !$socks;
 
   return $proto, $host, $port;
 }
@@ -50,6 +52,7 @@ sub proxy_connect {
 
   # No proxy
   return undef unless my $proxy = $req->proxy;
+  return undef if $proxy->protocol eq 'socks';
 
   # WebSocket and/or HTTPS
   my $url = $req->url;
@@ -281,6 +284,23 @@ Mojo::UserAgent::Transactor - User agent transactor
 L<Mojo::UserAgent::Transactor> is the transaction building and manipulation
 framework used by L<Mojo::UserAgent>.
 
+=head1 GENERATORS
+
+These content generators are available by default.
+
+=head2 form
+
+  $t->tx(POST => 'http://example.com' => form => {a => 'b'});
+
+Generate query string, C<application/x-www-form-urlencoded> or
+C<multipart/form-data> content.
+
+=head2 json
+
+  $t->tx(PATCH => 'http://example.com' => json => {a => 'b'});
+
+Generate JSON content with L<Mojo::JSON>.
+
 =head1 ATTRIBUTES
 
 L<Mojo::UserAgent::Transactor> implements the following attributes.
@@ -353,7 +373,7 @@ C<307> or C<308> redirect response if possible.
     PUT  => 'http://example.com' => {DNT => 1} => json => {a => 'b'});
 
 Versatile general purpose L<Mojo::Transaction::HTTP> transaction builder for
-requests, with support for content generators.
+requests, with support for L</"GENERATORS">.
 
   # Generate and inspect custom GET request with DNT header and content
   say $t->tx(GET => 'example.com' => {DNT => 1} => 'Bye!')->req->to_string;

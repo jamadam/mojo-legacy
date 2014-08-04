@@ -327,8 +327,8 @@ sub unquote {
 
 sub url_escape {
   my ($str, $pattern) = @_;
-  $pattern ||= '^A-Za-z0-9\-._~';
-  $str =~ s/([$pattern])/sprintf('%%%02X',ord($1))/ge;
+  if ($pattern) { $str =~ s/([$pattern])/sprintf('%%%02X',ord($1))/ge }
+  else          { $str =~ s/([^A-Za-z0-9\-._~])/sprintf('%%%02X',ord($1))/ge }
   return $str;
 }
 
@@ -387,6 +387,35 @@ sub _decode {
 
 sub _encoding {
   $CACHE{$_[0]} = defined $CACHE{$_[0]} ? $CACHE{$_[0]} : defined find_encoding($_[0]) ? find_encoding($_[0]) : croak "Unknown encoding '$_[0]'";
+}
+
+sub _options {
+
+  # Hash or name (one)
+  return ref $_[0] eq 'HASH' ? (undef, %{shift()}) : @_ if @_ == 1;
+
+  # Name and values (odd)
+  return shift, @_ if @_ % 2;
+
+  # Name and hash or just values (even)
+  return ref $_[1] eq 'HASH' ? (shift, %{shift()}) : (undef, @_);
+}
+
+sub _stash {
+  my ($name, $object) = (shift, shift);
+
+  # Hash
+  my $dict = $object->{$name} ||= {};
+  return $dict unless @_;
+
+  # Get
+  return $dict->{$_[0]} unless @_ > 1 || ref $_[0];
+
+  # Set
+  my $values = ref $_[0] ? $_[0] : {@_};
+  @$dict{keys %$values} = values %$values;
+
+  return $object;
 }
 
 1;

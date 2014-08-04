@@ -1,8 +1,8 @@
 package Mojo::IOLoop::Delay;
 use Mojo::Base 'Mojo::EventEmitter';
 
-use Mojo;
 use Mojo::IOLoop;
+use Mojo::Util;
 BEGIN {eval {require Hash::Util::FieldHash; import Hash::Util::FieldHash qw(fieldhash); 1} || eval {require Hash::FieldHash; import Hash::FieldHash qw(fieldhash)}}
 
 has ioloop => sub { Mojo::IOLoop->singleton };
@@ -16,7 +16,7 @@ sub begin {
   return sub { $self->_step($id, defined $offset ? $offset : 1, $len, @_) };
 }
 
-sub data { shift->Mojo::_dict(data => @_) }
+sub data { Mojo::Util::_stash(data => @_) }
 
 sub pass { $_[0]->begin->(@_) }
 
