@@ -204,8 +204,9 @@ get '/root' => sub { shift->render(text => 'root fallback!') };
 get '/template.txt' => {template => 'template', format => 'txt'};
 
 get ':number' => [number => qr/0/] => sub {
-  my $c       = shift;
-  my $url     = $c->req->url->to_abs;
+  my $c   = shift;
+  my $url = $c->req->url->to_abs;
+  $c->res->headers->header('X-Original' => $c->tx->original_remote_address);
   my $address = $c->tx->remote_address;
   my $num     = $c->param('number');
   $c->render(text => "$url-$address-$num");
@@ -238,7 +239,7 @@ get '/source' => sub {
   my $c = shift;
   my $file = $c->param('fail') ? 'does_not_exist.txt' : '../lite_app.t';
   $c->render_maybe('this_does_not_ever_exist')
-    or $c->render_static($file)
+    or $c->reply->static($file)
     or $c->res->headers->header('X-Missing' => 1);
 };
 
@@ -376,23 +377,13 @@ get '/subrequest_non_blocking' => sub {
   $c->stash->{nb} = 'success!';
 };
 
-get '/redirect_url' => sub {
-  shift->redirect_to('http://127.0.0.1/foo')->render(text => 'Redirecting!');
-};
+get '/redirect_url' => sub { shift->redirect_to('http://127.0.0.1/foo') };
 
-get '/redirect_path' => sub {
-  shift->redirect_to('/foo/bar?foo=bar')->render(text => 'Redirecting!');
-};
+get '/redirect_path' => sub { shift->redirect_to('/foo/bar?foo=bar') };
 
-get '/redirect_named' => sub {
-  shift->redirect_to('index', format => 'txt')->render(text => 'Redirecting!');
-};
+get '/redirect_named' => sub { shift->redirect_to('index', format => 'txt') };
 
 get '/redirect_twice' => sub { shift->redirect_to('/redirect_named') };
-
-get '/redirect_no_render' => sub {
-  shift->redirect_to('index', {format => 'txt'});
-};
 
 get '/redirect_callback' => sub {
   my $c = shift;
@@ -405,7 +396,7 @@ get '/redirect_callback' => sub {
   );
 };
 
-get '/static_render' => sub { shift->render_static('hello.txt') };
+get '/static' => sub { shift->reply->static('hello.txt') };
 
 app->types->type('koi8-r' => 'text/html; charset=koi8-r');
 get '/koi8-r' => sub {
@@ -742,7 +733,8 @@ $t->get_ok('/.html')->status_is(200)
   local $ENV{MOJO_REVERSE_PROXY} = 1;
   $t->ua->server->restart;
   $t->get_ok('/0' => {'X-Forwarded-For' => '192.0.2.2, 192.0.2.1'})
-    ->status_is(200)->content_like(qr!http://localhost:\d+/0-192\.0\.2\.1-0$!);
+    ->status_is(200)->header_unlike('X-Original' => qr/192\.0\.2\.1/)
+    ->content_like(qr!http://localhost:\d+/0-192\.0\.2\.1-0$!);
 }
 
 # Reverse proxy with "X-Forwarded-Proto"
@@ -974,22 +966,18 @@ is $nb, 'broken!', 'right text';
 
 # Redirect to URL
 $t->get_ok('/redirect_url')->status_is(302)
-  ->header_is(Server           => 'Mojolicious (Perl)')
-  ->header_is('Content-Length' => 12)
-  ->header_is(Location => 'http://127.0.0.1/foo')->content_is('Redirecting!');
+  ->header_is(Server   => 'Mojolicious (Perl)')
+  ->header_is(Location => 'http://127.0.0.1/foo')->content_is('');
 
 # Redirect to path
 $t->get_ok('/redirect_path')->status_is(302)
-  ->header_is(Server           => 'Mojolicious (Perl)')
-  ->header_is('Content-Length' => 12)
-  ->header_like(Location => qr!/foo/bar\?foo=bar$!)
-  ->content_is('Redirecting!');
+  ->header_is(Server => 'Mojolicious (Perl)')
+  ->header_like(Location => qr!/foo/bar\?foo=bar$!)->content_is('');
 
 # Redirect to named route
 $t->get_ok('/redirect_named')->status_is(302)
-  ->header_is(Server           => 'Mojolicious (Perl)')
-  ->header_is('Content-Length' => 12)
-  ->header_like(Location => qr!/template.txt$!)->content_is('Redirecting!');
+  ->header_is(Server => 'Mojolicious (Perl)')
+  ->header_like(Location => qr!/template.txt$!)->content_is('');
 
 # Redirect twice
 $t->ua->max_redirects(3);
@@ -1002,12 +990,6 @@ is $redirects->[0]->req->url->path, '/redirect_twice', 'right path';
 is $redirects->[1]->req->url->path, '/redirect_named', 'right path';
 $t->ua->max_redirects(0);
 
-# Redirect without rendering
-$t->get_ok('/redirect_no_render')->status_is(302)
-  ->header_is(Server           => 'Mojolicious (Perl)')
-  ->header_is('Content-Length' => 0)
-  ->header_like(Location => qr!/template.txt$!)->content_is('');
-
 # Non-blocking redirect
 $t->get_ok('/redirect_callback')->status_is(301)
   ->header_is(Server           => 'Mojolicious (Perl)')
@@ -1015,7 +997,7 @@ $t->get_ok('/redirect_callback')->status_is(301)
   ->header_is(Location => 'http://127.0.0.1/foo')->content_is('Whatever!');
 
 # Static file
-$t->get_ok('/static_render')->status_is(200)
+$t->get_ok('/static')->status_is(200)
   ->header_is(Server           => 'Mojolicious (Perl)')
   ->header_is('Content-Length' => 31)
   ->content_is("Hello Mojo from a static file!\n");
@@ -1031,7 +1013,7 @@ $t->get_ok('/redirect_named')->status_is(200)
 $t->ua->max_redirects(0);
 Test::Mojo->new->tx($t->tx->previous)->status_is(302)
   ->header_is(Server => 'Mojolicious (Perl)')
-  ->header_like(Location => qr!/template.txt$!)->content_is('Redirecting!');
+  ->header_like(Location => qr!/template.txt$!)->content_is('');
 
 # Request with koi8-r content
 my $koi8

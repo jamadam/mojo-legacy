@@ -238,8 +238,8 @@ C<X-Forwarded-For> and C<X-Forwarded-Proto> headers.
 
   $ MOJO_REVERSE_PROXY=1 plackup ./script/myapp
 
-If an older server adapter is not be able to correctly detect the application
-home directory, you can simply use the C<MOJO_HOME> environment variable.
+If an older server adapter is unable to correctly detect the application home
+directory, you can simply use the C<MOJO_HOME> environment variable.
 
   $ MOJO_HOME=/home/sri/myapp plackup ./script/myapp
 
@@ -257,7 +257,22 @@ application logic.
 
   builder {
     enable 'Deflater';
-    require 'myapp.pl';
+    require './script/myapp';
+  };
+
+L<Mojo::Server::PSGI> can be used directly to load and customize applications
+in the wrapper script.
+
+  #!/usr/bin/env plackup -s FCGI
+  use Mojo::Server::PSGI;
+  use Plack::Builder;
+
+  builder {
+    enable 'Deflater';
+    my $server = Mojo::Server::PSGI->new;
+    $server->load_app('./script/myapp');
+    $server->app->config(foo => 'bar');
+    $server->to_psgi_app;
   };
 
 But you could even use middleware right in your application.
@@ -284,7 +299,7 @@ you can use the hook L<Mojolicious/"before_dispatch"> to rewrite incoming
 requests.
 
   # Change scheme if "X-Forwarded-HTTPS" header is set
-  app->hook(before_dispatch => sub {
+  $app->hook(before_dispatch => sub {
     my $c = shift;
     $c->req->url->base->scheme('https')
       if $c->req->headers->header('X-Forwarded-HTTPS');
@@ -295,11 +310,11 @@ prefixes your application might be deployed under, rewriting the base path of
 incoming requests is also quite common.
 
   # Move first part and slash from path to base path in production mode
-  app->hook(before_dispatch => sub {
+  $app->hook(before_dispatch => sub {
     my $c = shift;
     push @{$c->req->url->base->path->trailing_slash(1)},
       shift @{$c->req->url->path->leading_slash(0)};
-  }) if app->mode eq 'production';
+  }) if $app->mode eq 'production';
 
 L<Mojo::URL> objects are very easy to manipulate, just make sure that the URL
 (C<foo/bar?baz=yada>), which represents the routing destination, is always
@@ -500,9 +515,19 @@ created at startup time.
 
   app->start;
 
-Since timers and other low-level event watchers are also independent from
-applications, errors can't get logged automatically, you can change that by
-subscribing to the event L<Mojo::Reactor/"error">.
+Just remember that all events are processed cooperatively, so your callbacks
+shouldn't block for too long.
+
+=head2 Exceptions in events
+
+Since timers and other non-blocking operations are running solely in the event
+loop, outside of the application, exceptions that get thrown in callbacks
+can't get caught and handled automatically. But you can handle them manually
+by subscribing to the event L<Mojo::Reactor/"error"> or catching them inside
+the callback.
+
+  use Mojolicious::Lite;
+  use Mojo::IOLoop;
 
   # Forward error messages to the application log
   Mojo::IOLoop->singleton->reactor->on(error => sub {
@@ -510,8 +535,33 @@ subscribing to the event L<Mojo::Reactor/"error">.
     app->log->error($err);
   });
 
-Just remember that all events are processed cooperatively, so your callbacks
-shouldn't block for too long.
+  # Exception only gets logged (and connection times out)
+  get '/connection_times_out' => sub {
+    my $c = shift;
+    Mojo::IOLoop->timer(2 => sub {
+      die 'This request will not be getting a response';
+    });
+  };
+
+  # Exception gets caught and handled
+  get '/catch_exception' => sub {
+    my $c = shift;
+    Mojo::IOLoop->timer(2 => sub {
+      eval { die 'This request will be getting a response' };
+      $c->reply->exception($@) if $@;
+    });
+  };
+
+  app->start;
+
+A default subscriber that turns all errors into warnings will usually be added
+by L<Mojo::IOLoop> as a fallback.
+
+  Mojo::IOLoop->singleton->reactor->unsubscribe('error');
+
+During development or for applications where crashing is simply preferable,
+you can also make every exception that gets thrown in a callback fatal by
+removing all of its subscribers.
 
 =head2 WebSocket web service
 
@@ -1178,7 +1228,7 @@ C<Authorization> header.
 
 This can be combined with TLS for a secure authentication mechanism.
 
-  $ ./myapp.pl daemon -l https://*:3000?cert=./server.crt&key=./server.key
+  $ ./myapp.pl daemon -l 'https://*:3000?cert=./server.crt&key=./server.key'
 
 =head2 Adding a configuration file
 
@@ -1227,16 +1277,17 @@ application, you can use application specific plugins.
   $ touch lib/MyApp/Plugin/MyHelpers.pm
 
 They work just like normal plugins and are also subclasses of
-L<Mojolicious::Plugin>.
+L<Mojolicious::Plugin>. Nested helpers with a prefix based on the plugin name
+are an easy way to avoid conflicts.
 
   package MyApp::Plugin::MyHelpers;
   use Mojo::Base 'Mojolicious::Plugin';
 
   sub register {
     my ($self, $app) = @_;
-    $app->helper(render_with_header => sub {
+    $app->helper('my_helpers.render_with_header' => sub {
       my ($c, @args) = @_;
-      $c->res->headers->header('X-Mojo' => 'I <3 Mojolicious!')
+      $c->res->headers->header('X-Mojo' => 'I <3 Mojolicious!');
       $c->render(@args);
     });
   }
@@ -1255,10 +1306,13 @@ name.
 
   get '/' => sub {
     my $c = shift;
-    $c->render_with_header(text => 'I ♥ Mojolicious!');
+    $c->my_helpers->render_with_header(text => 'I ♥ Mojolicious!');
   };
 
   app->start;
+
+Of course these plugins can contain more than just helpers, take a look at
+L<Mojolicious::Plugins/"PLUGINS"> for a few ideas.
 
 =head2 Adding commands to Mojolicious
 
@@ -1277,6 +1331,9 @@ that they will be picked up automatically by the command line interface?
 
     # Leak secret passphrases
     say for @{$self->app->secrets} if $args[0] eq 'secrets';
+
+    # Leak mode
+    say $self->app->mode if $args[0] eq 'mode';
   }
 
   1;
@@ -1306,6 +1363,14 @@ L<Mojolicious::Commands/"namespaces">.
   }
 
   1;
+
+Some options like C<-m> for the operating mode of your application are shared
+by all commands automatically.
+
+  $ ./myapp.pl spy -m production mode
+  production
+
+For a full list of shared options see L<Mojolicious::Commands/"SYNOPSIS">.
 
 =head2 Running code against your application
 

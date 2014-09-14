@@ -119,8 +119,7 @@ sub _connect {
       return $self->_error($id, $err) if $err;
 
       # Connection established
-      $stream->on(
-        timeout => sub { $self->_error($id, 'Inactivity timeout', 1) });
+      $stream->on(timeout => sub { $self->_error($id, 'Inactivity timeout') });
       $stream->on(close => sub { $self && $self->_finish($id, 1) });
       $stream->on(error => sub { $self && $self->_error($id, pop) });
       $stream->on(read => sub { $self->_read($id, pop) });
@@ -235,12 +234,9 @@ sub _enqueue {
 }
 
 sub _error {
-  my ($self, $id, $err, $timeout) = @_;
-
-  if (my $tx = $self->{connections}{$id}{tx}) {
-    $tx->res->error({message => $err});
-  }
-  elsif (!$timeout) { return $self->emit(error => $err) }
+  my ($self, $id, $err) = @_;
+  my $tx = $self->{connections}{$id}{tx};
+  $tx->res->error({message => $err}) if $tx;
   $self->_finish($id, 1);
 }
 
@@ -388,6 +384,11 @@ Mojo::UserAgent - Non-blocking I/O HTTP and WebSocket user agent
   # Scrape the latest headlines from a news site with CSS selectors
   say $ua->get('blogs.perl.org')->res->dom('h2 > a')->text->shuffle;
 
+  # Search DuckDuckGo anonymously through Tor
+  $ua->proxy->http('socks://127.0.0.1:9050');
+  say $ua->get('api.3g2upl4pq6kufc4m.onion/?q=mojolicious&format=json')
+    ->res->json('/Abstract');
+
   # IPv6 PUT request with content
   my $tx
     = $ua->put('[::1]:3000' => {'Content-Type' => 'text/plain'} => 'Hello!');
@@ -451,21 +452,6 @@ See L<Mojolicious::Guides::Cookbook/"USER AGENT"> for more.
 
 L<Mojo::UserAgent> inherits all events from L<Mojo::EventEmitter> and can emit
 the following new ones.
-
-=head2 error
-
-  $ua->on(error => sub {
-    my ($ua, $err) = @_;
-    ...
-  });
-
-Emitted if an error occurs that can't be associated with a transaction, fatal
-if unhandled.
-
-  $ua->on(error => sub {
-    my ($ua, $err) = @_;
-    say "This looks bad: $err";
-  });
 
 =head2 start
 
@@ -846,7 +832,8 @@ non-blocking.
 Open a non-blocking WebSocket connection with transparent handshake, takes the
 same arguments as L<Mojo::UserAgent::Transactor/"websocket">. The callback
 will receive either a L<Mojo::Transaction::WebSocket> or
-L<Mojo::Transaction::HTTP> object.
+L<Mojo::Transaction::HTTP> object, depending on if the handshake was
+successful.
 
   $ua->websocket('ws://example.com/echo' => sub {
     my ($ua, $tx) = @_;

@@ -2,12 +2,12 @@ package Mojo::Date;
 use Mojo::Base -base;
 use overload bool => sub {1}, '""' => sub { shift->to_string }, fallback => 1;
 
-use Time::Local 'timegm';
+use Time::Local 1.2 'timegm';
 
-has 'epoch';
+has epoch => sub {time};
 
 my $RFC3339_RE = qr/
-  ^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+)(?:\.\d+)?   # Date and time
+  ^(\d+)-(\d+)-(\d+)T(\d+):(\d+):(\d+(?:\.\d+)?)   # Date and time
   (?:Z|([+-])(\d+):(\d+))?$                        # Offset
 /xi;
 
@@ -22,7 +22,7 @@ sub parse {
   my ($self, $date) = @_;
 
   # epoch (784111777)
-  return $self->epoch($date) if $date =~ /^\d+$/;
+  return $self->epoch($date) if $date =~ /^\d+$|^\d+\.\d+$/;
 
   # RFC 822/1123 (Sun, 06 Nov 1994 08:49:37 GMT)
   my $offset = 0;
@@ -48,26 +48,27 @@ sub parse {
   }
 
   # Invalid
-  else { return $self }
+  else { return $self->epoch(undef) }
 
   # Prevent crash
-  my $epoch = eval { timegm($s, $m, $h, $day, $month, $year) };
-  return
-    defined $epoch && ($epoch += $offset) >= 0 ? $self->epoch($epoch) : $self;
+  my $epoch = eval { timegm $s, $m, $h, $day, $month, $year };
+  return $self->epoch(
+    (defined $epoch && ($epoch += $offset) >= 0) ? $epoch : undef);
 }
 
 sub to_datetime {
 
   # RFC 3339 (1994-11-06T08:49:37Z)
-  my ($s, $m, $h, $day, $month, $year) = gmtime(defined $_[0]->{epoch} ? $_[0]->{epoch} : time);
-  return sprintf '%04d-%02d-%02dT%02d:%02d:%02dZ', $year + 1900, $month + 1,
+  my ($s, $m, $h, $day, $month, $year) = gmtime(my $epoch = shift->epoch);
+  my $str = sprintf '%04d-%02d-%02dT%02d:%02d:%02d', $year + 1900, $month + 1,
     $day, $h, $m, $s;
+  return $str . ($epoch =~ /(\.\d+)$/ ? "$1Z" : 'Z');
 }
 
 sub to_string {
 
   # RFC 7231 (Sun, 06 Nov 1994 08:49:37 GMT)
-  my ($s, $m, $h, $mday, $month, $year, $wday) = gmtime(defined $_[0]->{epoch} ? $_[0]->{epoch} : time);
+  my ($s, $m, $h, $mday, $month, $year, $wday) = gmtime shift->epoch;
   return sprintf '%s, %02d %s %04d %02d:%02d:%02d GMT', $DAYS[$wday], $mday,
     $MONTHS[$month], $year + 1900, $h, $m, $s;
 }
@@ -108,7 +109,7 @@ L<Mojo::Date> implements the following attributes.
   my $epoch = $date->epoch;
   $date     = $date->epoch(784111777);
 
-Epoch seconds.
+Epoch seconds, defaults to the current time.
 
 =head1 METHODS
 
@@ -130,6 +131,7 @@ Parse date.
 
   # Epoch
   say Mojo::Date->new('784111777')->epoch;
+  say Mojo::Date->new('784111777.21')->epoch;
 
   # RFC 822/1123
   say Mojo::Date->new('Sun, 06 Nov 1994 08:49:37 GMT')->epoch;
@@ -155,6 +157,9 @@ Render L<RFC 3339|http://tools.ietf.org/html/rfc3339> date and time.
 
   # "1994-11-06T08:49:37Z"
   Mojo::Date->new(784111777)->to_datetime;
+
+  # "1994-11-06T08:49:37.21Z"
+  Mojo::Date->new(784111777.21)->to_datetime;
 
 =head2 to_string
 

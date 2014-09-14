@@ -422,7 +422,7 @@ Mojo::DOM - Minimalistic HTML/XML DOM parser with CSS selectors
   say $dom->div->children('p')->first->{id};
 
   # Iterate
-  $dom->find('p[id]')->each(sub { say $_->{id} });
+  $dom->find('p[id]')->reverse->each(sub { say $_->{id} });
 
   # Loop
   for my $e ($dom->find('p[id]')->each) {
@@ -524,7 +524,7 @@ Append HTML/XML fragment to this node.
 
   $dom = $dom->append_content('<p>I ♥ Mojolicious!</p>');
 
-Append HTML/XML fragment or raw content (depending on node type) to this
+Append HTML/XML fragment (for C<root> and C<tag> nodes) or raw content to this
 node's content.
 
   # "<div><h1>Test123</h1></div>"
@@ -578,8 +578,8 @@ All selectors from L<Mojo::DOM::CSS/"SELECTORS"> are supported.
   my $str = $dom->content;
   $dom    = $dom->content('<p>I ♥ Mojolicious!</p>');
 
-Return this node's content or replace it with HTML/XML fragment or raw content
-(depending on node type).
+Return this node's content or replace it with HTML/XML fragment (for C<root>
+and C<tag> nodes) or raw content.
 
   # "<b>Test</b>"
   $dom->parse('<div><b>Test</b></div>')->div->content;
@@ -587,17 +587,18 @@ Return this node's content or replace it with HTML/XML fragment or raw content
   # "<div><h1>123</h1></div>"
   $dom->parse('<div><h1>Test</h1></div>')->at('h1')->content('123')->root;
 
+  # "<p><i>123</i></p>"
+  $dom->parse('<p>Test</p>')->at('p')->content('<i>123</i>')->root;
+
   # "<div><h1></h1></div>"
   $dom->parse('<div><h1>Test</h1></div>')->at('h1')->content('')->root;
 
   # " Test "
   $dom->parse('<!-- Test --><br>')->contents->first->content;
 
-  # "<!-- 123 --><br>"
-  $dom->parse('<!-- Test --><br>')->contents->first->content(' 123 ')->root;
-
-  # "<p><i>123</i></p>"
-  $dom->parse('<p>Test</p>')->at('p')->content('<i>123</i>')->root;
+  # "<div><!-- 123 -->456</div>"
+  $dom->parse('<div><!-- Test -->456</div>')->at('div')
+    ->contents->first->content(' 123 ')->root;
 
 =head2 contents
 
@@ -721,8 +722,8 @@ Prepend HTML/XML fragment to this node.
 
   $dom = $dom->prepend_content('<p>I ♥ Mojolicious!</p>');
 
-Prepend HTML/XML fragment or raw content (depending on node type) to this
-node's content.
+Prepend HTML/XML fragment (for C<root> and C<tag> nodes) or raw content to
+this node's content.
 
   # "<div><h2>Test123</h2></div>"
   $dom->parse('<div><h2>123</h2></div>')->at('h2')

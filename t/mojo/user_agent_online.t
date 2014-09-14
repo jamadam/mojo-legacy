@@ -87,7 +87,7 @@ ok $tx->error,       'has error';
 $tx = $ua->build_tx(GET => 'http://cdeabcdeffoobarnonexisting.com');
 $ua->start($tx);
 ok $tx->is_finished, 'transaction is finished';
-like $tx->error->{message}, qr/^Couldn't connect/, 'right error';
+like $tx->error->{message}, qr/^Can't connect/, 'right error';
 
 # Fresh user agent again
 $ua = Mojo::UserAgent->new;
@@ -234,8 +234,9 @@ is $tx->res->code,   200,             'right status';
 ok $tx->kept_alive,    'connection was kept alive';
 ok $tx->local_address, 'has local address';
 ok $tx->local_port > 0, 'has local port';
-ok $tx->remote_address, 'has local address';
-ok $tx->remote_port > 0, 'has local port';
+ok $tx->original_remote_address, 'has original remote address';
+ok $tx->remote_address,          'has remote address';
+ok $tx->remote_port > 0, 'has remote port';
 
 # Simple request with redirect
 $ua->max_redirects(3);

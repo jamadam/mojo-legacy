@@ -65,6 +65,8 @@ is $t->app->renderer->template_handler(
 is $t->app->build_controller->req->url, '', 'no URL';
 is $t->app->build_controller->render_to_string('does_not_exist'), undef,
   'no result';
+is $t->app->build_controller->render_to_string(inline => '%= $c', c => 'foo'),
+  "foo\n", 'right result';
 
 # Missing methods and functions (AUTOLOAD)
 eval { $t->app->missing };
@@ -115,7 +117,6 @@ ok $t->app->routes->is_hidden('render_exception'), 'is hidden';
 ok $t->app->routes->is_hidden('render_later'),     'is hidden';
 ok $t->app->routes->is_hidden('render_maybe'),     'is hidden';
 ok $t->app->routes->is_hidden('render_not_found'), 'is hidden';
-ok $t->app->routes->is_hidden('render_static'),    'is hidden';
 ok $t->app->routes->is_hidden('render_to_string'), 'is hidden';
 ok $t->app->routes->is_hidden('rendered'),         'is hidden';
 ok $t->app->routes->is_hidden('req'),              'is hidden';

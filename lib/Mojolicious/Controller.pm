@@ -4,7 +4,6 @@ use Mojo::Base -base;
 # No imports, for security reasons!
 use Carp ();
 use Mojo::ByteStream;
-use Mojo::Exception;
 use Mojo::Transaction::HTTP;
 use Mojo::URL;
 use Mojo::Util;
@@ -172,20 +171,19 @@ sub render {
   return !!$self->rendered($self->stash->{status});
 }
 
-sub render_exception { _development('exception', @_) }
+sub render_exception { shift->helpers->reply->exception(@_) }
 
 sub render_later { shift->stash('mojo.rendered' => 1) }
 
 sub render_maybe { shift->render(@_, 'mojo.maybe' => 1) }
 
-sub render_not_found { _development('not_found', @_) }
+sub render_not_found { shift->helpers->reply->not_found }
 
+# DEPRECATED in Tiger Face!
 sub render_static {
-  my ($self, $file) = @_;
-  my $app = $self->app;
-  return !!$self->rendered if $app->static->serve($self, $file);
-  $app->log->debug(qq{File "$file" not found, public directory missing?});
-  return !$self->render_not_found;
+  Mojo::Util::deprecated 'Mojolicious::Controller::render_static is DEPRECATED'
+    . ' in favor of the reply->static helper';
+  shift->helpers->reply->static(@_);
 }
 
 sub render_to_string { shift->render(@_, 'mojo.to_string' => 1) }
@@ -384,50 +382,6 @@ sub write_chunk {
   my $content = $self->res->content;
   $content->write_chunk($chunk, $cb ? sub { shift; $self->$cb(@_) } : ());
   return $self->rendered;
-}
-
-sub _development {
-  my ($page, $self, $e) = @_;
-
-  my $app = $self->app;
-  $app->log->error($e = Mojo::Exception->new($e)) if $page eq 'exception';
-
-  # Filtered stash snapshot
-  my $stash = $self->stash;
-  my %snapshot = map { $_ => $stash->{$_} }
-    grep { !/^mojo\./ and defined $stash->{$_} } keys %$stash;
-
-  # Render with fallbacks
-  my $mode     = $app->mode;
-  my $renderer = $app->renderer;
-  my $options  = {
-    exception => $page eq 'exception' ? $e : undef,
-    format => $stash->{format} || $renderer->default_format,
-    handler  => undef,
-    snapshot => \%snapshot,
-    status   => $page eq 'exception' ? 500 : 404,
-    template => "$page.$mode"
-  };
-  my $inline = $renderer->_bundled($mode eq 'development' ? $mode : $page);
-  return $self if _fallbacks($self, $options, $page, $inline);
-  _fallbacks($self, {%$options, format => 'html'}, $page, $inline);
-  return $self;
-}
-
-sub _fallbacks {
-  my ($self, $options, $template, $inline) = @_;
-
-  # Mode specific template
-  return 1 if $self->render_maybe(%$options);
-
-  # Normal template
-  return 1 if $self->render_maybe(%$options, template => $template);
-
-  # Inline template
-  my $stash = $self->stash;
-  return undef unless $stash->{format} eq 'html';
-  delete @$stash{qw(extends layout)};
-  return $self->render_maybe(%$options, inline => $inline, handler => 'ep');
 }
 
 1;
@@ -670,7 +624,7 @@ Prepare a C<302> redirect response, takes the same arguments as L</"url_for">.
   my $bool = $c->render(handler => 'something');
   my $bool = $c->render('foo/index');
 
-Render content using L<Mojolicious::Renderer/"render"> and emit hooks
+Render content with L<Mojolicious::Renderer/"render"> and emit hooks
 L<Mojolicious/"before_render"> as well as L<Mojolicious/"after_render">. If no
 template is provided a default one based on controller and action or route
 name will be generated with L<Mojolicious::Renderer/"template_for">, all
@@ -700,10 +654,7 @@ additional pairs get merged into the L</"stash">.
   $c = $c->render_exception('Oops!');
   $c = $c->render_exception(Mojo::Exception->new('Oops!'));
 
-Render the exception template C<exception.$mode.$format.*> or
-C<exception.$format.*> and set the response status code to C<500>. Also sets
-the stash values C<exception> to a L<Mojo::Exception> object and C<snapshot>
-to a copy of the L</"stash"> for use in the templates.
+Alias for L<Mojolicious::Plugin::DefaultHelpers/"reply-E<gt>exception">.
 
 =head2 render_later
 
@@ -724,7 +675,8 @@ automatic rendering would result in a response.
   my $bool = $c->render_maybe(controller => 'foo', action => 'bar');
   my $bool = $c->render_maybe('foo/index', format => 'html');
 
-Try to render content, but do not call L</"render_not_found"> if no response
+Try to render content, but do not call
+L<Mojolicious::Plugin::DefaultHelpers/"reply-E<gt>not_found"> if no response
 could be generated, takes the same arguments as L</"render">.
 
   # Render template "index_local" only if it exists
@@ -734,23 +686,7 @@ could be generated, takes the same arguments as L</"render">.
 
   $c = $c->render_not_found;
 
-Render the not found template C<not_found.$mode.$format.*> or
-C<not_found.$format.*> and set the response status code to C<404>. Also sets
-the stash value C<snapshot> to a copy of the L</"stash"> for use in the
-templates.
-
-=head2 render_static
-
-  my $bool = $c->render_static('images/logo.png');
-  my $bool = $c->render_static('../lib/MyApp.pm');
-
-Render a static file using L<Mojolicious::Static/"serve">, usually from the
-C<public> directories or C<DATA> sections of your application. Note that this
-method does not protect from traversing to parent directories.
-
-  # Serve file with a custom content type
-  $c->res->headers->content_type('application/myapp');
-  $c->render_static('foo.txt');
+Alias for L<Mojolicious::Plugin::DefaultHelpers/"reply-E<gt>not_found">.
 
 =head2 render_to_string
 
@@ -781,7 +717,7 @@ using a C<200> response code.
 
   my $req = $c->req;
 
-Get L<Mojo::Message::Request> object from L<Mojo::Transaction/"req">.
+Get L<Mojo::Message::Request> object from L</"tx">.
 
   # Longer version
   my $req = $c->tx->req;
@@ -803,7 +739,7 @@ Get L<Mojo::Message::Request> object from L<Mojo::Transaction/"req">.
 
   my $res = $c->res;
 
-Get L<Mojo::Message::Response> object from L<Mojo::Transaction/"res">.
+Get L<Mojo::Message::Response> object from L</"tx">.
 
   # Longer version
   my $res = $c->tx->res;

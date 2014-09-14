@@ -43,7 +43,7 @@ has types     => sub { Mojolicious::Types->new };
 has validator => sub { Mojolicious::Validator->new };
 
 our $CODENAME = 'Tiger Face';
-our $VERSION  = '5.32';
+our $VERSION  = '5.41';
 
 sub AUTOLOAD {
   my $self = shift;
@@ -160,9 +160,12 @@ sub new {
   # Hide controller attributes/methods and "handler"
   $r->hide(qw(app continue cookie finish flash handler helpers match on));
   $r->hide(qw(param redirect_to render render_exception render_later));
-  $r->hide(qw(render_maybe render_not_found render_static render_to_string));
-  $r->hide(qw(rendered req res respond_to send session signed_cookie stash));
-  $r->hide(qw(tx url_for validation write write_chunk));
+  $r->hide(qw(render_maybe render_not_found render_to_string rendered req));
+  $r->hide(qw(res respond_to send session signed_cookie stash tx url_for));
+  $r->hide(qw(validation write write_chunk));
+
+  # DEPRECATED in Tiger Face!
+  $r->hide('render_static');
 
   # Check if we have a log directory
   my $mode = $self->mode;
@@ -361,8 +364,9 @@ Useful for rewriting outgoing responses and other post-processing tasks.
 Emitted right before the L</"before_dispatch"> hook and wraps around the whole
 dispatch process, so you have to manually forward to the next hook if you want
 to continue the chain. Default exception handling with
-L<Mojolicious::Controller/"render_exception"> is the first hook in the chain
-and a call to L</"dispatch"> the last, yours will be in between.
+L<Mojolicious::Plugin::DefaultHelpers/"reply-E<gt>exception"> is the first
+hook in the chain and a call to L</"dispatch"> the last, yours will be in
+between.
 
   $app->hook(around_dispatch => sub {
     my ($next, $c) = @_;

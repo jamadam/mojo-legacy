@@ -1,6 +1,6 @@
 package Mojo::ByteStream;
 use Mojo::Base -strict;
-use overload '""' => sub { shift->to_string }, fallback => 1;
+use overload '""' => sub { ${$_[0]} }, fallback => 1;
 
 use Exporter 'import';
 use Mojo::Collection;

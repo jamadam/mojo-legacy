@@ -120,10 +120,9 @@ sub move_to {
   return $self->path($to)->cleanup(0);
 }
 
-sub size {
-  return 0 unless defined(my $file = shift->path);
-  return -s $file;
-}
+sub mtime { (stat shift->handle)[9] }
+
+sub size { -s shift->handle }
 
 sub slurp {
   return '' unless defined(my $file = shift->path);
@@ -232,6 +231,12 @@ True.
   $file = $file->move_to('/home/sri/bar.txt');
 
 Move asset data into a specific file and disable L</"cleanup">.
+
+=head2 mtime
+
+  my $mtime = $file->mtime;
+
+Modification time of asset.
 
 =head2 size
 

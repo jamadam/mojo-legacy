@@ -67,7 +67,12 @@ eval {
   Mojo::Server::Daemon->new->load_app(
     "$FindBin::Bin/lib/Mojo/LoaderException.pm");
 };
-like $@, qr/^Couldn't load application/, 'right error';
+like $@, qr/^Can't load application/, 'right error';
+
+# Load missing application class
+eval { Mojo::Server::Daemon->new->build_app('Mojo::DoesNotExist') };
+like $@, qr/^Can't find application class "Mojo::DoesNotExist" in \@INC/,
+  'right error';
 
 # Transaction
 isa_ok $app->build_tx, 'Mojo::Transaction::HTTP', 'right class';
@@ -194,12 +199,13 @@ is $tx->res->code, 200, 'right status';
 is $tx->res->body, $result, 'right content';
 ok $tx->local_address, 'has local address';
 ok $tx->local_port > 0, 'has local port';
-ok $tx->remote_address, 'has local address';
-ok $tx->remote_port > 0, 'has local port';
+ok $tx->original_remote_address, 'has original remote address';
+ok $tx->remote_address,          'has remote address';
+ok $tx->remote_port > 0, 'has remote port';
 ok $local_address, 'has local address';
 ok $local_port > 0, 'has local port';
-ok $remote_address, 'has local address';
-ok $remote_port > 0, 'has local port';
+ok $remote_address, 'has remote address';
+ok $remote_port > 0, 'has remote port';
 
 # Pipelined
 my $daemon

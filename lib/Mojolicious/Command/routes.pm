@@ -28,9 +28,9 @@ sub _walk {
 
   # Flags
   my @flags;
-  push @flags, $route->inline ? 'B' : '.';
   push @flags, @{$route->over || []} ? 'C' : '.';
   push @flags, (my $partial = $route->partial) ? 'D' : '.';
+  push @flags, $route->inline       ? 'U' : '.';
   push @flags, $route->is_websocket ? 'W' : '.';
   push @$row, join('', @flags) if $verbose;
 
@@ -45,8 +45,8 @@ sub _walk {
   # Regex (verbose)
   my $pattern = $route->pattern;
   $pattern->match('/', $route->is_endpoint && !$partial);
-  my $regex = (regexp_pattern $pattern->regex)[0];
-  my $format = (regexp_pattern($pattern->format_regex || ''))[0];
+  my $regex  = (regexp_pattern $pattern->regex)[0];
+  my $format = (regexp_pattern($pattern->format_regex))[0];
   push @$row, $regex, $format ? $format : '' if $verbose;
 
   $depth++;
@@ -68,7 +68,7 @@ Mojolicious::Command::routes - Routes command
 
   Options:
     -v, --verbose   Print additional details about routes, flags indicate
-                    B=Bridge, C=Conditions, D=Detour and W=WebSocket.
+                    C=Conditions, D=Detour, U=Under and W=WebSocket.
 
 =head1 DESCRIPTION
 

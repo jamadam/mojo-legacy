@@ -170,6 +170,9 @@ L<Mojolicious::Command::generate::app>.
   $ mojo generate lite_app myapp.pl
   $ mojo generate app MyApp
 
+Feature-wise both are almost equal, the only real differences are
+organizational, so each one can be gradually transformed into the other.
+
 =head2 Foundation
 
 We start our new application with a single executable Perl script.
@@ -203,7 +206,7 @@ you refresh your browser.
 =head2 Model
 
 In L<Mojolicious> we consider web applications simple frontends for existing
-business logic, that means L<Mojolicious> is by design entirely L<model> layer
+business logic, that means L<Mojolicious> is by design entirely I<model> layer
 agnostic and you just use whatever Perl modules you like most.
 
   $ mkdir -p lib/MyApp/Model
@@ -358,7 +361,7 @@ using the method L<Mojolicious::Controller/"session">, there is no setup
 required, but we suggest setting a more secure passphrase with
 L<Mojolicious/"secrets">.
 
-  app->secrets(['Mojolicious rocks']);
+  $app->secrets(['Mojolicious rocks']);
 
 This passphrase is used by the HMAC-SHA1 algorithm to make signed cookies
 secure and can be changed at any time to invalidate all existing sessions.
@@ -377,8 +380,9 @@ set an absolute expiration date in the past.
   $c->session(expires => 1);
 
 For data that should only be visible on the next request, like a confirmation
-message after a 302 redirect, you can use the flash, accessible through the
-method L<Mojolicious::Controller/"flash">.
+message after a C<302> redirect performed with
+L<Mojolicious::Controller/"redirect_to">, you can use the flash, accessible
+through the method L<Mojolicious::Controller/"flash">.
 
   $c->flash(message => 'Everything is fine.');
   $c->redirect_to('goodbye');
