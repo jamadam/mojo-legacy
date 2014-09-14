@@ -725,7 +725,7 @@ served automatically from a C<public> directory if it exists.
   $ mv something.js public/something.js
   $ mv mojolicious.tar.gz public/mojolicious.tar.gz
 
-Both have a higher precedence than routes.
+Both have a higher precedence than routes for C<GET> and C<HEAD> requests.
 
 =head2 External templates
 

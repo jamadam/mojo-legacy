@@ -1,6 +1,7 @@
 use Mojo::Base -strict;
 
 use Test::More;
+use Mojo::Util 'decode';
 use Mojolicious::Controller;
 
 # Partial rendering
@@ -60,5 +61,56 @@ $cb = $c->app->log->on(message => sub { $log .= pop });
 $c->cookie(foo => 'x' x 4097);
 like $log, qr/Cookie "foo" is bigger than 4096 bytes\./, 'right message';
 $c->app->log->unsubscribe(message => $cb);
+
+# Nested helpers
+my $first = Mojolicious::Controller->new;
+$first->helpers->app->log->level('fatal');
+$first->app->helper('myapp.multi_level.test' => sub {'works!'});
+ok $first->app->renderer->get_helper('myapp'),                  'found helper';
+ok $first->app->renderer->get_helper('myapp.multi_level'),      'found helper';
+ok $first->app->renderer->get_helper('myapp.multi_level.test'), 'found helper';
+is $first->myapp->multi_level->test, 'works!', 'right result';
+is $first->helpers->myapp->multi_level->test, 'works!', 'right result';
+$first->app->helper('myapp.defaults' => sub { shift->app->defaults(@_) });
+ok $first->app->renderer->get_helper('myapp.defaults'), 'found helper';
+is $first->app->renderer->get_helper('myap.'),          undef, 'no helper';
+is $first->app->renderer->get_helper('yapp'),           undef, 'no helper';
+$first->myapp->defaults(foo => 'bar');
+is $first->myapp->defaults('foo'), 'bar', 'right result';
+is $first->helpers->myapp->defaults('foo'), 'bar', 'right result';
+is $first->app->myapp->defaults('foo'),     'bar', 'right result';
+my $second = Mojolicious::Controller->new;
+$second->app->log->level('fatal');
+is $second->app->renderer->get_helper('myapp'),          undef, 'no helper';
+is $second->app->renderer->get_helper('myapp.defaults'), undef, 'no helper';
+$second->app->helper('myapp.defaults' => sub {'nothing'});
+my $myapp = $first->myapp;
+is $first->myapp->defaults('foo'),  'bar',     'right result';
+is $second->myapp->defaults('foo'), 'nothing', 'right result';
+is $second->helpers->myapp->defaults('foo'), 'nothing', 'right result';
+is $first->myapp->defaults('foo'), 'bar', 'right result';
+is $first->helpers->myapp->defaults('foo'), 'bar', 'right result';
+
+# Missing method (AUTOLOAD)
+my $class = ref $first->myapp;
+eval { $first->myapp->missing };
+like $@, qr/^Can't locate object method "missing" via package "$class"/,
+  'right error';
+eval { $first->app->myapp->missing };
+like $@, qr/^Can't locate object method "missing" via package "$class"/,
+  'right error';
+
+# No leaky namespaces
+my $helper_class = ref $second->myapp;
+is ref $second->myapp, $helper_class, 'same class';
+ok $helper_class->can('defaults'), 'helpers are active';
+my $template_class = decode 'UTF-8',
+  $second->render_to_string(inline => "<%= __PACKAGE__ =%>");
+is decode('UTF-8', $second->render_to_string(inline => "<%= __PACKAGE__ =%>")),
+  $template_class, 'same class';
+ok $template_class->can('stash'), 'helpers are active';
+undef $second;
+ok !$helper_class->can('defaults'), 'helpers have been cleaned up';
+ok !$template_class->can('stash'),  'helpers have been cleaned up';
 
 done_testing();

@@ -108,9 +108,9 @@ environments out of the box.
   $ hypnotoad script/myapp
   Server available at http://127.0.0.1:8080.
 
-You can tweak many configuration settings right from within your application
-with L<Mojo/"config">, for a full list see
-L<Mojo::Server::Hypnotoad/"SETTINGS">.
+It automatically sets the operating mode to C<production> and you can tweak
+many configuration settings right from within your application with
+L<Mojo/"config">, for a full list see L<Mojo::Server::Hypnotoad/"SETTINGS">.
 
   use Mojolicious::Lite;
 
@@ -1217,6 +1217,48 @@ the helper L<Mojolicious::Plugin::DefaultHelpers/"config">
 
 Alternatively you can also use configuration files in the JSON format with
 L<Mojolicious::Plugin::JSONConfig>.
+
+=head2 Adding a plugin to your application
+
+To organize your code better and to prevent helpers from cluttering your
+application, you can use application specific plugins.
+
+  $ mkdir -p lib/MyApp/Plugin
+  $ touch lib/MyApp/Plugin/MyHelpers.pm
+
+They work just like normal plugins and are also subclasses of
+L<Mojolicious::Plugin>.
+
+  package MyApp::Plugin::MyHelpers;
+  use Mojo::Base 'Mojolicious::Plugin';
+
+  sub register {
+    my ($self, $app) = @_;
+    $app->helper(render_with_header => sub {
+      my ($c, @args) = @_;
+      $c->res->headers->header('X-Mojo' => 'I <3 Mojolicious!')
+      $c->render(@args);
+    });
+  }
+
+  1;
+
+You can have as many application specific plugins as you like, the only
+difference to normal plugins is that you load them using their full class
+name.
+
+  use Mojolicious::Lite;
+
+  use lib 'lib';
+
+  plugin 'MyApp::Plugin::MyHelpers';
+
+  get '/' => sub {
+    my $c = shift;
+    $c->render_with_header(text => 'I ♥ Mojolicious!');
+  };
+
+  app->start;
 
 =head2 Adding commands to Mojolicious
 

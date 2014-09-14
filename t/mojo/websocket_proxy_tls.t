@@ -139,6 +139,19 @@ my $id = Mojo::IOLoop->server(
 );
 my $proxy = Mojo::IOLoop->acceptor($id)->handle->sockport;
 
+# Fake server to test failed TLS handshake
+$id = Mojo::IOLoop->server(
+  sub {
+    my ($loop, $stream) = @_;
+    $stream->on(read => sub { shift->close });
+  }
+);
+my $close = Mojo::IOLoop->acceptor($id)->handle->sockport;
+
+# Fake server to test idle connection
+$id = Mojo::IOLoop->server(sub { });
+my $idle = Mojo::IOLoop->acceptor($id)->handle->sockport;
+
 # User agent with valid certificates
 my $ua = Mojo::UserAgent->new(
   ioloop => Mojo::IOLoop->singleton,
@@ -272,7 +285,7 @@ $ua->websocket(
   "wss://localhost:$port2/test" => sub {
     my ($ua, $tx) = @_;
     $success = $tx->success;
-    $err     = $tx->error;
+    $err     = $tx->res->error;
     Mojo::IOLoop->stop;
   }
 );
@@ -280,8 +293,18 @@ Mojo::IOLoop->start;
 ok !$success, 'no success';
 is $err->{message}, 'Proxy connection failed', 'right error';
 
+# Failed TLS handshake through proxy
+$tx = $ua->get("https://localhost:$close");
+is $err->{message}, 'Proxy connection failed', 'right error';
+
+# Idle connection through proxy
+$ua->on(start =>
+    sub { shift->connect_timeout(0.25) if pop->req->method eq 'CONNECT' });
+$tx = $ua->get("https://localhost:$idle");
+is $err->{message}, 'Proxy connection failed', 'right error';
+$ua->connect_timeout(10);
+
 # Blocking proxy request again
-$ua->proxy->https("http://localhost:$proxy");
 $tx = $ua->get("https://localhost:$port/proxy");
 is $tx->res->code, 200, 'right status';
 is $tx->res->body, "https://localhost:$port/proxy", 'right content';

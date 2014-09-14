@@ -13,7 +13,7 @@ has pattern    => sub { Mojolicious::Routes::Pattern->new };
 sub AUTOLOAD {
   my $self = shift;
 
-  my ($package, $method) = split /::(\w+)$/, our $AUTOLOAD;
+  my ($package, $method) = our $AUTOLOAD =~ /^(.+)::(.+)$/;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
@@ -123,13 +123,15 @@ sub remove {
 sub render {
   my ($self, $path, $values) = @_;
 
-  # Render pattern
-  my $prefix = $self->pattern->render($values, !$path);
-  $path = "$prefix$path" unless $prefix eq '/';
-  $path ||= '/' unless my $parent = $self->parent;
+  # Render pattern (if necessary)
+  if (defined((my $pattern = $self->pattern)->pattern) || !$path) {
+    my $prefix = $pattern->render($values, !$path);
+    $path = "$prefix$path" unless $prefix eq '/';
+  }
 
   # Let parent render
-  return $parent ? $parent->render($path, $values) : $path;
+  return $path || '/' unless my $parent = $self->parent;
+  return $parent->render($path, $values);
 }
 
 sub root {
@@ -597,11 +599,13 @@ variations.
 In addition to the L</"ATTRIBUTES"> and L</"METHODS"> above you can also call
 shortcuts provided by L</"root"> on L<Mojolicious::Routes::Route> objects.
 
+  # Add a "firefox" shortcut
   $r->root->add_shortcut(firefox => sub {
     my ($r, $path) = @_;
     $r->get($path, agent => qr/Firefox/);
   });
 
+  # Use "firefox" shortcut to generate routes
   $r->firefox('/welcome')->to('firefox#welcome');
   $r->firefox('/bye')->to('firefox#bye');
 

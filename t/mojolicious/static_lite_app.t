@@ -12,13 +12,66 @@ use Test::Mojo;
 
 get '/hello3.txt' => sub { shift->render_static('hello2.txt') };
 
+post '/hello4.txt' => sub {
+  my $c = shift;
+  $c->res->headers->content_type('text/html');
+  $c->render_static('hello2.txt');
+};
+
+options '/hello.txt' => sub { shift->render(text => 'Options!') };
+
+get '/etag' => sub {
+  my $c = shift;
+  $c->is_fresh(etag => 'abc')
+    ? $c->rendered(304)
+    : $c->render(text => 'I ♥ Mojolicious!');
+};
+
 my $t = Test::Mojo->new;
+
+# Freshness
+my $c = $t->app->build_controller;
+ok !$c->is_fresh, 'content is stale';
+$c->res->headers->etag('"abc"');
+$c->req->headers->if_none_match('"abc"');
+ok $c->is_fresh, 'content is fresh';
+$c = $t->app->build_controller;
+my $date = Mojo::Date->new(23);
+$c->res->headers->last_modified($date);
+$c->req->headers->if_modified_since($date);
+ok $c->is_fresh, 'content is fresh';
+$c = $t->app->build_controller;
+$c->req->headers->if_none_match('"abc"');
+$c->req->headers->if_modified_since($date);
+ok $c->is_fresh(etag => 'abc', last_modified => $date->epoch),
+  'content is fresh';
+is $c->res->headers->etag,          '"abc"', 'right "ETag" value';
+is $c->res->headers->last_modified, "$date", 'right "Last-Modified" value';
+$c = $t->app->build_controller;
+ok !$c->is_fresh(last_modified => $date->epoch), 'content is stale';
+is $c->res->headers->etag,          undef,   'no "ETag" value';
+is $c->res->headers->last_modified, "$date", 'right "Last-Modified" value';
 
 # Static file
 $t->get_ok('/hello.txt')->status_is(200)
   ->header_is(Server => 'Mojolicious (Perl)')
   ->header_is('Accept-Ranges' => 'bytes')->header_is('Content-Length' => 31)
   ->content_is("Hello Mojo from a static file!\n");
+
+# Static file (HEAD)
+$t->head_ok('/hello.txt')->status_is(200)
+  ->header_is(Server => 'Mojolicious (Perl)')
+  ->header_is('Accept-Ranges' => 'bytes')->header_is('Content-Length' => 31)
+  ->content_is('');
+
+# Route for method other than GET and HEAD
+$t->options_ok('/hello.txt')->status_is(200)
+  ->header_is(Server           => 'Mojolicious (Perl)')
+  ->header_is('Content-Length' => 8)->content_is('Options!');
+
+# Unknown method
+$t->put_ok('/hello.txt')->status_is(404)
+  ->header_is(Server => 'Mojolicious (Perl)');
 
 # Partial static file
 $t->get_ok('/hello.txt' => {Range => 'bytes=2-8'})->status_is(206)
@@ -79,6 +132,20 @@ $t->get_ok('/hello3.txt' => {Range => 'bytes=0-0'})->status_is(206)
   ->header_is(Server          => 'Mojolicious (Perl)')
   ->header_is('Accept-Ranges' => 'bytes')->header_is('Content-Length' => 1)
   ->header_is('Content-Range' => 'bytes 0-0/1')->content_is('X');
+
+# Render static file with custom content type
+$t->post_ok('/hello4.txt')->status_is(200)
+  ->header_is(Server => 'Mojolicious (Perl)')->content_type_is('text/html')
+  ->header_is('Content-Length' => 1)->content_is('X');
+
+# Fresh content
+$t->get_ok('/etag')->status_is(200)->header_is(Server => 'Mojolicious (Perl)')
+  ->header_is(ETag => '"abc"')->content_is('I ♥ Mojolicious!');
+
+# Stale content
+$t->get_ok('/etag' => {'If-None-Match' => '"abc"'})
+  ->header_is(Server => 'Mojolicious (Perl)')->header_is(ETag => '"abc"')
+  ->status_is(304)->content_is('');
 
 # Empty file
 $t->get_ok('/hello4.txt')->status_is(200)

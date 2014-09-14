@@ -11,11 +11,9 @@ has url => sub { Mojo::URL->new };
 has 'reverse_proxy';
 
 my $START_LINE_RE = qr/
-  ^
-  ([a-zA-Z]+)                                               # Method
+  ^([a-zA-Z]+)                                              # Method
   \s+([0-9a-zA-Z!#\$\%&'()*+,\-.\/:;=?\@[\\\]^_`\{|\}~]+)   # URL
-  \s+HTTP\/(\d\.\d)                                         # Version
-  $
+  \s+HTTP\/(\d\.\d)$                                        # Version
 /x;
 
 sub clone {
@@ -60,8 +58,7 @@ sub extract_start_line {
   return undef unless $$bufref =~ s/^\s*(.*?)\x0d?\x0a//;
 
   # We have a (hopefully) full request line
-  $self->error({message => 'Bad request start line', advice => 400})
-    and return undef
+  return !$self->error({message => 'Bad request start line', advice => 400})
     unless $1 =~ $START_LINE_RE;
   my $url = $self->method($1)->version($3)->url;
   return !!($1 eq 'CONNECT' ? $url->authority($2) : $url->parse($2));
@@ -224,10 +221,8 @@ sub _parse_env {
   $self->method($env->{REQUEST_METHOD}) if $env->{REQUEST_METHOD};
 
   # Scheme/Version
-  if ((defined $env->{SERVER_PROTOCOL} ? $env->{SERVER_PROTOCOL} : '') =~ m!^([^/]+)/([^/]+)$!) {
-    $base->scheme($1);
-    $self->version($2);
-  }
+  $base->scheme($1) and $self->version($2)
+    if (defined $env->{SERVER_PROTOCOL} ? $env->{SERVER_PROTOCOL} : '') =~ m!^([^/]+)/([^/]+)$!;
 
   # HTTPS
   $base->scheme('https') if uc(defined $env->{HTTPS} ? $env->{HTTPS} : '') eq 'ON';

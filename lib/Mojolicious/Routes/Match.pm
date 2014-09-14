@@ -44,7 +44,7 @@ sub _match {
   my $detect  = (my $endpoint = $r->is_endpoint) && !$partial;
   return unless my $captures = $r->pattern->match_partial(\$path, $detect);
   local $options->{path} = $path;
-  @{$self->{captures} ||= {}}{keys %$captures} = values %$captures;
+  local @{$self->{captures} ||= {}}{keys %$captures} = values %$captures;
   $captures = $self->{captures};
 
   # Method

@@ -59,29 +59,24 @@ sub parse {
 sub render {
   my ($self, $values, $render) = @_;
 
-  # Merge values with defaults
-  my $format = ($values ||= {})->{format};
-  my $defaults = $self->defaults;
-  $values = {%$defaults, %$values};
-
   # Placeholders can only be optional without a format
-  my $optional = !$format;
+  my $optional = !(my $format = $values->{format});
 
   my $str = '';
   for my $token (reverse @{$self->tree}) {
-    my ($op, $value) = @$token[0, 1];
+    my ($op, $value) = @$token;
     my $fragment = '';
 
-    # Slash
-    if ($op eq 'slash') { $fragment = '/' unless $optional }
-
     # Text
-    elsif ($op eq 'text') { ($fragment, $optional) = ($value, 0) }
+    if ($op eq 'text') { ($fragment, $optional) = ($value, 0) }
+
+    # Slash
+    elsif ($op eq 'slash') { $fragment = '/' unless $optional }
 
     # Placeholder
     else {
-      $fragment = defined $values->{$value} ? $values->{$value} : '';
-      my $default = $defaults->{$value};
+      my $default = $self->defaults->{$value};
+      $fragment = defined $values->{$value} ? $values->{$value} : defined $default ? $default : '';
       if (!defined $default || ($default ne $fragment)) { $optional = 0 }
       elsif ($optional) { $fragment = '' }
     }
@@ -104,21 +99,21 @@ sub _compile {
   my $block = my $regex = '';
   my $optional = 1;
   for my $token (reverse @{$self->tree}) {
-    my ($op, $value) = @$token[0, 1];
+    my ($op, $value) = @$token;
     my $fragment = '';
 
+    # Text
+    if ($op eq 'text') { ($fragment, $optional) = (quotemeta $value, 0) }
+
     # Slash
-    if ($op eq 'slash') {
+    elsif ($op eq 'slash') {
       $regex = ($optional ? "(?:/$block)?" : "/$block") . $regex;
       ($block, $optional) = ('', 1);
       next;
     }
 
-    # Text
-    elsif ($op eq 'text') { ($fragment, $optional) = (quotemeta $value, 0) }
-
     # Placeholder
-    elsif ($op eq 'placeholder' || $op eq 'relaxed' || $op eq 'wildcard') {
+    else {
       unshift @$placeholders, $value;
 
       # Placeholder
@@ -128,11 +123,10 @@ sub _compile {
       elsif ($op eq 'relaxed') { $fragment = '([^/]+)' }
 
       # Wildcard
-      elsif ($op eq 'wildcard') { $fragment = '(.+)' }
+      else { $fragment = '(.+)' }
 
       # Custom regex
-      my $constraint = $constraints->{$value};
-      $fragment = _compile_req($constraint) if $constraint;
+      if (my $c = $constraints->{$value}) { $fragment = _compile_req($c) }
 
       # Optional placeholder
       exists $defaults->{$value} ? ($fragment .= '?') : ($optional = 0);
@@ -202,18 +196,21 @@ sub _tokenize {
     # Quote end
     elsif ($char eq $quote_end) { ($inside, $quoted) = (0, 0) }
 
-    # Slash
+    # Slash (first slash is text for optimizations)
     elsif ($char eq '/') {
-      push @tree, ['slash'];
+      push @tree, @tree ? ['slash'] : ['text', '/'];
       $inside = 0;
     }
 
     # Placeholder, relaxed or wildcard
     elsif ($inside) { $tree[-1][-1] .= $char }
 
-    # Text
+    # Text (optimize text followed by slash followed by text)
     elsif ($tree[-1][0] eq 'text') { $tree[-1][-1] .= $char }
-    else                           { push @tree, ['text', $char] }
+    elsif ($tree[-2] && $tree[-2][0] eq 'text' && $tree[-1][0] eq 'slash') {
+      pop @tree && ($tree[-1][-1] .= "/$char");
+    }
+    else { push @tree, ['text', $char] }
   }
 
   return $self->pattern($pattern)->tree(\@tree);
@@ -269,8 +266,8 @@ Compiled regular expression for format matching.
 
 =head2 pattern
 
-  my $pattern = $pattern->pattern;
-  $pattern    = $pattern->pattern('/(foo)/(bar)');
+  my $raw  = $pattern->pattern;
+  $pattern = $pattern->pattern('/(foo)/(bar)');
 
 Raw unparsed pattern.
 
@@ -319,7 +316,7 @@ Character indicating a relaxed placeholder, defaults to C<#>.
 =head2 tree
 
   my $tree = $pattern->tree;
-  $pattern = $pattern->tree([['slash'], ['text', 'foo']]);
+  $pattern = $pattern->tree([['text', '/foo']]);
 
 Pattern in parsed form. Note that this structure should only be used very
 carefully since it is very dynamic.

@@ -1,5 +1,5 @@
 This is a modified version of mojo to run on Perl-5.8.7 environment.
-The API is expected to be compatible with Mojolicious v5.24.
+The API is expected to be compatible with Mojolicious v5.32.
 
 The code is experimental and might not work in all cases.
 

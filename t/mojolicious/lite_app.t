@@ -39,6 +39,12 @@ is app->test_helper2, 'Mojolicious::Controller', 'right value';
 app->test_helper3->{foo} = 'bar';
 is app->test_helper3->{foo}, 'bar', 'right result';
 
+# Nested helpers
+helper 'test.helper' => sub { shift->app->controller_class };
+is app->test->helper, 'Mojolicious::Controller', 'right value';
+is app->build_controller->test->helper, 'Mojolicious::Controller',
+  'right value';
+
 # Test renderer
 app->renderer->add_handler(dead => sub { die 'renderer works!' });
 
@@ -475,6 +481,8 @@ is $t->app->build_controller($t->app->ua->build_tx(GET => '/foo'))->req->url,
   '/foo', 'right URL';
 is $t->app->build_controller->render_to_string('index', handler => 'epl'),
   'Just works!', 'right result';
+is $t->app->build_controller->render_to_string(inline => '0'), "0\n",
+  'right result';
 
 # Unicode snowman
 $t->get_ok('/☃')->status_is(200)

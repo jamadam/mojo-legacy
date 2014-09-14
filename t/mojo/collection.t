@@ -112,9 +112,17 @@ is $collection->size, 1, 'right size';
 $collection = c(5, 4, 3, 2, 1);
 is $collection->size, 5, 'right size';
 
+# reduce
+$collection = c(2, 5, 4, 1);
+is $collection->reduce(sub { $a + $b }), 12, 'right result';
+is $collection->reduce(sub { $a + $b }, 5), 17, 'right result';
+is c()->reduce(sub { $a + $b }), undef, 'no result';
+
 # sort
 $collection = c(2, 5, 4, 1);
 is_deeply [$collection->sort->each], [1, 2, 4, 5], 'right order';
+is_deeply [$collection->sort(sub { $b cmp $a })->each], [5, 4, 2, 1],
+  'right order';
 is_deeply [$collection->sort(sub { $_[1] cmp $_[0] })->each], [5, 4, 2, 1],
   'right order';
 $collection = c(qw(Test perl Mojo));
@@ -122,8 +130,7 @@ is_deeply [$collection->sort(sub { uc(shift) cmp uc(shift) })->each],
   [qw(Mojo perl Test)], 'right order';
 $collection = c();
 is_deeply [$collection->sort->each], [], 'no elements';
-is_deeply [$collection->sort(sub { $_[1] cmp $_[0] })->each], [],
-  'no elements';
+is_deeply [$collection->sort(sub { $a cmp $b })->each], [], 'no elements';
 
 # slice
 $collection = c(1, 2, 3, 4, 5, 6, 7, 10, 9, 8);

@@ -24,12 +24,19 @@ utilizing multiple template systems and data encoding modules.
 
 Templates can be automatically detected if enough information is provided by
 the developer or routes. Template names are expected to follow the
-C<name.format.handler> scheme, with C<name> defaulting to C<controller/action>
-or the route name, C<format> defaulting to C<html> and C<handler> to C<ep>.
+C<template.format.handler> scheme, with C<template> defaulting to
+C<controller/action> or the route name, C<format> defaulting to C<html> and
+C<handler> to C<ep>.
 
   {controller => 'users', action => 'list'} -> 'users/list.html.ep'
-  {name => 'foo', format => 'txt'}          -> 'foo.txt.ep'
-  {name => 'foo', handler => 'epl'}         -> 'foo.html.epl'
+  {template => 'foo', format => 'txt'}      -> 'foo.txt.ep'
+  {template => 'foo', handler => 'epl'}     -> 'foo.html.epl'
+
+The C<controller> value gets decamelized using L<Mojo::Util/"decamelize"> and
+C<-> characters replaced with C</>.
+
+  {controller => 'My::Users', action => 'add'} -> 'my/users/add.html.ep'
+  {controller => 'my-users', action => 'show'} -> 'my/users/show.html.ep'
 
 All templates should be in the C<templates> directories of the application,
 which can be customized with L<Mojolicious::Renderer/"paths">, or one of the
@@ -144,6 +151,11 @@ controller object as both C<$self> and C<$c>.
   $c->stash(name => 'tester');
 
   Hello <%= $name %> from <%= $c->tx->remote_address %>.
+
+A prefix like C<myapp.*> is commonly used for stash values that you don't want
+to expose in templates.
+
+  $c->stash('myapp.name' => 'tester');
 
 There are also many helper functions available, but more about that later.
 
@@ -295,16 +307,16 @@ These mappings can be easily extended or changed with L<Mojolicious/"types">.
 
 =head2 Stash data
 
-Any of the native Perl data types can be passed to templates through the
-L<Mojolicious::Controller/"stash">.
+Any of the native Perl data types can be passed to templates as references
+through the L<Mojolicious::Controller/"stash">.
 
   $c->stash(author     => 'Sebastian');
   $c->stash(frameworks => [qw(Catalyst Mojolicious)]);
-  $c->stash(examples   => {tweetylicious => 'a microblogging app'});
+  $c->stash(examples   => {convos => 'an IRC app'});
 
   %= $author
   %= $frameworks->[1]
-  %= $examples->{tweetylicious}
+  %= $examples->{convos}
 
 Since everything is just Perl normal control structures just work.
 
@@ -312,9 +324,50 @@ Since everything is just Perl normal control structures just work.
     <%= $framework %> was written by <%= $author %>.
   % }
 
-  % if (my $description = $examples->{tweetylicious}) {
-    Tweetylicious is a <%= $description %>.
+  % if (my $description = $examples->{convos}) {
+    Convos is a <%= $description %>.
   % }
+
+For templates that might get rendered in different ways and where you're not
+sure if a stash value will actually be set, you can just use the helper
+L<Mojolicious::Plugin::DefaultHelpers/"stash">.
+
+  % if (my $examples = stash 'examples') {
+    Convos is <%= $examples->{convos} %>.
+  % }
+
+=head2 Helpers
+
+Helpers are little functions you can use in templates as well as application
+and controller code.
+
+  # Template
+  %= dumper [1, 2, 3]
+
+  # Application
+  my $serialized = $app->dumper([1, 2, 3]);
+
+  # Controller
+  my $serialized = $c->dumper([1, 2, 3]);
+
+The helper L<Mojolicious::Plugin::DefaultHelpers/"dumper"> for example will
+use L<Data::Dumper> to serialize whatever data structure you pass it, this can
+be very useful for debugging. We differentiate between default helpers which
+are more general purpose like C<dumper> and tag helpers, which are template
+specific and mostly used to generate HTML tags.
+
+  %= link_to 'http://mojolicio.us' => begin
+    Mojolicious
+  % end
+
+In controllers you can also use the method
+L<Mojolicious::Controller/"helpers"> to fully qualify helper calls and ensure
+that they don't conflict with existing methods you may already have.
+
+  my $serialized = $c->helpers->dumper([1, 2, 3]);
+
+A list of all built-in helpers can be found in
+L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
 
 =head2 Content negotiation
 
@@ -454,29 +507,6 @@ passed to the renderer.
   get '/' => sub { die "This sho...ALL GLORY TO THE HYPNOTOAD!\n" };
 
   app->start;
-
-=head2 Helpers
-
-Helpers are little functions you can use in templates and controller code.
-
-  %= dumper [1, 2, 3]
-
-  my $serialized = $c->dumper([1, 2, 3]);
-
-The helper L<Mojolicious::Plugin::DefaultHelpers/"dumper"> for example will
-use L<Data::Dumper> to serialize whatever data structure you pass it, this can
-be very useful for debugging. We differentiate between default helpers which
-are more general purpose like C<dumper> and tag helpers, which are template
-specific and mostly used to generate HTML tags.
-
-  %= javascript '/script.js'
-
-  %= javascript begin
-    var a = 'b';
-  % end
-
-A list of all built-in helpers can be found in
-L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
 
 =head2 Layouts
 
@@ -842,7 +872,7 @@ The token can also be submitted with the C<X-CSRF-Token> request header.
 =head2 Adding helpers
 
 Adding and redefining helpers is very easy, you can use them to do pretty much
-everything.
+anything.
 
   use Mojolicious::Lite;
 
@@ -863,7 +893,9 @@ everything.
   % debug 'Hello from a template!';
 
 Helpers can also accept template blocks as last argument, this for example
-allows very pleasant to use tag helpers and filters.
+allows very pleasant to use tag helpers and filters. Wrapping the helper
+result into a L<Mojo::ByteStream> object can prevent accidental double
+escaping.
 
   use Mojolicious::Lite;
   use Mojo::ByteStream;
@@ -887,8 +919,37 @@ allows very pleasant to use tag helpers and filters.
     More text.
   % end
 
-Wrapping the helper result into a L<Mojo::ByteStream> object can prevent
-accidental double escaping.
+Similar to stash values you can use a prefix like C<myapp.*> to keep helpers
+from getting exposed in templates and to organize them into namespaces as your
+application grows. Every prefix automatically becomes a helper that returns a
+proxy object containing the current controller object and on which you can
+call the nested helpers.
+
+  use Mojolicious::Lite;
+
+  helper 'cache_control.no_caching' => sub {
+    my $c = shift;
+    $c->res->headers->cache_control('private, max-age=0, no-cache');
+  };
+
+  helper 'cache_control.five_minutes' => sub {
+    my $c = shift;
+    $c->res->headers->cache_control('public, max-age=300');
+  };
+
+  get '/news' => sub {
+    my $c = shift;
+    $c->cache_control->no_caching;
+    $c->render(text => 'Always up to date.');
+  };
+
+  get '/some_older_story' => sub {
+    my $c = shift;
+    $c->cache_control->five_minutes;
+    $c->render(text => 'This one can be cached for a bit.');
+  };
+
+  app->start;
 
 =head2 Helper plugins
 

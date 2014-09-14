@@ -27,13 +27,13 @@ my %RESERVED = map { $_ => 1 } (
 sub AUTOLOAD {
   my $self = shift;
 
-  my ($package, $method) = split /::(\w+)$/, our $AUTOLOAD;
+  my ($package, $method) = our $AUTOLOAD =~ /^(.+)::(.+)$/;
   Carp::croak "Undefined subroutine &${package}::$method called"
     unless Scalar::Util::blessed $self && $self->isa(__PACKAGE__);
 
   # Call helper with current controller
   Carp::croak qq{Can't locate object method "$method" via package "$package"}
-    unless my $helper = $self->app->renderer->helpers->{$method};
+    unless my $helper = $self->app->renderer->get_helper($method);
   return $self->$helper(@_);
 }
 
@@ -92,6 +92,8 @@ sub flash {
 
   return $self;
 }
+
+sub helpers { $_[0]->app->renderer->get_helper('')->($_[0]) }
 
 sub on {
   my ($self, $name, $cb) = @_;
@@ -439,7 +441,7 @@ Mojolicious::Controller - Controller base class
 =head1 SYNOPSIS
 
   # Controller
-  package MyApp::Foo;
+  package MyApp::Controller::Foo;
   use Mojo::Base 'Mojolicious::Controller';
 
   # Action
@@ -553,6 +555,17 @@ L</"session">.
   # Show message after redirect
   $c->flash(message => 'User created successfully!');
   $c->redirect_to('show_user', id => 23);
+
+=head2 helpers
+
+  my $helpers = $c->helpers;
+
+Return a proxy object containing the current controller object and on which
+helpers provided by L</"app"> can be called. This includes all helpers from
+L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
+
+  # Make sure to use the "title" helper and not the controller method
+  $c->helpers->title('Welcome!');
 
 =head2 on
 
@@ -734,6 +747,10 @@ templates.
 Render a static file using L<Mojolicious::Static/"serve">, usually from the
 C<public> directories or C<DATA> sections of your application. Note that this
 method does not protect from traversing to parent directories.
+
+  # Serve file with a custom content type
+  $c->res->headers->content_type('application/myapp');
+  $c->render_static('foo.txt');
 
 =head2 render_to_string
 

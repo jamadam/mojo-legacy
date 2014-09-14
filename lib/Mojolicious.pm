@@ -43,18 +43,18 @@ has types     => sub { Mojolicious::Types->new };
 has validator => sub { Mojolicious::Validator->new };
 
 our $CODENAME = 'Tiger Face';
-our $VERSION  = '5.24';
+our $VERSION  = '5.32';
 
 sub AUTOLOAD {
   my $self = shift;
 
-  my ($package, $method) = split /::(\w+)$/, our $AUTOLOAD;
+  my ($package, $method) = our $AUTOLOAD =~ /^(.+)::(.+)$/;
   croak "Undefined subroutine &${package}::$method called"
     unless blessed $self && $self->isa(__PACKAGE__);
 
   # Call helper with fresh controller
   croak qq{Can't locate object method "$method" via package "$package"}
-    unless my $helper = $self->renderer->helpers->{$method};
+    unless my $helper = $self->renderer->get_helper($method);
   return $self->build_controller->$helper(@_);
 }
 
@@ -154,15 +154,15 @@ sub new {
   push @{$self->renderer->paths}, $home->rel_dir('templates');
   push @{$self->static->paths},   $home->rel_dir('public');
 
-  # Default to application namespace
-  my $r = $self->routes->namespaces([ref $self]);
+  # Default to controller and application namespace
+  my $r = $self->routes->namespaces(["@{[ref $self]}::Controller", ref $self]);
 
   # Hide controller attributes/methods and "handler"
-  $r->hide(qw(app continue cookie finish flash handler match on param));
-  $r->hide(qw(redirect_to render render_exception render_later render_maybe));
-  $r->hide(qw(render_not_found render_static render_to_string rendered req));
-  $r->hide(qw(res respond_to send session signed_cookie stash tx url_for));
-  $r->hide(qw(validation write write_chunk));
+  $r->hide(qw(app continue cookie finish flash handler helpers match on));
+  $r->hide(qw(param redirect_to render render_exception render_later));
+  $r->hide(qw(render_maybe render_not_found render_static render_to_string));
+  $r->hide(qw(rendered req res respond_to send session signed_cookie stash));
+  $r->hide(qw(tx url_for validation write write_chunk));
 
   # Check if we have a log directory
   my $mode = $self->mode;
@@ -188,7 +188,11 @@ sub plugin {
   $self->plugins->register_plugin(shift, $self, @_);
 }
 
-sub start { shift->commands->run(@_ ? @_ : @ARGV) }
+sub start {
+  my $self = shift;
+  $_->_warmup for $self->static, $self->renderer;
+  return $self->commands->run(@_ ? @_ : @ARGV);
+}
 
 sub startup { }
 
@@ -220,7 +224,7 @@ Mojolicious - Real-time web framework
   }
 
   # Controller
-  package MyApp::Foo;
+  package MyApp::Controller::Foo;
   use Mojo::Base 'Mojolicious::Controller';
 
   # Action
@@ -457,7 +461,7 @@ startup method to define the url endpoints for your application.
   $r->post('/baz')->to('test#baz');
 
   # Add another namespace to load controllers from
-  push @{$app->routes->namespaces}, 'MyApp::Controller';
+  push @{$app->routes->namespaces}, 'MyApp::MyController';
 
 =head2 secrets
 

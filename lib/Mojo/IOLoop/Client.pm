@@ -62,12 +62,12 @@ sub _connect {
     my $class = IPV6 ? 'IO::Socket::IP' : 'IO::Socket::INET';
     return $self->emit(error => "Couldn't connect: $@")
       unless $self->{handle} = $handle = $class->new(%options);
-
-    # Timeout
-    $self->{timer} = $reactor->timer($args->{timeout} || 10,
-      sub { $self->emit(error => 'Connect timeout') });
   }
   $handle->blocking(0);
+
+  # Timeout
+  $self->{timer} = $reactor->timer($args->{timeout} || 10,
+    sub { $self->emit(error => 'Connect timeout') });
 
   # Wait for handle to become writable
   weaken $self;
@@ -155,7 +155,7 @@ sub _try_tls {
     SSL_ca_file => $args->{tls_ca}
       && -T $args->{tls_ca} ? $args->{tls_ca} : undef,
     SSL_cert_file  => $args->{tls_cert},
-    SSL_error_trap => sub { $self->_cleanup->emit(error => $_[1]) },
+    SSL_error_trap => sub { $self->emit(error => $_[1]) },
     SSL_hostname   => IO::Socket::SSL->can_client_sni ? $args->{address} : '',
     SSL_key_file   => $args->{tls_key},
     SSL_startHandshake  => 0,

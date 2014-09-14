@@ -25,10 +25,10 @@ This black box is usually called a dispatcher. There are many implementations
 using different strategies to establish these connections, but pretty much all
 are based around mapping the requests path to some kind of response generator.
 
-  /user/show/1 -> $c->render(text => 'Sebastian');
-  /user/show/2 -> $c->render(text => 'Sara');
-  /user/show/3 -> $c->render(text => 'Baerbel');
-  /user/show/4 -> $c->render(text => 'Wolfgang');
+  /user/show/2 -> $c->render(text => 'Daniel');
+  /user/show/3 -> $c->render(text => 'Sara');
+  /user/show/4 -> $c->render(text => 'Baerbel');
+  /user/show/5 -> $c->render(text => 'Wolfgang');
 
 While it is very well possible to make all these connections static, it is
 also rather inefficient. That's why regular expressions are commonly used to
@@ -169,11 +169,11 @@ defined.
 
   1;
 
-The minimal route above will load and instantiate the class C<MyApp::Foo> and
-call its C<welcome> method.
+The minimal route above will load and instantiate the class
+C<MyApp::Controller::Foo> and call its C<welcome> method.
 
   # Controller
-  package MyApp::Foo;
+  package MyApp::Controller::Foo;
   use Mojo::Base 'Mojolicious::Controller';
 
   # Action
@@ -259,9 +259,10 @@ old ones.
 When the dispatcher sees C<controller> and C<action> values in the stash it
 will always try to turn them into a class and method to dispatch to. The
 C<controller> value gets camelized using L<Mojo::Util/"camelize"> and
-prefixed with a C<namespace> (defaulting to the applications class). While the
-action value is not changed at all, because of this both values are case
-sensitive.
+appended to one or more namespaces, defaulting to a controller namespace based
+on the application class (C<MyApp::Controller>), as well as the bare
+application class (C<MyApp>), and these namespaces are searched in that order.
+The action value is not changed at all, so both values are case sensitive.
 
   # Application
   package MyApp;
@@ -270,14 +271,14 @@ sensitive.
   sub startup {
     my $self = shift;
 
-    # /bye -> {controller => 'foo', action => 'bye'} -> MyApp::Foo->bye
+    # /bye -> MyApp::Controller::Foo->bye
     $self->routes->route('/bye')->to(controller => 'foo', action => 'bye');
   }
 
   1;
 
   # Controller
-  package MyApp::Foo;
+  package MyApp::Controller::Foo;
   use Mojo::Base 'Mojolicious::Controller';
 
   # Action
@@ -298,11 +299,17 @@ C<controller#action>.
   # /bye -> {controller => 'foo', action => 'bye', mymessage => 'Bye'}
   $r->route('/bye')->to('foo#bye', mymessage => 'Bye');
 
-During camelization C<-> gets replaced with C<::>, this allows multi-level
-C<controller> hierarchies.
+During camelization C<-> characters get replaced with C<::>, this allows
+multi-level C<controller> hierarchies.
 
-  # / -> {controller => 'foo-bar', action => 'hi'} -> MyApp::Foo::Bar->hi
+  # / -> MyApp::Controller::Foo::Bar->hi
   $r->route('/')->to('foo-bar#hi');
+
+You can also just specify the C<controller> in CamelCase form instead of
+snake_case.
+
+  # / -> MyApp::Controller::Foo::Bar->hi
+  $r->route('/')->to('Foo::Bar#hi');
 
 For security reasons the dispatcher will always check if the C<controller> is
 actually a subclass of L<Mojolicious::Controller> or L<Mojo> before
@@ -313,22 +320,22 @@ dispatching to it.
 You can use the C<namespace> stash value to change the namespace of a whole
 route with all its children.
 
-  # /bye -> MyApp::Controller::Foo::Bar->bye
+  # /bye -> MyApp::MyController::Foo::Bar->bye
   $r->route('/bye')
-    ->to(namespace => 'MyApp::Controller::Foo::Bar', action => 'bye');
+    ->to(namespace => 'MyApp::MyController::Foo::Bar', action => 'bye');
 
-The C<controller> is always appended to the C<namespace> if available.
+The C<controller> is always appended to this C<namespace> if available.
 
-  # /bye -> MyApp::Controller::Foo::Bar->bye
-  $r->route('/bye')->to('foo-bar#bye', namespace => 'MyApp::Controller');
+  # /bye -> MyApp::MyController::Foo::Bar->bye
+  $r->route('/bye')->to('foo-bar#bye', namespace => 'MyApp::MyController');
 
-  # /hey -> MyApp::Controller::Foo::Bar->hey
-  $r->route('/hey')->to('Foo::Bar#hey', namespace => 'MyApp::Controller');
+  # /hey -> MyApp::MyController::Foo::Bar->hey
+  $r->route('/hey')->to('Foo::Bar#hey', namespace => 'MyApp::MyController');
 
 You can also change the default namespaces for all routes in the application
 with the router attribute L<Mojolicious::Routes/"namespaces">.
 
-  $r->namespaces(['MyApp::Controller']);
+  $r->namespaces(['MyApp::MyController']);
 
 =head2 Route to callback
 
@@ -533,7 +540,7 @@ additional information.
   $r->websocket('/echo')->to(controller => 'foo', action => 'echo');
 
   # Controller
-  package MyApp::Foo;
+  package MyApp::Controller::Foo;
   use Mojo::Base 'Mojolicious::Controller';
 
   # Action
@@ -912,7 +919,7 @@ controller. This allows for example the use of the L<Mojolicious::Lite> domain
 specific language in normal L<Mojolicious> controllers.
 
   # Controller
-  package MyApp::Bar;
+  package MyApp::Controller::Bar;
   use Mojolicious::Lite;
 
   # /hello
@@ -935,7 +942,7 @@ path will be passed along in the C<path> stash value.
 A minimal embeddable application is nothing more than a subclass of L<Mojo>,
 containing a C<handler> method accepting L<Mojolicious::Controller> objects.
 
-  package MyApp::Bar;
+  package MyApp::Controller::Bar;
   use Mojo::Base 'Mojo';
 
   sub handler {
