@@ -9,7 +9,7 @@ perl:
   - "5.8"
 branches:
   only:
-    - mojo-legacy
+    - master
 env:
   - "HARNESS_OPTIONS=j9 TEST_EV=1 TEST_SOCKS=1 TEST_TLS=1"
 install:
