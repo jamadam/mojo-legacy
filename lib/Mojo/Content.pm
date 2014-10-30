@@ -4,8 +4,9 @@ use Mojo::Base 'Mojo::EventEmitter';
 use Carp 'croak';
 BEGIN {eval {require Compress::Raw::Zlib; import Compress::Raw::Zlib qw(WANT_GZIP Z_STREAM_END)}}
 use Mojo::Headers;
+use Scalar::Util 'looks_like_number';
 
-has [qw(auto_relax expect_close relaxed skip_body)];
+has [qw(auto_decompress auto_relax expect_close relaxed skip_body)];
 has headers           => sub { Mojo::Headers->new };
 has max_buffer_size   => sub { $ENV{MOJO_MAX_BUFFER_SIZE} || 262144 };
 has max_leftover_size => sub { $ENV{MOJO_MAX_LEFTOVER_SIZE} || 262144 };
@@ -89,7 +90,6 @@ sub parse {
   # Headers
   $self->_parse_until_body(@_);
   return $self if $self->{state} eq 'headers';
-  $self->emit('body') unless $self->{body}++;
 
   # Chunked content
   $self->{real_size} = defined $self->{real_size} ? $self->{real_size} : 0;
@@ -124,22 +124,21 @@ sub parse {
 
   # Chunked or relaxed content
   if ($self->is_chunked || $self->relaxed) {
-    $self->{size} += length($self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '');
-    $self->_uncompress($self->{buffer});
+    $self->_decompress($self->{buffer} = defined $self->{buffer} ? $self->{buffer} : '');
+    $self->{size} += length $self->{buffer};
     $self->{buffer} = '';
+    return $self;
   }
 
   # Normal content
-  else {
-    $self->{size} ||= 0;
-    if ((my $need = ($len ||= 0) - $self->{size}) > 0) {
-      my $len = length $self->{buffer};
-      my $chunk = substr $self->{buffer}, 0, $need > $len ? $len : $need, '';
-      $self->_uncompress($chunk);
-      $self->{size} += length $chunk;
-    }
-    $self->{state} = 'finished' if $len <= $self->progress;
+  $len = 0 unless looks_like_number $len;
+  if ((my $need = $len - ($self->{size} ||= 0)) > 0) {
+    my $len = length $self->{buffer};
+    my $chunk = substr $self->{buffer}, 0, $need > $len ? $len : $need, '';
+    $self->_decompress($chunk);
+    $self->{size} += length $chunk;
   }
+  $self->{state} = 'finished' if $len <= $self->progress;
 
   return $self;
 }
@@ -207,6 +206,28 @@ sub _build_chunk {
   return $crlf . sprintf('%x', length $chunk) . "\x0d\x0a$chunk";
 }
 
+sub _decompress {
+  my ($self, $chunk) = @_;
+
+  # No compression
+  return $self->emit(read => $chunk)
+    unless $self->auto_decompress && $self->is_compressed;
+
+  # Decompress
+  $self->{post_buffer} .= $chunk;
+  my $gz = $self->{gz} = defined $self->{gz} ? $self->{gz} : Compress::Raw::Zlib::Inflate->new(WindowBits => WANT_GZIP);
+  my $status = $gz->inflate(\$self->{post_buffer}, my $out);
+  $self->emit(read => $out) if defined $out;
+
+  # Replace Content-Encoding with Content-Length
+  $self->headers->content_length($gz->total_out)->remove('Content-Encoding')
+    if $status == Z_STREAM_END;
+
+  # Check buffer size
+  @$self{qw(state limit)} = ('finished', 1)
+    if length(defined $self->{post_buffer} ? $self->{post_buffer} : '') > $self->max_buffer_size;
+}
+
 sub _parse_chunked {
   my $self = shift;
 
@@ -250,7 +271,8 @@ sub _parse_chunked_trailing_headers {
   return unless $headers->is_finished;
   $self->{chunk_state} = 'finished';
 
-  # Replace Transfer-Encoding with Content-Length
+  # Take care of leftover and replace Transfer-Encoding with Content-Length
+  $self->{buffer} .= $headers->leftovers;
   $headers->remove('Transfer-Encoding');
   $headers->content_length($self->{real_size}) unless $headers->content_length;
 }
@@ -265,7 +287,6 @@ sub _parse_headers {
   # Take care of leftovers
   my $leftovers = $self->{pre_buffer} = $headers->leftovers;
   $self->{header_size} = $self->{raw_size} - length $leftovers;
-  $self->emit('body') unless $self->{body}++;
 }
 
 sub _parse_until_body {
@@ -273,35 +294,8 @@ sub _parse_until_body {
 
   $self->{raw_size} += length($chunk = defined $chunk ? $chunk : '');
   $self->{pre_buffer} .= $chunk;
-
-  unless ($self->{state}) {
-    $self->{header_size} = $self->{raw_size} - length $self->{pre_buffer};
-    $self->{state}       = 'headers';
-  }
-  $self->_parse_headers if (defined $self->{state} ? $self->{state} : '') eq 'headers';
-}
-
-sub _uncompress {
-  my ($self, $chunk) = @_;
-
-  # No compression
-  return $self->emit(read => $chunk)
-    unless $self->is_compressed && $self->auto_relax;
-
-  # Uncompress
-  $self->{post_buffer} .= $chunk;
-  my $gz = $self->{gz} = defined $self->{gz} ? $self->{gz} : 
-    Compress::Raw::Zlib::Inflate->new(WindowBits => WANT_GZIP());
-  my $status = $gz->inflate(\$self->{post_buffer}, my $out);
-  $self->emit(read => $out) if defined $out;
-
-  # Replace Content-Encoding with Content-Length
-  $self->headers->content_length($gz->total_out)->remove('Content-Encoding')
-    if $status == Z_STREAM_END();
-
-  # Check buffer size
-  @$self{qw(state limit)} = ('finished', 1)
-    if length(defined $self->{post_buffer} ? $self->{post_buffer} : '') > $self->max_buffer_size;
+  $self->_parse_headers if ($self->{state} ||= 'headers') eq 'headers';
+  $self->emit('body') if $self->{state} ne 'headers' && !$self->{body}++;
 }
 
 1;
@@ -378,6 +372,13 @@ Emitted when a new chunk of content arrives.
 =head1 ATTRIBUTES
 
 L<Mojo::Content> implements the following attributes.
+
+=head2 auto_decompress
+
+  my $bool = $content->auto_decompress;
+  $content = $content->auto_decompress($bool);
+
+Decompress content automatically if L</"is_compressed"> is true.
 
 =head2 auto_relax
 

@@ -75,9 +75,11 @@ sub redirect {
   return undef unless grep { $_ == $code } 301, 302, 303, 307, 308;
 
   # Fix location without authority and/or scheme
-  return unless my $location = $res->headers->location;
+  return undef unless my $location = $res->headers->location;
   $location = Mojo::URL->new($location);
   $location = $location->base($old->req->url)->to_abs unless $location->is_abs;
+  my $proto = $location->protocol;
+  return undef unless $proto eq 'http' || $proto eq 'https';
 
   # Clone request if necessary
   my $new = Mojo::Transaction::HTTP->new;
@@ -155,19 +157,19 @@ sub _form {
   my ($self, $tx, $form, %options) = @_;
 
   # Check for uploads and force multipart if necessary
-  my $multipart;
+  my $req       = $tx->req;
+  my $headers   = $req->headers;
+  my $multipart = (defined $headers->content_type ? $headers->content_type : '') =~ m!multipart/form-data!i;
   for my $value (map { ref $_ eq 'ARRAY' ? @$_ : $_ } values %$form) {
     ++$multipart and last if ref $value eq 'HASH';
   }
-  my $req     = $tx->req;
-  my $headers = $req->headers;
-  $headers->content_type('multipart/form-data') if $multipart;
 
   # Multipart
-  if ((defined $headers->content_type ? $headers->content_type : '') eq 'multipart/form-data') {
+  if ($multipart) {
     my $parts = $self->_multipart($options{charset}, $form);
     $req->content(
       Mojo::Content::MultiPart->new(headers => $headers, parts => $parts));
+    _type($headers, 'multipart/form-data');
     return $tx;
   }
 
@@ -178,15 +180,14 @@ sub _form {
   if ($method eq 'GET' || $method eq 'HEAD') { $req->url->query->merge($p) }
   else {
     $req->body($p->to_string);
-    $headers->content_type('application/x-www-form-urlencoded');
+    _type($headers, 'application/x-www-form-urlencoded');
   }
   return $tx;
 }
 
 sub _json {
   my ($self, $tx, $data) = @_;
-  my $headers = $tx->req->body(encode_json($data))->headers;
-  $headers->content_type('application/json') unless $headers->content_type;
+  _type($tx->req->body(encode_json $data)->headers, 'application/json');
   return $tx;
 }
 
@@ -253,6 +254,8 @@ sub _proxy {
 
   return $proto, $host, $port;
 }
+
+sub _type { $_[0]->content_type($_[1]) unless $_[0]->content_type }
 
 1;
 

@@ -1,10 +1,10 @@
 package Mojolicious::Routes::Route;
 use Mojo::Base -base;
 
-use Carp 'croak';
+use Carp ();
 use Mojo::Util;
 use Mojolicious::Routes::Pattern;
-use Scalar::Util qw(blessed weaken);
+use Scalar::Util ();
 
 has [qw(inline parent partial)];
 has 'children' => sub { [] };
@@ -14,18 +14,18 @@ sub AUTOLOAD {
   my $self = shift;
 
   my ($package, $method) = our $AUTOLOAD =~ /^(.+)::(.+)$/;
-  croak "Undefined subroutine &${package}::$method called"
-    unless blessed $self && $self->isa(__PACKAGE__);
+  Carp::croak "Undefined subroutine &${package}::$method called"
+    unless Scalar::Util::blessed $self && $self->isa(__PACKAGE__);
 
   # Call shortcut with current route
-  croak qq{Can't locate object method "$method" via package "$package"}
+  Carp::croak qq{Can't locate object method "$method" via package "$package"}
     unless my $shortcut = $self->root->shortcuts->{$method};
   return $self->$shortcut(@_);
 }
 
 sub add_child {
   my ($self, $route) = @_;
-  weaken $route->remove->parent($self)->{parent};
+  Scalar::Util::weaken $route->remove->parent($self)->{parent};
   push @{$self->children}, $route;
   return $self;
 }
@@ -58,7 +58,10 @@ sub find {
 
 sub get { shift->_generate_route(GET => @_) }
 
+# DEPRECATED in Tiger Face!
 sub has_conditions {
+  Mojo::Util::deprecated
+    'Mojolicious::Routes::Route::has_conditions is DEPRECATED';
   my $self = shift;
   return 1 if @{$self->over || []};
   return undef unless my $parent = $self->parent;
@@ -69,9 +72,8 @@ sub has_custom_name { !!shift->{custom} }
 
 sub has_websocket {
   my $self = shift;
-  return 1 if $self->is_websocket;
-  return undef unless my $parent = $self->parent;
-  return $parent->is_websocket;
+  return $self->{has_websocket} if exists $self->{has_websocket};
+  return $self->{has_websocket} = grep { $_->is_websocket } @{$self->_chain};
 }
 
 sub is_endpoint { $_[0]->inline ? undef : !@{$_[0]->children} }
@@ -97,7 +99,7 @@ sub over {
   my $conditions = ref $_[0] eq 'ARRAY' ? $_[0] : [@_];
   return $self unless @$conditions;
   $self->{over} = $conditions;
-  $self->root->cache(0);
+  $self->root->cache->max_keys(0);
 
   return $self;
 }
@@ -121,24 +123,14 @@ sub remove {
 }
 
 sub render {
-  my ($self, $path, $values) = @_;
-
-  # Render pattern (if necessary)
-  if (defined((my $pattern = $self->pattern)->pattern) || !$path) {
-    my $prefix = $pattern->render($values, !$path);
-    $path = "$prefix$path" unless $prefix eq '/';
-  }
-
-  # Let parent render
-  return $path || '/' unless my $parent = $self->parent;
-  return $parent->render($path, $values);
+  my ($self, $values) = @_;
+  my $path = join '',
+    map { $_->pattern->render($values, !@{$_->children} && !$_->partial) }
+    @{$self->_chain};
+  return $path || '/';
 }
 
-sub root {
-  my $root = my $parent = shift;
-  $root = $parent while $parent = $parent->parent;
-  return $root;
-}
+sub root { shift->_chain->[0] }
 
 sub route {
   my $self   = shift;
@@ -175,10 +167,7 @@ sub to {
 }
 
 sub to_string {
-  my $self = shift;
-  my $pattern = $self->parent ? $self->parent->to_string : '';
-  $pattern .= $self->pattern->pattern if $self->pattern->pattern;
-  return $pattern;
+  join '', map { defined $_->pattern->pattern ? $_->pattern->pattern : '' } @{shift->_chain};
 }
 
 sub under { shift->_generate_route(under => @_) }
@@ -195,6 +184,12 @@ sub websocket {
   my $route = shift->get(@_);
   $route->{websocket} = 1;
   return $route;
+}
+
+sub _chain {
+  my @chain = (my $parent = shift);
+  unshift @chain, $parent while $parent = $parent->parent;
+  return \@chain;
 }
 
 sub _generate_route {
@@ -375,12 +370,6 @@ See also the L<Mojolicious::Lite> tutorial for many more argument variations.
 
   $r->get('/user')->to('user#show');
 
-=head2 has_conditions
-
-  my $bool = $r->has_conditions;
-
-Check if this route has active conditions.
-
 =head2 has_custom_name
 
   my $bool = $r->has_custom_name;
@@ -391,7 +380,8 @@ Check if this route has a custom name.
 
   my $bool = $r->has_websocket;
 
-Check if this route has a WebSocket ancestor.
+Check if this route has a WebSocket ancestor and cache the result for future
+checks.
 
 =head2 is_endpoint
 
@@ -507,8 +497,7 @@ Remove route from parent.
 
 =head2 render
 
-  my $path = $r->render($suffix);
-  my $path = $r->render($suffix, {foo => 'bar'});
+  my $path = $r->render({foo => 'bar'});
 
 Render route with parameters into a path.
 
@@ -516,9 +505,7 @@ Render route with parameters into a path.
 
   my $root = $r->root;
 
-The L<Mojolicious::Routes> object this route is an descendent of.
-
-  $r->root->cache(0);
+The L<Mojolicious::Routes> object this route is a descendant of.
 
 =head2 route
 

@@ -1,18 +1,15 @@
 package Mojolicious::Plugin::JSONConfig;
 use Mojo::Base 'Mojolicious::Plugin::Config';
 
-use Mojo::JSON;
+use Mojo::JSON 'from_json';
 use Mojo::Template;
-use Mojo::Util 'encode';
 
 sub parse {
   my ($self, $content, $file, $conf, $app) = @_;
 
-  my $json   = Mojo::JSON->new;
-  my $config = $json->decode($self->render($content, $file, $conf, $app));
-  my $err    = $json->error;
-  die qq{Can't parse config "$file": $err} if !$config && $err;
-  die qq{Invalid config "$file"} if !$config || ref $config ne 'HASH';
+  my $config = eval { from_json $self->render($content, $file, $conf, $app) };
+  die qq{Can't parse config "$file": $@} if !$config && $@;
+  die qq{Invalid config "$file"} unless ref $config eq 'HASH';
 
   return $config;
 }
@@ -26,10 +23,9 @@ sub render {
   my $prepend = q[my $app = shift; no strict 'refs'; no warnings 'redefine';];
   $prepend .= q[sub app; local *app = sub { $app }; use Mojo::Base -strict;];
 
-  # Render and encode for JSON decoding
   my $mt = Mojo::Template->new($conf->{template} || {})->name($file);
-  my $json = $mt->prepend($prepend . $mt->prepend)->render($content, $app);
-  return ref $json ? die $json : encode 'UTF-8', $json;
+  my $output = $mt->prepend($prepend . $mt->prepend)->render($content, $app);
+  return ref $output ? die $output : $output;
 }
 
 1;

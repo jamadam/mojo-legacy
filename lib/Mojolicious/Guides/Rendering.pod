@@ -144,9 +144,9 @@ backslash.
   in multiple\\
   lines
 
-Stash values that don't have invalid characters in their name get
-automatically initialized as normal variables in the template, and the
-controller object as both C<$self> and C<$c>.
+At the beginning of the template, stash values that don't have invalid
+characters in their name get automatically initialized as normal variables,
+and the controller object as both C<$self> and C<$c>.
 
   $c->stash(name => 'tester');
 
@@ -255,7 +255,8 @@ too.
 =head2 Rendering text
 
 Characters can be rendered to bytes with the C<text> stash value, the given
-content will be automatically encoded to bytes.
+content will be automatically encoded with
+L<Mojolicious::Renderer/"encoding">.
 
   $c->render(text => 'I ♥ Mojolicious!');
 
@@ -1355,22 +1356,22 @@ that need to be automatically encoded, but this can be easily disabled if
 you're generating bytes instead.
 
   use Mojolicious::Lite;
-  use Mango::BSON ':bson';
+  use Storable 'nfreeze';
 
-  # Add "bson" handler
-  app->renderer->add_handler(bson => sub {
+  # Add "storable" handler
+  app->renderer->add_handler(storable => sub {
     my ($renderer, $c, $output, $options) = @_;
 
     # Disable automatic encoding
     delete $options->{encoding};
 
-    # Encode BSON data from stash value
-    $$output = bson_encode delete $c->stash->{bson};
+    # Encode data from stash value
+    $$output = nfreeze delete $c->stash->{storable};
 
     return 1;
   });
 
-  get '/' => {bson => {i => '♥ mojolicious'}, handler => 'bson'};
+  get '/' => {storable => {i => '♥ mojolicious'}, handler => 'storable'};
 
   app->start;
 

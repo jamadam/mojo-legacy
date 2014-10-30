@@ -87,7 +87,7 @@ L<Mojolicious>.
 =head1 TUTORIAL
 
 A quick example driven introduction to the wonders of L<Mojolicious::Lite>.
-Most of what you'll learn here also applies to normal L<Mojolicious>
+Most of what you'll learn here also applies to full L<Mojolicious>
 applications.
 
 =head2 Hello World
@@ -144,7 +144,7 @@ Your application will automatically reload itself if you start it with the
 C<morbo> development web server, so you don't have to restart the server after
 every change.
 
-  $ morbo myapp.pl
+  $ morbo ./myapp.pl
   Server available at http://127.0.0.1:3000.
 
 For more information about how to deploy your application see also
@@ -874,7 +874,7 @@ L<Mojo::JSON> and L<Mojo::DOM> this can be a very powerful tool.
     my $c   = shift;
     my $url = $c->param('url') || 'http://mojolicio.us';
     my $dom = $c->ua->get($url)->res->dom;
-    $c->render(json => [$dom->find('h1, h2, h3')->text->each]);
+    $c->render(json => [$dom->find('h1, h2, h3')->pluck('text')->each]);
   };
 
   # Non-blocking
@@ -898,8 +898,8 @@ L<Mojo::JSON> and L<Mojo::DOM> this can be a very powerful tool.
       sub {
         my ($delay, $mojo, $cpan) = @_;
         $c->render(json => {
-          mojo => $mojo->res->dom->html->head->title->text,
-          cpan => $cpan->res->dom->html->head->title->text
+          mojo => $mojo->res->dom->at('title')->text,
+          cpan => $cpan->res->dom->at('title')->text
         });
       }
     );

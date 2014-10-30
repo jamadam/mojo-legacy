@@ -8,7 +8,7 @@ Mojolicious::Guides::Growing - Growing
 =head1 OVERVIEW
 
 This document explains the process of starting a L<Mojolicious::Lite>
-prototype from scratch and growing it into a well structured L<Mojolicious>
+prototype from scratch and growing it into a well-structured L<Mojolicious>
 application.
 
 =head1 CONCEPTS
@@ -197,11 +197,37 @@ This will be the foundation for our login manager example application.
 The built-in development web server makes working on your application a lot of
 fun thanks to automatic reloading.
 
-  $ morbo myapp.pl
+  $ morbo ./myapp.pl
   Server available at http://127.0.0.1:3000.
 
 Just save your changes and they will be automatically in effect the next time
 you refresh your browser.
+
+=head2 A birds-eye view
+
+It all starts with an HTTP request like this, sent by your browser.
+
+  GET / HTTP/1.1
+  Host: localhost:3000
+
+Once the request has been received by the web server through the event loop,
+it will be passed on to L<Mojolicious>, where it will be handled in a few
+simple steps.
+
+  1. Check if a static file exists that would meet the requirements.
+  2. Try to find a route that would meet the requirements.
+  3. Dispatch the request to this route, usually reaching one or more actions.
+  4. Process the request, maybe generating a response with the renderer.
+  5. Return control to the web server, and if no response has been generated
+     yet, wait for a non-blocking operation to do so through the event loop.
+
+With our application the router would have found an action in step 2, and
+rendered some text in step 4, resulting in an HTTP response like this being
+sent back to the browser.
+
+  HTTP/1.1 200 OK
+  Content-Length: 12
+  Hello world!
 
 =head2 Model
 
@@ -486,10 +512,21 @@ this.
     <body><%= content %></body>
   </html>
 
-A list of all built-in helpers can be found in
-L<Mojolicious::Plugin::DefaultHelpers> and L<Mojolicious::Plugin::TagHelpers>.
+And the directory structure should be looking like this now.
 
-=head1 WELL STRUCTURED APPLICATION
+  myapp
+  |- myapp.pl
+  |- lib
+  |  +- MyApp
+  |     +- Model
+  |        +- Users.pm
+  +- t
+     +- login.t
+
+Our templates are using quite a few features of the renderer,
+L<Mojolicious::Guides::Rendering> explains them all in great detail.
+
+=head1 WELL-STRUCTURED APPLICATION
 
 Due to the flexibility of L<Mojolicious> there are many variations of the
 actual growing process, but this should give you a good overview of the
@@ -503,8 +540,8 @@ directories with the command L<Mojolicious::Command::inflate>.
 
   $ ./myapp.pl inflate
 
-Those directories always get priority, so inflating can also be a great way to
-allow your users to customize their applications.
+Those directories have a higher precedence, so inflating can also be a great
+way to allow your users to customize their applications.
 
 =head2 Simplified application class
 
@@ -580,6 +617,24 @@ allow running tests again.
   # Start command line interface for application
   Mojolicious::Commands->start_app('MyApp');
 
+And the directory structure of our hybrid application should be looking like
+this.
+
+  myapp
+  |- myapp.pl
+  |- lib
+  |  |- MyApp.pm
+  |  +- MyApp
+  |     +- Model
+  |        +- Users.pm
+  |- t
+  |  +- login.t
+  +- templates
+     |- layouts
+     |  +- default.html.ep
+     |- index.html.ep
+     +- protected.html.ep
+
 =head2 Controller class
 
 Hybrid routes are a nice intermediate step, but to maximize maintainability it
@@ -652,8 +707,8 @@ information.
 
   1;
 
-L<Mojolicious::Routes> allows many route variations, choose whatever you like
-most.
+The router allows many different route variations,
+L<Mojolicious::Guides::Routing> explains them all in great detail.
 
 =head2 Templates
 
@@ -690,8 +745,8 @@ without breaking updated dual-life modules.
 
 =head2 Simplified tests
 
-Normal L<Mojolicious> applications are a little easier to test, so
-C<t/login.t> can be simplified.
+Full L<Mojolicious> applications are a little easier to test, so C<t/login.t>
+can be simplified.
 
   use Test::More;
   use Test::Mojo;
@@ -717,6 +772,27 @@ C<t/login.t> can be simplified.
     ->element_exists('form input[type="submit"]');
 
   done_testing();
+
+And our final directory structure should be looking like this.
+
+  myapp
+  |- script
+  |  +- myapp
+  |- lib
+  |  |- MyApp.pm
+  |  +- MyApp
+  |     |- Controller
+  |     |  +- Login.pm
+  |     +- Model
+  |        +- Users.pm
+  |- t
+  |  +- login.t
+  +- templates
+     |- layouts
+     |  +- default.html.ep
+     +- login
+        |- index.html.ep
+        +- protected.html.ep
 
 Test-driven development takes a little getting used to, but can be a very
 powerful tool.

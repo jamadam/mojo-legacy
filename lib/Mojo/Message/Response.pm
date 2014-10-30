@@ -87,7 +87,7 @@ sub cookies {
   return $self;
 }
 
-sub default_message { $MESSAGES{$_[1] || defined $_[0]->code ? $_[0]->code : 404} || '' }
+sub default_message { $MESSAGES{$_[1] || (defined $_[0]->code ? $_[0]->code : 404)} || '' }
 
 sub extract_start_line {
   my ($self, $bufref) = @_;
@@ -99,7 +99,7 @@ sub extract_start_line {
 
   my $content = $self->content;
   $content->skip_body(1) if $self->code($2)->is_empty;
-  $content->auto_relax(1) unless defined $content->auto_relax;
+  defined $content->$_ or $content->$_(1) for qw(auto_decompress auto_relax);
   $content->expect_close(1) if $1 eq '1.0';
   return !!$self->version($1)->message($3);
 }
@@ -189,14 +189,14 @@ implements the following new ones.
   my $code = $res->code;
   $res     = $res->code(200);
 
-HTTP response code.
+HTTP response status code.
 
 =head2 message
 
   my $msg = $res->message;
   $res    = $res->message('OK');
 
-HTTP response message.
+HTTP response status message.
 
 =head1 METHODS
 
@@ -214,8 +214,10 @@ Access response cookies, usually L<Mojo::Cookie::Response> objects.
 =head2 default_message
 
   my $msg = $res->default_message;
+  my $msg = $res->default_message(418);
 
-Generate default response message for code.
+Generate default response message for status code, defaults to using
+L</"code">.
 
 =head2 extract_start_line
 

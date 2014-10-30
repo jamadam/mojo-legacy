@@ -48,7 +48,7 @@ therefore considered a prerequisite, you should definitely take a look!
 =item L<Mojolicious::Guides::Growing>
 
 Starting a L<Mojolicious::Lite> prototype from scratch and growing it into a
-well structured L<Mojolicious> application.
+well-structured L<Mojolicious> application.
 
 =item L<Mojolicious::Guides::Routing>
 
@@ -123,23 +123,6 @@ Testing toolkit for web applications.
 =item L<ojo>
 
 Fun one-liners using everything above.
-
-=back
-
-=head1 SPIN-OFFS
-
-These modules are not part of the L<Mojolicious> distribution, but have been
-designed to be used with it and are being developed under the same umbrella.
-
-=over 2
-
-=item L<Mango>
-
-Pure-Perl non-blocking I/O MongoDB driver.
-
-=item L<Minion>
-
-Job queue.
 
 =back
 
@@ -291,8 +274,6 @@ This is the class hierarchy of the L<Mojolicious> distribution.
 
 =item * L<Mojo::IOLoop>
 
-=item * L<Mojo::JSON>
-
 =item * L<Mojo::JSON::Pointer>
 
 =item * L<Mojo::Loader>
@@ -428,6 +409,8 @@ This is the class hierarchy of the L<Mojolicious> distribution.
 =item * L<Mojo::Collection>
 
 =item * L<Mojo::DOM>
+
+=item * L<Mojo::JSON>
 
 =item * L<Mojo::Util>
 

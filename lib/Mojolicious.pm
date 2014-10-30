@@ -2,9 +2,9 @@ package Mojolicious;
 use Mojo::Base 'Mojo';
 
 # "Fry: Shut up and take my money!"
-use Carp 'croak';
+use Carp ();
 use Mojo::Exception;
-use Mojo::Util 'decamelize';
+use Mojo::Util;
 use Mojolicious::Commands;
 use Mojolicious::Controller;
 use Mojolicious::Plugins;
@@ -14,17 +14,17 @@ use Mojolicious::Sessions;
 use Mojolicious::Static;
 use Mojolicious::Types;
 use Mojolicious::Validator;
-use Scalar::Util qw(blessed weaken);
-use Time::HiRes 'gettimeofday';
+use Scalar::Util ();
+use Time::HiRes  ();
 
 has commands => sub {
   my $commands = Mojolicious::Commands->new(app => shift);
-  weaken $commands->{app};
+  Scalar::Util::weaken $commands->{app};
   return $commands;
 };
 has controller_class => 'Mojolicious::Controller';
 has mode => sub { $ENV{MOJO_MODE} || $ENV{PLACK_ENV} || 'development' };
-has moniker  => sub { decamelize ref shift };
+has moniker  => sub { Mojo::Util::decamelize ref shift };
 has plugins  => sub { Mojolicious::Plugins->new };
 has renderer => sub { Mojolicious::Renderer->new };
 has routes   => sub { Mojolicious::Routes->new };
@@ -43,17 +43,17 @@ has types     => sub { Mojolicious::Types->new };
 has validator => sub { Mojolicious::Validator->new };
 
 our $CODENAME = 'Tiger Face';
-our $VERSION  = '5.41';
+our $VERSION  = '5.56';
 
 sub AUTOLOAD {
   my $self = shift;
 
   my ($package, $method) = our $AUTOLOAD =~ /^(.+)::(.+)$/;
-  croak "Undefined subroutine &${package}::$method called"
-    unless blessed $self && $self->isa(__PACKAGE__);
+  Carp::croak "Undefined subroutine &${package}::$method called"
+    unless Scalar::Util::blessed $self && $self->isa(__PACKAGE__);
 
   # Call helper with fresh controller
-  croak qq{Can't locate object method "$method" via package "$package"}
+  Carp::croak qq{Can't locate object method "$method" via package "$package"}
     unless my $helper = $self->renderer->get_helper($method);
   return $self->build_controller->$helper(@_);
 }
@@ -72,7 +72,7 @@ sub build_controller {
   @$stash{keys %$defaults} = values %$defaults;
   my $c
     = $self->controller_class->new(app => $self, stash => $stash, tx => $tx);
-  weaken $c->{app};
+  Scalar::Util::weaken $c->{app};
 
   return $c;
 }
@@ -106,7 +106,7 @@ sub dispatch {
     my $method = $req->method;
     my $path   = $req->url->path->to_abs_string;
     $self->log->debug(qq{$method "$path".});
-    $stash->{'mojo.started'} = [gettimeofday];
+    $stash->{'mojo.started'} = [Time::HiRes::gettimeofday];
   }
 
   # Routes
@@ -129,7 +129,7 @@ sub handler {
 
   # Process with chain
   my $c = $self->build_controller(@_);
-  weaken $c->{tx};
+  Scalar::Util::weaken $c->{tx};
   $self->plugins->emit_chain(around_dispatch => $c);
 
   # Delayed response
@@ -158,7 +158,8 @@ sub new {
   my $r = $self->routes->namespaces(["@{[ref $self]}::Controller", ref $self]);
 
   # Hide controller attributes/methods and "handler"
-  $r->hide(qw(app continue cookie finish flash handler helpers match on));
+  $r->hide(qw(app continue cookie every_cookie every_param));
+  $r->hide(qw(every_signed_cookie finish flash handler helpers match on));
   $r->hide(qw(param redirect_to render render_exception render_later));
   $r->hide(qw(render_maybe render_not_found render_to_string rendered req));
   $r->hide(qw(res respond_to send session signed_cookie stash tx url_for));
@@ -886,6 +887,8 @@ Kevin Old
 
 Kitamura Akatsuki
 
+Klaus S. Madsen
+
 Lars Balker Rasmussen
 
 Leon Brocard
@@ -893,6 +896,10 @@ Leon Brocard
 Magnus Holm
 
 Maik Fischer
+
+Mark Fowler
+
+Mark Grimes
 
 Mark Stosberg
 
@@ -977,6 +984,8 @@ Stephane Este-Gracias
 Tatsuhiko Miyagawa
 
 Terrence Brannon
+
+Tianon Gravi
 
 Tomas Znamenacek
 

@@ -112,7 +112,6 @@ is $stream->split('/')->map(sub { $_->quote })->join(', '), '"1", "2", "3"',
   'right result';
 is $stream->split('/')->map(sub { shift->quote })->join(', '),
   '"1", "2", "3"', 'right result';
-is $stream->split('/')->quote->join(', '), '"1", "2", "3"', 'right result';
 
 # length
 is b('foo bar baz')->size, 11, 'size is 11';
@@ -150,9 +149,5 @@ my $dir = tempdir CLEANUP => 1;
 $file = catfile $dir, 'test.txt';
 is b("just\nworks!")->spurt($file)->quote, qq{"just\nworks!"}, 'right result';
 is b($file)->slurp, "just\nworks!", 'successful roundtrip';
-
-# Boolean context
-ok !Mojo::ByteStream->new(0),  '"0" is falsy';
-ok !!Mojo::ByteStream->new(1), '"1" is truthy';
 
 done_testing();

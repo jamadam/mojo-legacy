@@ -29,8 +29,7 @@ sub run {
   my $selector = shift @args;
 
   # Parse header pairs
-  my %headers;
-  /^\s*([^:]+)\s*:\s*(.+)$/ and $headers{$1} = $2 for @headers;
+  my %headers = map { /^\s*([^:]+)\s*:\s*(.+)$/ ? ($1, $2) : () } @headers;
 
   # Detect proxy for absolute URLs
   my $ua = Mojo::UserAgent->new(ioloop => Mojo::IOLoop->singleton);
@@ -66,14 +65,12 @@ sub run {
   STDOUT->autoflush(1);
   my $tx = $ua->start($ua->build_tx($method, $url, \%headers, $content));
   my $err = $tx->error;
-  $url = encode 'UTF-8', $url;
-  warn qq{Problem loading URL "$url". ($err->{message})\n}
+  warn qq{Problem loading URL "@{[$tx->req->url]}": $err->{message}\n}
     if $err && !$err->{code};
 
   # JSON Pointer
   return unless defined $selector;
-  my $type = defined $tx->res->headers->content_type ? $tx->res->headers->content_type : '';
-  return _json($buffer, $selector) if $type =~ /json/i;
+  return _json($buffer, $selector) if $selector eq '' || $selector =~ m!^/!;
 
   # Selector
   _select($buffer, $selector, defined $charset ? $charset : $tx->res->content->charset, @args);
